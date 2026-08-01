@@ -1,38 +1,12 @@
 import VectorLayer from 'ol/layer/Vector.js';
-import VectorSource from 'ol/source/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import Draw from 'ol/interaction/Draw.js';
 import Modify from 'ol/interaction/Modify.js';
 import Select from 'ol/interaction/Select.js';
 import Snap from 'ol/interaction/Snap.js';
-import Style from 'ol/style/Style.js';
-import Circle from 'ol/style/Circle.js';
-import Fill from 'ol/style/Fill.js';
-import Stroke from 'ol/style/Stroke.js';
 import { loadFeatureCollection, saveFeatureCollection } from './geojsonApi.js';
-
-const STYLE_BY_TYPE = {
-  Point: new Style({
-    image: new Circle({
-      radius: 6,
-      fill: new Fill({ color: '#ff9800' }),
-      stroke: new Stroke({ color: '#ffffff', width: 1.5 }),
-    }),
-  }),
-  LineString: new Style({
-    stroke: new Stroke({ color: '#2979ff', width: 3 }),
-  }),
-  Polygon: new Style({
-    fill: new Fill({ color: 'rgba(76,175,80,0.25)' }),
-    stroke: new Stroke({ color: '#4caf50', width: 2 }),
-  }),
-};
-
-function editStyle(feature) {
-  return STYLE_BY_TYPE[feature.getGeometry().getType()];
-}
-
-const KIND_BY_TYPE = { Point: 'node', LineString: 'link', Polygon: 'block' };
+import { nodeLinkSource as source } from './appShared.js';
+import { nodeLinkStyle, KIND_BY_TYPE } from './nodeLinkStyle.js';
 
 /**
  * 지도에 노드(point)/링크(line)/블록(polygon) 편집 레이어와 툴바를 연결한다.
@@ -41,8 +15,7 @@ const KIND_BY_TYPE = { Point: 'node', LineString: 'link', Polygon: 'block' };
  * @param {HTMLElement} panelEl
  */
 export function createEditLayer(map, projection, panelEl) {
-  const source = new VectorSource();
-  const layer = new VectorLayer({ source, style: editStyle, zIndex: 10 });
+  const layer = new VectorLayer({ source, style: nodeLinkStyle, zIndex: 10 });
   map.addLayer(layer);
 
   const geojsonFormat = new GeoJSON({

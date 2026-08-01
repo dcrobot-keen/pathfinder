@@ -7,19 +7,21 @@
   </head>
   <body>
     <div id="tabs">
-      <button id="tab-2d" class="tab-button active">2D 지도</button>
-      <button id="tab-3d" class="tab-button">3D 뷰</button>
+      <button id="tab-2d" class="tab-button active" data-tab="2d">2D 지도</button>
+      <button id="tab-3d" class="tab-button" data-tab="3d">3D 뷰</button>
+      <button id="tab-pf-nodelink" class="tab-button" data-tab="pf-nodelink">길찾기 (노드/링크)</button>
+      <button id="tab-pf-obstacle" class="tab-button" data-tab="pf-obstacle">길찾기 (장애물)</button>
       <label class="pcd-upload">
         PCD 업로드
         <input id="pcd-file-input" type="file" accept=".pcd" />
       </label>
       <div id="pcd-status" class="pcd-status"></div>
     </div>
-    <div id="map" class="view active">
+    <div id="map" class="view active" data-view="2d">
       <div id="slice-panel"></div>
       <div id="edit-panel"></div>
     </div>
-    <div id="view3d" class="view">
+    <div id="view3d" class="view" data-view="3d">
       <div id="mesh-panel">
         <div class="mesh-buttons">
           <button id="btn-view-points" class="mesh-button active">포인트</button>
@@ -27,6 +29,12 @@
         </div>
         <div id="mesh-status" class="mesh-status"></div>
       </div>
+    </div>
+    <div id="pf-nodelink" class="view" data-view="pf-nodelink">
+      <div id="pf-nodelink-panel"></div>
+    </div>
+    <div id="pf-obstacle" class="view" data-view="pf-obstacle">
+      <div id="pf-obstacle-panel"></div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

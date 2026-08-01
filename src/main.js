@@ -1,18 +1,9 @@
 import './style.css';
 import Map from 'ol/Map.js';
 import View from 'ol/View.js';
-import Projection from 'ol/proj/Projection.js';
-import { addProjection } from 'ol/proj.js';
-import VectorLayer from 'ol/layer/Vector.js';
-import VectorSource from 'ol/source/Vector.js';
 import WebGLVectorLayer from 'ol/layer/WebGLVector.js';
 import Feature from 'ol/Feature.js';
 import Point from 'ol/geom/Point.js';
-import LineString from 'ol/geom/LineString.js';
-import Style from 'ol/style/Style.js';
-import Stroke from 'ol/style/Stroke.js';
-import Text from 'ol/style/Text.js';
-import Fill from 'ol/style/Fill.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
 import MousePosition from 'ol/control/MousePosition.js';
@@ -21,67 +12,14 @@ import { loadPcd, parsePcdAscii } from './pcd.js';
 import { createView3D } from './view3d.js';
 import { buildHeightBands, createSliceLayers, renderSlicePanel } from './heightSlices.js';
 import { createEditLayer } from './editLayer.js';
+import { buildGridLayer } from './grid2d.js';
+import { indoorProjection, MAP_SIZE_M, pcdSource } from './appShared.js';
+import { createPathfindingTab } from './pathfinding/tab.js';
 
 const SAMPLE_PCD_URL = '/samples/sample-room.pcd';
 const SLICE_HEIGHT_M = 0.5;
 
-// 실내 지도용 평면 좌표계 정의: 0,0을 기점으로 m 단위, 200m x 200m 범위
-const MAP_SIZE_M = 200;
-const indoorProjection = new Projection({
-  code: 'indoor-plane',
-  units: 'm',
-  extent: [0, 0, MAP_SIZE_M, MAP_SIZE_M],
-});
-addProjection(indoorProjection);
-
-// 10m 간격 기준선 레이어
-function buildGridSource(size, step) {
-  const source = new VectorSource();
-  for (let x = 0; x <= size; x += step) {
-    source.addFeature(
-      new Feature({
-        geometry: new LineString([
-          [x, 0],
-          [x, size],
-        ]),
-        label: x % (step * 5) === 0 ? `${x}m` : null,
-      })
-    );
-  }
-  for (let y = 0; y <= size; y += step) {
-    source.addFeature(
-      new Feature({
-        geometry: new LineString([
-          [0, y],
-          [size, y],
-        ]),
-        label: y % (step * 5) === 0 ? `${y}m` : null,
-      })
-    );
-  }
-  return source;
-}
-
-const gridLayer = new VectorLayer({
-  source: buildGridSource(MAP_SIZE_M, 10),
-  style: (feature) => {
-    const label = feature.get('label');
-    return new Style({
-      stroke: new Stroke({
-        color: label ? 'rgba(80,80,80,0.6)' : 'rgba(150,150,150,0.35)',
-        width: label ? 1.2 : 0.6,
-      }),
-      text: label
-        ? new Text({
-            text: label,
-            font: '11px sans-serif',
-            fill: new Fill({ color: '#333' }),
-            placement: 'point',
-          })
-        : undefined,
-    });
-  },
-});
+const gridLayer = buildGridLayer(MAP_SIZE_M, 10);
 
 const map = new Map({
   target: 'map',
@@ -110,7 +48,6 @@ const map = new Map({
 });
 
 // 컬러드 PCD(3D) 포인트 클라우드 레이어 ("전체(비분류)" 옵션으로 남겨둠)
-const pcdSource = new VectorSource();
 const pcdLayer = new WebGLVectorLayer({
   source: pcdSource,
   style: {
@@ -124,39 +61,64 @@ map.addLayer(pcdLayer);
 // 노드/링크/블록 편집 레이어 (GeoJSON 파일 DB에 저장)
 createEditLayer(map, indoorProjection, document.getElementById('edit-panel'));
 
-// 2D / 3D 탭 전환 및 3D 뷰 지연 초기화
-const mapEl = document.getElementById('map');
+// 탭 전환 (2D 지도 / 3D 뷰 / 길찾기 두 모드). 3D 뷰와 길찾기 탭은 처음 열릴 때 지연 초기화한다.
+const tabButtons = document.querySelectorAll('.tab-button');
+const viewEls = document.querySelectorAll('.view');
 const view3dEl = document.getElementById('view3d');
-const tab2dBtn = document.getElementById('tab-2d');
-const tab3dBtn = document.getElementById('tab-3d');
 
 let view3d = null;
 let currentPoints = [];
 let sliceLayers = [];
+let pfNodeLinkTab = null;
+let pfObstacleTab = null;
 
-function activateTab(tab) {
-  const is2d = tab === '2d';
-  mapEl.classList.toggle('active', is2d);
-  view3dEl.classList.toggle('active', !is2d);
-  tab2dBtn.classList.toggle('active', is2d);
-  tab3dBtn.classList.toggle('active', !is2d);
+function activateTab(tabKey) {
+  tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
+  viewEls.forEach((el) => el.classList.toggle('active', el.dataset.view === tabKey));
 
-  if (is2d) {
+  if (tabKey === '2d') {
     map.updateSize();
     return;
   }
 
-  if (!view3d) {
-    view3d = createView3D(view3dEl);
-    if (currentPoints.length) {
-      view3d.setPoints(currentPoints);
+  if (tabKey === '3d') {
+    if (!view3d) {
+      view3d = createView3D(view3dEl);
+      if (currentPoints.length) {
+        view3d.setPoints(currentPoints);
+      }
     }
+    view3d.resize();
+    return;
   }
-  view3d.resize();
+
+  if (tabKey === 'pf-nodelink') {
+    if (!pfNodeLinkTab) {
+      pfNodeLinkTab = createPathfindingTab(
+        document.getElementById('pf-nodelink'),
+        document.getElementById('pf-nodelink-panel'),
+        'nodelink'
+      );
+      pfNodeLinkTab.fitToData();
+    }
+    pfNodeLinkTab.resize();
+    return;
+  }
+
+  if (tabKey === 'pf-obstacle') {
+    if (!pfObstacleTab) {
+      pfObstacleTab = createPathfindingTab(
+        document.getElementById('pf-obstacle'),
+        document.getElementById('pf-obstacle-panel'),
+        'obstacle'
+      );
+      pfObstacleTab.fitToData();
+    }
+    pfObstacleTab.resize();
+  }
 }
 
-tab2dBtn.addEventListener('click', () => activateTab('2d'));
-tab3dBtn.addEventListener('click', () => activateTab('3d'));
+tabButtons.forEach((btn) => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
 
 /**
  * 새로 로드된 PCD 포인트를 2D 지도(높이 슬라이스 포함)와 3D 뷰 양쪽에 동시에 반영한다.

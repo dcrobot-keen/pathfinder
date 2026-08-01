@@ -4,11 +4,13 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n vite,api -c blue,green \"vite\" \"node server/index.mjs\"",
+    "dev": "concurrently -n vite,api,pathfinder -c blue,green,magenta \"vite\" \"node server/index.mjs\" \"npm:dev:pathfinder\"",
     "dev:client": "vite",
     "dev:server": "node server/index.mjs",
+    "dev:pathfinder": "cd pathfinder && go run ./server",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:pathfinder": "cd pathfinder && go test ./..."
   },
   "dependencies": {
     "express": "^5.2.1",
