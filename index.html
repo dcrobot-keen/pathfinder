@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>실내 지도 - LiDAR PCD Viewer</title>
+  </head>
+  <body>
+    <div id="tabs">
+      <button id="tab-2d" class="tab-button active">2D 지도</button>
+      <button id="tab-3d" class="tab-button">3D 뷰</button>
+      <label class="pcd-upload">
+        PCD 업로드
+        <input id="pcd-file-input" type="file" accept=".pcd" />
+      </label>
+      <div id="pcd-status" class="pcd-status"></div>
+    </div>
+    <div id="map" class="view active">
+      <div id="slice-panel"></div>
+    </div>
+    <div id="view3d" class="view">
+      <div id="mesh-panel">
+        <div class="mesh-buttons">
+          <button id="btn-view-points" class="mesh-button active">포인트</button>
+          <button id="btn-view-mesh" class="mesh-button">메쉬로 변환</button>
+        </div>
+        <div id="mesh-status" class="mesh-status"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

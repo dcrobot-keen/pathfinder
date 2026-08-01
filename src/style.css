@@ -1,0 +1,166 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+#tabs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #222;
+  box-sizing: border-box;
+}
+
+.tab-button {
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font: 13px sans-serif;
+  color: #ccc;
+  background: #3a3a3a;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: #4a90e2;
+  color: #fff;
+}
+
+.pcd-upload {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #3a3a3a;
+  color: #ccc;
+  font: 13px sans-serif;
+  cursor: pointer;
+}
+
+.pcd-upload input {
+  color: #ccc;
+  font: 12px sans-serif;
+  max-width: 220px;
+}
+
+.pcd-status {
+  align-self: center;
+  margin-left: 8px;
+  font: 12px sans-serif;
+  color: #8fd18f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #f5f5f3;
+  display: none;
+}
+
+.view.active {
+  display: block;
+}
+
+#view3d {
+  background: #111318;
+}
+
+.slice-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font: 12px sans-serif;
+  color: #222;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  max-height: calc(100% - 20px);
+  overflow-y: auto;
+}
+
+.slice-panel-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+.slice-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#mesh-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  background: rgba(30, 30, 34, 0.88);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: 12px sans-serif;
+  color: #eee;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.mesh-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.mesh-button {
+  flex: 1;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: 12px sans-serif;
+  color: #ccc;
+  background: #3a3a3a;
+  cursor: pointer;
+}
+
+.mesh-button.active {
+  background: #4a90e2;
+  color: #fff;
+}
+
+.mesh-status {
+  font-size: 11px;
+  color: #aaa;
+  white-space: pre-line;
+}
+
+.mouse-position {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.85);
+  font: 12px monospace;
+  border-radius: 3px;
+}
