@@ -20,6 +20,7 @@ import { createStringXY } from 'ol/coordinate.js';
 import { loadPcd, parsePcdAscii } from './pcd.js';
 import { createView3D } from './view3d.js';
 import { buildHeightBands, createSliceLayers, renderSlicePanel } from './heightSlices.js';
+import { createEditLayer } from './editLayer.js';
 
 const SAMPLE_PCD_URL = '/samples/sample-room.pcd';
 const SLICE_HEIGHT_M = 0.5;
@@ -119,6 +120,9 @@ const pcdLayer = new WebGLVectorLayer({
   },
 });
 map.addLayer(pcdLayer);
+
+// 노드/링크/블록 편집 레이어 (GeoJSON 파일 DB에 저장)
+createEditLayer(map, indoorProjection, document.getElementById('edit-panel'));
 
 // 2D / 3D 탭 전환 및 3D 뷰 지연 초기화
 const mapEl = document.getElementById('map');
