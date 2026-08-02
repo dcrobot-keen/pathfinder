@@ -103,6 +103,8 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
       resume() {},
       isPaused: () => false,
       getPosition: () => coords[0],
+      getRemainingPath: () => coords,
+      metersPerSecond,
     };
   }
 
@@ -121,6 +123,10 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
   let rafId = null;
   let stopped = false;
   let paused = false;
+  // deconfliction이 "현재 위치"가 아니라 "앞으로 지나갈 구간"을 기준으로 판단할 수
+  // 있도록, 매 프레임 갱신되는 현재 위치와 잘라낸 나머지 경로를 별도로 들고 있는다.
+  let currentPoint = coords[0];
+  let remainingCoords = coords;
 
   function finish() {
     stopped = true;
@@ -143,8 +149,10 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
     }
 
     const { point, segmentIndex } = pointAtDistance(coords, lens, traveled);
+    currentPoint = point;
+    remainingCoords = [point, ...coords.slice(segmentIndex + 1)];
     robotFeature.getGeometry().setCoordinates(point);
-    pathFeature.getGeometry().setCoordinates([point, ...coords.slice(segmentIndex + 1)]);
+    pathFeature.getGeometry().setCoordinates(remainingCoords);
 
     rafId = requestAnimationFrame(frame);
   }
@@ -171,5 +179,11 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
     },
     isPaused: () => paused,
     getPosition: () => robotFeature.getGeometry().getCoordinates(),
+    // 현재 위치부터 목적지까지 남은 경로(polyline). 이미 지나온 구간은 빠져 있으므로
+    // 이 경로끼리 비교하면 "이미 지나간 로봇"이 더 이상 충돌 판정에 끼어들지 않는다.
+    getRemainingPath: () => remainingCoords,
+    // deconfliction이 "앞으로 몇 초 안에 실제로 갈 만한 거리"를 계산할 수 있도록
+    // 실제 이동 속도도 노출한다.
+    metersPerSecond,
   };
 }
