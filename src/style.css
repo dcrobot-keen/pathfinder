@@ -6,9 +6,32 @@ body {
   width: 100%;
 }
 
-#tabs {
+#app-title {
   position: absolute;
   top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #181818;
+  color: #fff;
+  font: 600 14px sans-serif;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+#app-title-version {
+  margin-left: 6px;
+  font: 400 11px sans-serif;
+  color: #999;
+}
+
+#tabs {
+  position: absolute;
+  top: 30px;
   left: 0;
   right: 0;
   height: 40px;
@@ -68,7 +91,7 @@ body {
 
 .view {
   position: absolute;
-  top: 40px;
+  top: 70px;
   left: 0;
   right: 0;
   bottom: 0;
