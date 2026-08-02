@@ -5,6 +5,7 @@ import express from 'express';
 import { JSONFilePreset } from 'lowdb/node';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRobotsRouter } from './robots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = resolve(__dirname, '../data/nodelink.geojson');
@@ -22,6 +23,7 @@ function isFeatureCollection(body) {
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
+app.use('/api', await createRobotsRouter());
 
 app.get('/api/nodelink', (req, res) => {
   res.json(db.data);

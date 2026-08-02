@@ -15,6 +15,7 @@ import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
 import { indoorProjection, MAP_SIZE_M, pcdSource } from './appShared.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
+import { createRobotRegistryTab } from './robots/robotRegistry.js';
 
 const SAMPLE_PCD_URL = '/samples/sample-room.pcd';
 const SLICE_HEIGHT_M = 0.5;
@@ -71,6 +72,7 @@ let currentPoints = [];
 let sliceLayers = [];
 let pfNodeLinkTab = null;
 let pfObstacleTab = null;
+let robotsTab = null;
 
 function activateTab(tabKey) {
   tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
@@ -115,6 +117,11 @@ function activateTab(tabKey) {
       pfObstacleTab.fitToData();
     }
     pfObstacleTab.resize();
+    return;
+  }
+
+  if (tabKey === 'robots' && !robotsTab) {
+    robotsTab = createRobotRegistryTab(document.getElementById('robots'));
   }
 }
 

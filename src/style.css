@@ -241,6 +241,11 @@ body {
   font: 12px sans-serif;
 }
 
+.pathfinding-select:disabled {
+  background: #2a2a2a;
+  color: #888;
+}
+
 .pathfinding-button-row {
   display: flex;
   gap: 6px;
@@ -275,4 +280,192 @@ body {
   background: rgba(255, 255, 255, 0.85);
   font: 12px monospace;
   border-radius: 3px;
+}
+
+.robot-registry {
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 20px;
+  font: 13px sans-serif;
+  color: #222;
+}
+
+.robot-layout {
+  display: flex;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: flex-start;
+}
+
+.robot-form-panel {
+  flex: 0 0 280px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 20px;
+}
+
+.robot-form-title {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.robot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #555;
+}
+
+.robot-input {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font: 13px sans-serif;
+  color: #222;
+  resize: vertical;
+}
+
+.robot-icon-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: #f0f0f0;
+  object-fit: contain;
+  margin-bottom: 4px;
+}
+
+.robot-button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.robot-button {
+  flex: 1;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font: 13px sans-serif;
+  color: #333;
+  background: #eee;
+  cursor: pointer;
+}
+
+.robot-button:hover {
+  background: #e0e0e0;
+}
+
+.robot-button-primary {
+  background: #4a90e2;
+  color: #fff;
+}
+
+.robot-button-primary:hover {
+  background: #3d7fce;
+}
+
+.robot-button-danger {
+  background: #fdecea;
+  color: #c0392b;
+}
+
+.robot-button-danger:hover {
+  background: #fbd9d5;
+}
+
+.robot-form-status {
+  font-size: 12px;
+  color: #888;
+  min-height: 16px;
+}
+
+.robot-list-panel {
+  flex: 1;
+}
+
+.robot-list-title {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.robot-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.robot-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.robot-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.robot-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.robot-card-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.robot-card-name {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.robot-card-type {
+  font-size: 12px;
+  color: #777;
+}
+
+.robot-status-badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.robot-card-meta {
+  font-size: 12px;
+  color: #555;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.robot-card-description {
+  color: #777;
+}
+
+.robot-card-actions {
+  display: flex;
+  gap: 8px;
 }
