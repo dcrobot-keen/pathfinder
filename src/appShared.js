@@ -5,12 +5,13 @@ import Projection from 'ol/proj/Projection.js';
 import { addProjection } from 'ol/proj.js';
 import VectorSource from 'ol/source/Vector.js';
 
-// 실내 지도용 평면 좌표계: 0,0을 기점으로 m 단위, 200m x 200m 범위
-export const MAP_SIZE_M = 200;
+// 실내 지도용 평면 좌표계: 0,0을 기점으로 m 단위, 200m(가로) x 400m(세로) 공장 부지 기준
+export const MAP_SIZE_X = 200;
+export const MAP_SIZE_Y = 400;
 export const indoorProjection = new Projection({
   code: 'indoor-plane',
   units: 'm',
-  extent: [0, 0, MAP_SIZE_M, MAP_SIZE_M],
+  extent: [0, 0, MAP_SIZE_X, MAP_SIZE_Y],
 });
 addProjection(indoorProjection);
 

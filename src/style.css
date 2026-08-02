@@ -64,7 +64,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: 12px;
+  margin-right: 8px;
   padding: 6px 10px;
   border-radius: 4px;
   background: #3a3a3a;
@@ -293,6 +293,77 @@ body {
   font-size: 11px;
   color: #aaa;
   white-space: pre-line;
+}
+
+.pathfinding-conflict-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.pathfinding-conflict-mode .pathfinding-select {
+  flex: 1;
+}
+
+.pathfinding-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 4px;
+  background: #2a2a2a;
+  padding: 4px;
+}
+
+.pathfinding-list-empty {
+  font-size: 11px;
+  color: #888;
+  padding: 4px 6px;
+}
+
+.pathfinding-list-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  background: #3a3a3a;
+  cursor: grab;
+  font-size: 11px;
+  color: #eee;
+}
+
+.pathfinding-list-row.dragging {
+  opacity: 0.4;
+}
+
+.pathfinding-list-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.pathfinding-list-id {
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.pathfinding-list-priority {
+  color: #8fbde0;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pathfinding-list-name {
+  color: #aaa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mouse-position {

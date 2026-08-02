@@ -145,5 +145,5 @@ export function createEditLayer(map, projection, panelEl) {
   setMode('none');
   load();
 
-  return { setMode, save, load };
+  return { setMode, save, load, layer };
 }

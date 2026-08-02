@@ -106,13 +106,15 @@ export function renderSlicePanel(container, bands, sliceLayers, extraEntries) {
     addRow(label, undefined, layer, checked ?? layer.getVisible());
   });
 
-  const sliceTitle = document.createElement('div');
-  sliceTitle.className = 'slice-panel-title';
-  sliceTitle.textContent = '높이 슬라이스 (50cm)';
-  container.appendChild(sliceTitle);
+  if (bands.length > 0) {
+    const sliceTitle = document.createElement('div');
+    sliceTitle.className = 'slice-panel-title';
+    sliceTitle.textContent = '높이 슬라이스 (50cm)';
+    container.appendChild(sliceTitle);
 
-  bands.forEach((band, i) => {
-    const label = `${band.min.toFixed(1)}m ~ ${band.max.toFixed(1)}m`;
-    addRow(label, band.count, sliceLayers[i], i === 0);
-  });
+    bands.forEach((band, i) => {
+      const label = `${band.min.toFixed(1)}m ~ ${band.max.toFixed(1)}m`;
+      addRow(label, band.count, sliceLayers[i], i === 0);
+    });
+  }
 }

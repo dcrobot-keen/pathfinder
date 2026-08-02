@@ -10,16 +10,15 @@ import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
 import MousePosition from 'ol/control/MousePosition.js';
 import { createStringXY } from 'ol/coordinate.js';
-import { loadPcd, parsePcd } from './pcd.js';
+import { parsePcd } from './pcd.js';
 import { createView3D } from './view3d.js';
 import { buildHeightBands, createSliceLayers, renderSlicePanel } from './heightSlices.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_M, pcdSource } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource } from './appShared.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
 
-const SAMPLE_PCD_URL = '/samples/sample-room.pcd';
 const SLICE_HEIGHT_M = 0.5;
 
 // 2D 지도 맨 아래 깔리는 배경 도면. data/에 있는 파일을 vite 에셋으로 바로
@@ -41,23 +40,30 @@ const blueprintLayer = new ImageLayer({
   visible: false, // 기본은 꺼둔 채로 시작 — 레이어 패널에서 필요할 때 켠다
 });
 
-const gridLayer = buildGridLayer(MAP_SIZE_M, 10);
+const gridLayer = buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10);
 
 const map = new Map({
   target: 'map',
   layers: [blueprintLayer, gridLayer],
   view: new View({
     projection: indoorProjection,
-    center: [MAP_SIZE_M / 2, MAP_SIZE_M / 2],
-    zoom: 2,
+    center: [MAP_SIZE_X / 2, MAP_SIZE_Y / 2],
+    zoom: 1,
     minZoom: 0,
     maxZoom: 8,
     extent: [
-      -MAP_SIZE_M * 0.2,
-      -MAP_SIZE_M * 0.2,
-      MAP_SIZE_M * 1.2,
-      MAP_SIZE_M * 1.2,
+      -MAP_SIZE_X * 0.2,
+      -MAP_SIZE_Y * 0.2,
+      MAP_SIZE_X * 1.2,
+      MAP_SIZE_Y * 1.2,
     ],
+    // 이 extent는 "화면 중심이 벗어날 수 없는 범위"로만 쓴다(constrainOnlyCenter).
+    // 기본값(false)이면 확대/축소 배율도 이 extent 안에 다 들어오게 강제되는데,
+    // 데이터는 세로가 긴 200x400인데 브라우저 창은 보통 가로로 넓어서(landscape),
+    // 그 상태로 축소하면 필요한 배율이 extent의 가로 폭을 넘어버려 OL이 축소를
+    // 막아버린다 — 그 결과 세로(400m)를 다 못 보여주고 잘렸다. 그냥 팬 범위만
+    // 제한하고 배율 자체는 fit()이 정하는 대로 두면 해결된다.
+    constrainOnlyCenter: true,
   }),
   controls: defaultControls().extend([
     new ScaleLine({ units: 'metric' }),
@@ -68,6 +74,14 @@ const map = new Map({
     }),
   ]),
 });
+
+// 처음 실행 시 200x400m 공장 부지 전체가 보이도록 뷰를 맞춘다(고정 zoom 대신
+// fit을 써서 가로세로 비율이 달라도 항상 전체 부지가 프레임에 들어오게 함).
+// updateSize()를 먼저 호출해야 한다 — 생성 직후에는 OL이 아직 컨테이너 크기를
+// 측정하지 않은 상태라, 그 전에 fit()을 부르면 잘못된(0에 가까운) 크기 기준으로
+// 계산해서 세로(400m)가 다 안 보이는 등 엉뚱한 확대 배율이 나올 수 있다.
+map.updateSize();
+map.getView().fit([0, 0, MAP_SIZE_X, MAP_SIZE_Y], { padding: [20, 20, 20, 20] });
 
 // 컬러드 PCD(3D) 포인트 클라우드 레이어 ("전체(비분류)" 옵션으로 남겨둠)
 const pcdLayer = new WebGLVectorLayer({
@@ -81,7 +95,14 @@ const pcdLayer = new WebGLVectorLayer({
 map.addLayer(pcdLayer);
 
 // 노드/링크/블록 편집 레이어 (GeoJSON 파일 DB에 저장)
-createEditLayer(map, indoorProjection, document.getElementById('edit-panel'));
+const editLayerApi = createEditLayer(map, indoorProjection, document.getElementById('edit-panel'));
+
+// PCD를 아직 업로드하지 않은 초기 상태에도 레이어 토글 패널이 보이도록 먼저 한 번 그린다
+// (배경 도면 / 노드·링크·블록만 — 높이 슬라이스·원본 PCD는 업로드 후에 채워짐).
+renderSlicePanel(document.getElementById('slice-panel'), [], [], [
+  { layer: blueprintLayer, label: '배경 도면' },
+  { layer: editLayerApi.layer, label: '노드/링크/블록' },
+]);
 
 // 탭 전환 (2D 지도 / 3D 뷰 / 길찾기 두 모드). 3D 뷰와 길찾기 탭은 처음 열릴 때 지연 초기화한다.
 const tabButtons = document.querySelectorAll('.tab-button');
@@ -91,7 +112,6 @@ const view3dEl = document.getElementById('view3d');
 let view3d = null;
 let currentPoints = [];
 let sliceLayers = [];
-let pfNodeLinkTab = null;
 let pfObstacleTab = null;
 let robotsTab = null;
 
@@ -112,19 +132,6 @@ function activateTab(tabKey) {
       }
     }
     view3d.resize();
-    return;
-  }
-
-  if (tabKey === 'pf-nodelink') {
-    if (!pfNodeLinkTab) {
-      pfNodeLinkTab = createPathfindingTab(
-        document.getElementById('pf-nodelink'),
-        document.getElementById('pf-nodelink-panel'),
-        'nodelink'
-      );
-      pfNodeLinkTab.fitToData();
-    }
-    pfNodeLinkTab.resize();
     return;
   }
 
@@ -178,6 +185,7 @@ function applyPoints(points, label) {
   sliceLayers.forEach((layer) => map.addLayer(layer));
   renderSlicePanel(document.getElementById('slice-panel'), bands, sliceLayers, [
     { layer: blueprintLayer, label: '배경 도면' },
+    { layer: editLayerApi.layer, label: '노드/링크/블록' },
     { layer: pcdLayer, label: `전체 (비분류) — ${label}`, checked: false },
   ]);
 
@@ -194,21 +202,15 @@ function applyPoints(points, label) {
   console.log(`PCD 적용 완료 (${label}): ${points.length}개 포인트`);
 }
 
-// 초기 샘플 PCD 로드
-loadPcd(SAMPLE_PCD_URL)
-  .then(({ points }) => applyPoints(points, 'sample-room.pcd'))
-  .catch((err) => {
-    console.error(err);
-    setPcdStatus(`샘플 PCD 로드 실패: ${err.message}`);
-  });
-
-// 상단 공용 PCD 업로드: 파일이 바뀌면 2D/3D 뷰가 함께 갱신된다
+// 상단 공용 PCD 업로드: 파일이 바뀌면 2D/3D 뷰가 함께 갱신된다.
+// 기본값으로 자동 로드되는 PCD는 없음 — 업로드 전까지는 빈 지도 상태를 유지한다.
 const pcdFileInput = document.getElementById('pcd-file-input');
 const pcdStatusEl = document.getElementById('pcd-status');
 
 function setPcdStatus(text) {
   pcdStatusEl.textContent = text;
 }
+setPcdStatus('PCD를 업로드하세요.');
 
 pcdFileInput.addEventListener('change', async () => {
   const file = pcdFileInput.files[0];

@@ -6,6 +6,7 @@ import CircleStyle from 'ol/style/Circle.js';
 import Icon from 'ol/style/Icon.js';
 import Fill from 'ol/style/Fill.js';
 import Stroke from 'ol/style/Stroke.js';
+import Text from 'ol/style/Text.js';
 
 // sizeMeters(등록된 로봇의 실제 폭/지름)가 REFERENCE_SIZE_M일 때 기본 아이콘 크기가 되도록
 // 비례시킨다. 화면 줌에 따라 실시간으로 정확한 미터 축척을 유지하진 않지만(그러려면 매
@@ -15,8 +16,20 @@ export const REFERENCE_SIZE_M = 0.5;
 const BASE_ICON_SCALE = 0.4;
 const BASE_CIRCLE_RADIUS = 7;
 
-function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFERENCE_SIZE_M } = {}) {
+function numberLabelStyle(label) {
+  if (label === undefined || label === null) return undefined;
+  return new Text({
+    text: String(label),
+    font: 'bold 12px sans-serif',
+    fill: new Fill({ color: '#fff' }),
+    stroke: new Stroke({ color: '#000', width: 3 }),
+    offsetY: -1, // 마커 중심에 최대한 겹쳐서 "아이콘 위 번호"처럼 보이게
+  });
+}
+
+function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFERENCE_SIZE_M, label } = {}) {
   const sizeRatio = sizeMeters / REFERENCE_SIZE_M;
+  const text = numberLabelStyle(label);
 
   if (iconSrc) {
     // ol/style/Icon의 size 옵션은 "스프라이트 시트에서 잘라올 영역" 지정용이라
@@ -25,6 +38,7 @@ function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFEREN
     const scale = Math.min(1.2, Math.max(0.15, BASE_ICON_SCALE * sizeRatio));
     return new Style({
       image: new Icon({ src: iconSrc, scale, opacity: paused ? 0.35 : 1 }),
+      text,
     });
   }
   const radius = Math.min(18, Math.max(4, BASE_CIRCLE_RADIUS * sizeRatio));
@@ -34,6 +48,7 @@ function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFEREN
       fill: new Fill({ color: paused ? 'rgba(150,150,150,0.6)' : color }),
       stroke: new Stroke({ color: '#fff', width: 2 }),
     }),
+    text,
   });
 }
 
@@ -76,15 +91,17 @@ function pointAtDistance(coords, lens, d) {
  * @param {import('ol/Map.js').default} map
  * @param {import('ol/source/Vector.js').default} source
  * @param {Array<[number, number]>} coords
- * @param {{ metersPerSecond?: number, sizeMeters?: number, color?: string, iconSrc?: string, onDone?: () => void }} [options]
+ * @param {{ metersPerSecond?: number, sizeMeters?: number, color?: string, iconSrc?: string, label?: string|number, onDone?: () => void }} [options]
  *   iconSrc가 주어지면 로봇 마커를 원형 점 대신 해당 아이콘(등록된 로봇의 아이콘)으로 그린다.
  *   sizeMeters는 마커 크기에 반영된다(로봇 등록 값 기준, 기본 0.5m).
+ *   label이 주어지면 마커 위에 번호/텍스트를 겹쳐 그린다(deconfliction 목록과 대응시키는 용도).
  * @returns {{
  *   stop: () => void,
  *   pause: () => void,
  *   resume: () => void,
  *   isPaused: () => boolean,
  *   getPosition: () => [number, number],
+ *   setLabel: (label: string|number) => void,
  * }}
  */
 export function animatePathAndRobot(map, source, coords, options = {}) {
@@ -93,6 +110,7 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
     sizeMeters = REFERENCE_SIZE_M,
     color = randomPathColor(),
     iconSrc,
+    label,
     onDone,
   } = options;
 
@@ -104,6 +122,7 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
       isPaused: () => false,
       getPosition: () => coords[0],
       getRemainingPath: () => coords,
+      setLabel() {},
       metersPerSecond,
     };
   }
@@ -111,8 +130,9 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
   const pathFeature = new Feature(new LineString(coords));
   pathFeature.setStyle(new Style({ stroke: new Stroke({ color, width: 3 }) }));
 
+  let currentLabel = label;
   const robotFeature = new Feature(new PointGeom(coords[0]));
-  robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { sizeMeters }));
+  robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { sizeMeters, label: currentLabel }));
 
   source.addFeatures([pathFeature, robotFeature]);
 
@@ -168,12 +188,12 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
     pause() {
       if (stopped || paused) return;
       paused = true;
-      robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { paused: true, sizeMeters }));
+      robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { paused: true, sizeMeters, label: currentLabel }));
     },
     resume() {
       if (stopped || !paused) return;
       paused = false;
-      robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { paused: false, sizeMeters }));
+      robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { paused: false, sizeMeters, label: currentLabel }));
       lastTime = null; // 정지해 있던 시간이 dt로 잡혀 순간이동하지 않도록 리셋
       rafId = requestAnimationFrame(frame);
     },
@@ -182,6 +202,11 @@ export function animatePathAndRobot(map, source, coords, options = {}) {
     // 현재 위치부터 목적지까지 남은 경로(polyline). 이미 지나온 구간은 빠져 있으므로
     // 이 경로끼리 비교하면 "이미 지나간 로봇"이 더 이상 충돌 판정에 끼어들지 않는다.
     getRemainingPath: () => remainingCoords,
+    // deconfliction 리스트의 번호를 마커 위 라벨과 동기화할 때 사용(우선순위 변경 등).
+    setLabel(newLabel) {
+      currentLabel = newLabel;
+      robotFeature.setStyle(robotMarkerStyle(color, iconSrc, { paused, sizeMeters, label: currentLabel }));
+    },
     // deconfliction이 "앞으로 몇 초 안에 실제로 갈 만한 거리"를 계산할 수 있도록
     // 실제 이동 속도도 노출한다.
     metersPerSecond,

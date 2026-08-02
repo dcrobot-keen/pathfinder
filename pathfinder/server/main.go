@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 
 	"pathfinder/graph"
@@ -130,6 +131,66 @@ func blockBoundsPoints(blocks [][]graph.Point) []graph.Point {
 	return pts
 }
 
+// localSearchBounds는 격자를 start/end 주변 지역 범위로만 한정한다. 부지가
+// 아무리 커도(200x400m 등) start/end가 가까우면 격자도 작게 유지된다 —
+// 예전엔 업로드된 모든 장애물 좌표까지 bounds에 넣어서, 부지 반대편에 있는
+// 상관없는 장애물 때문에 격자가 부지 전체 크기로 커지는 문제가 있었다.
+func localSearchBounds(start, end graph.Point, minPadding float64) (minX, minY, maxX, maxY float64) {
+	minX = math.Min(start.X, end.X)
+	minY = math.Min(start.Y, end.Y)
+	maxX = math.Max(start.X, end.X)
+	maxY = math.Max(start.Y, end.Y)
+
+	dist := math.Hypot(end.X-start.X, end.Y-start.Y)
+	padding := math.Max(minPadding, dist*0.6) // 우회로를 낼 여유
+	return minX - padding, minY - padding, maxX + padding, maxY + padding
+}
+
+func ringBounds(ring []graph.Point) (minX, minY, maxX, maxY float64) {
+	minX, minY = math.Inf(1), math.Inf(1)
+	maxX, maxY = math.Inf(-1), math.Inf(-1)
+	for _, p := range ring {
+		minX = math.Min(minX, p.X)
+		minY = math.Min(minY, p.Y)
+		maxX = math.Max(maxX, p.X)
+		maxY = math.Max(maxY, p.Y)
+	}
+	return
+}
+
+func ringOverlapsBounds(ring []graph.Point, minX, minY, maxX, maxY float64) bool {
+	bMinX, bMinY, bMaxX, bMaxY := ringBounds(ring)
+	return !(bMaxX < minX || bMinX > maxX || bMaxY < minY || bMinY > maxY)
+}
+
+// filterRelevantBlocks는 검색 범위와 겹치는 장애물만 남긴다. 부지 반대편의
+// 장애물을 걸러내면 (1) 격자 크기 자체가 커지지 않고 (2) 래스터화 비용
+// (칸 수 x 장애물 수)도 크게 줄어든다.
+func filterRelevantBlocks(blocks [][]graph.Point, minX, minY, maxX, maxY float64) [][]graph.Point {
+	relevant := make([][]graph.Point, 0, len(blocks))
+	for _, ring := range blocks {
+		if ringOverlapsBounds(ring, minX, minY, maxX, maxY) {
+			relevant = append(relevant, ring)
+		}
+	}
+	return relevant
+}
+
+// maxGridCells는 격자 칸 수의 상한이다. start/end가 아주 멀리 떨어져 있으면
+// localSearchBounds의 padding만으로도 격자가 커질 수 있으니, 이 상한을
+// 넘어서면 cellSize를 늘려(해상도를 낮춰) 계산량을 안전하게 유지한다.
+const maxGridCells = 400_000
+
+func adaptiveCellSize(width, height, cellSize float64) float64 {
+	cols := width/cellSize + 1
+	rows := height/cellSize + 1
+	if cols*rows <= maxGridCells {
+		return cellSize
+	}
+	scale := math.Sqrt((cols * rows) / maxGridCells)
+	return cellSize * scale
+}
+
 // handleObstaclePath implements path-finding.md mode 2: ignore the
 // node/link graph entirely and search free space around drawn block
 // polygons via a rasterized occupancy grid.
@@ -153,10 +214,14 @@ func handleObstaclePath(w http.ResponseWriter, r *http.Request) {
 	start := req.Start.toPoint()
 	end := req.End.toPoint()
 
-	boundsInput := append(blockBoundsPoints(blocks), start, end)
+	searchMinX, searchMinY, searchMaxX, searchMaxY := localSearchBounds(start, end, 5.0)
+	relevantBlocks := filterRelevantBlocks(blocks, searchMinX, searchMinY, searchMaxX, searchMaxY)
+	cellSize = adaptiveCellSize(searchMaxX-searchMinX, searchMaxY-searchMinY, cellSize)
+
+	boundsInput := append(blockBoundsPoints(relevantBlocks), start, end)
 	originX, originY, cols, rows := grid.Bounds(boundsInput, 1.0, cellSize)
 	occupancy := grid.NewGrid(originX, originY, cellSize, cols, rows)
-	occupancy.RasterizeBlocks(blocks)
+	occupancy.RasterizeBlocks(relevantBlocks)
 
 	algo := req.Algorithm
 	var path []graph.Point
