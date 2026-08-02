@@ -60,19 +60,26 @@ export function createSliceLayers(source, bands) {
 }
 
 /**
- * 슬라이스 레이어 on/off 체크박스 패널을 컨테이너에 렌더링한다.
+ * 슬라이스 레이어 on/off 체크박스 패널을 컨테이너에 렌더링한다. 지도의 모든
+ * on/off 가능한 레이어(배경 도면, 원본 PCD, 높이 슬라이스별)를 한곳에서
+ * 토글하는 레이어 관리 패널 역할을 겸한다.
  * @param {HTMLElement} container
  * @param {Array<{min:number,max:number,count:number}>} bands
  * @param {import('ol/layer/WebGLVector.js').default[]} sliceLayers
- * @param {{ layer: import('ol/layer.js').Layer, label: string }} rawEntry
+ * @param {{ layer: import('ol/layer.js').Layer, label: string, checked?: boolean }[]} extraEntries
+ *   높이 슬라이스 목록 위에 고정으로 표시할 레이어들(배경 도면, 원본 PCD 등).
+ *   checked를 생략하면 레이어의 현재 visible 상태를 그대로 반영한다 — 매번
+ *   PCD를 새로 불러올 때마다 패널이 다시 그려지므로, 배경 도면처럼 데이터
+ *   로드와 무관하게 계속 떠 있는 레이어는 이렇게 해야 사용자가 꺼둔 상태가
+ *   재로딩 때마다 되돌아가지 않는다.
  */
-export function renderSlicePanel(container, bands, sliceLayers, rawEntry) {
+export function renderSlicePanel(container, bands, sliceLayers, extraEntries) {
   container.innerHTML = '';
   container.classList.add('slice-panel');
 
   const title = document.createElement('div');
   title.className = 'slice-panel-title';
-  title.textContent = '높이 슬라이스 (50cm)';
+  title.textContent = '레이어';
   container.appendChild(title);
 
   function addRow(label, count, layer, checked) {
@@ -95,7 +102,14 @@ export function renderSlicePanel(container, bands, sliceLayers, rawEntry) {
     container.appendChild(row);
   }
 
-  addRow(rawEntry.label, undefined, rawEntry.layer, false);
+  extraEntries.forEach(({ layer, label, checked }) => {
+    addRow(label, undefined, layer, checked ?? layer.getVisible());
+  });
+
+  const sliceTitle = document.createElement('div');
+  sliceTitle.className = 'slice-panel-title';
+  sliceTitle.textContent = '높이 슬라이스 (50cm)';
+  container.appendChild(sliceTitle);
 
   bands.forEach((band, i) => {
     const label = `${band.min.toFixed(1)}m ~ ${band.max.toFixed(1)}m`;

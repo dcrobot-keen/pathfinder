@@ -2,6 +2,8 @@ import './style.css';
 import Map from 'ol/Map.js';
 import View from 'ol/View.js';
 import WebGLVectorLayer from 'ol/layer/WebGLVector.js';
+import ImageLayer from 'ol/layer/Image.js';
+import ImageStatic from 'ol/source/ImageStatic.js';
 import Feature from 'ol/Feature.js';
 import Point from 'ol/geom/Point.js';
 import { defaults as defaultControls } from 'ol/control.js';
@@ -20,11 +22,30 @@ import { createRobotRegistryTab } from './robots/robotRegistry.js';
 const SAMPLE_PCD_URL = '/samples/sample-room.pcd';
 const SLICE_HEIGHT_M = 0.5;
 
+// 2D 지도 맨 아래 깔리는 배경 도면. data/에 있는 파일을 vite 에셋으로 바로
+// 참조한다(별도 서버/정적 경로 설정 없이 dev·build 양쪽에서 동작).
+// 실측 동서(가로) 폭은 25.923m. 이미지 픽셀이 정사각형(3840x3840)이라 남북(세로)도
+// 같은 축척(25.923m)으로 가정했다 — 세로 실측이 다르면 BLUEPRINT_HEIGHT_M만
+// 따로 바꾸면 된다. world file(정확한 원점 옵셋)이 없어서 우선 지도 원점(0,0)에
+// 왼쪽 아래를 맞춰 깔았다 — 실제 배치 지점이 다르면 imageExtent의 원점을
+// 옮겨야 한다.
+const BLUEPRINT_WIDTH_M = 25.923;
+const BLUEPRINT_HEIGHT_M = 25.923;
+const BLUEPRINT_URL = new URL('../data/blueprint_9108.jpg', import.meta.url).href;
+const blueprintLayer = new ImageLayer({
+  source: new ImageStatic({
+    url: BLUEPRINT_URL,
+    imageExtent: [0, 0, BLUEPRINT_WIDTH_M, BLUEPRINT_HEIGHT_M],
+    projection: indoorProjection,
+  }),
+  visible: false, // 기본은 꺼둔 채로 시작 — 레이어 패널에서 필요할 때 켠다
+});
+
 const gridLayer = buildGridLayer(MAP_SIZE_M, 10);
 
 const map = new Map({
   target: 'map',
-  layers: [gridLayer],
+  layers: [blueprintLayer, gridLayer],
   view: new View({
     projection: indoorProjection,
     center: [MAP_SIZE_M / 2, MAP_SIZE_M / 2],
@@ -155,10 +176,10 @@ function applyPoints(points, label) {
   const bands = buildHeightBands(points, SLICE_HEIGHT_M);
   sliceLayers = createSliceLayers(pcdSource, bands);
   sliceLayers.forEach((layer) => map.addLayer(layer));
-  renderSlicePanel(document.getElementById('slice-panel'), bands, sliceLayers, {
-    layer: pcdLayer,
-    label: '전체 (비분류)',
-  });
+  renderSlicePanel(document.getElementById('slice-panel'), bands, sliceLayers, [
+    { layer: blueprintLayer, label: '배경 도면' },
+    { layer: pcdLayer, label: `전체 (비분류) — ${label}`, checked: false },
+  ]);
 
   // 2D: 새 데이터의 실제 좌표 범위에 맞춰 뷰 자동 이동/줌
   const extent = pcdSource.getExtent();
