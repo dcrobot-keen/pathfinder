@@ -1,0 +1,60 @@
+{
+  "robots": [
+    {
+      "id": "7385e6c5-c005-4937-9678-f4d36eb2b82b",
+      "createdAt": "2026-08-01T23:38:17.776Z",
+      "updatedAt": "2026-08-01T23:48:11.458Z",
+      "name": "Atlas",
+      "type": "humanoid",
+      "algorithm": "gridastar",
+      "status": "standby",
+      "company": "Boston Dynamics",
+      "description": "완전한 동역학 제어 기반의 이족보행 휴머노이드 로봇. 계단 오르기, 점프 등 고난도 지형 대응이 가능합니다.",
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2212%22%20r%3D%228%22%20fill%3D%22%234a90e2%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2224%22%20y%3D%2222%22%20width%3D%2216%22%20height%3D%2220%22%20rx%3D%224%22%20fill%3D%22%234a90e2%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2210%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%20transform%3D%22rotate(-15%2014%2024)%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2246%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%20transform%3D%22rotate(15%2050%2024)%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2224%22%20y%3D%2242%22%20width%3D%227%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2233%22%20y%3D%2242%22%20width%3D%227%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "sizeMeters": 0.55,
+      "speedMps": 0.2
+    },
+    {
+      "id": "1705819d-78da-4670-ab8c-4f009d003691",
+      "createdAt": "2026-08-01T23:38:17.777Z",
+      "updatedAt": "2026-08-01T23:38:17.777Z",
+      "name": "MoBED",
+      "type": "wheeled_nonholonomic",
+      "algorithm": "hybridastar",
+      "status": "standby",
+      "company": "Research Platform",
+      "description": "4개의 조향 가능한 바퀴를 가진 non-holonomic 모바일 베이스. 정밀한 경로 추종이 필요한 연구/물류 환경에 적합합니다.",
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2214%22%20y%3D%2218%22%20width%3D%2236%22%20height%3D%2228%22%20rx%3D%226%22%20fill%3D%22%237e57c2%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2218%22%20cy%3D%2218%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2246%22%20cy%3D%2218%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2218%22%20cy%3D%2246%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2246%22%20cy%3D%2246%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "sizeMeters": 0.6,
+      "speedMps": 0.8
+    },
+    {
+      "id": "33b2faa4-2178-4dab-8921-ec811a2a74d0",
+      "createdAt": "2026-08-01T23:38:17.777Z",
+      "updatedAt": "2026-08-01T23:47:57.490Z",
+      "name": "SPOT",
+      "type": "quadruped",
+      "algorithm": "gridastar",
+      "status": "standby",
+      "company": "Boston Dynamics",
+      "description": "4족 보행 산업/필드 점검용 로봇. 계단과 불규칙한 지형을 안정적으로 이동할 수 있습니다.",
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2214%22%20y%3D%2222%22%20width%3D%2236%22%20height%3D%2216%22%20rx%3D%226%22%20fill%3D%22%23f5a623%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2246%22%20y%3D%2218%22%20width%3D%2210%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2216%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2226%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2236%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2246%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "sizeMeters": 0.5,
+      "speedMps": 1.2
+    },
+    {
+      "id": "d23e022f-dd31-49d2-a383-d2ff5ff88fd0",
+      "createdAt": "2026-08-01T23:38:17.777Z",
+      "updatedAt": "2026-08-01T23:48:05.524Z",
+      "name": "AGV/AMR",
+      "type": "agv_amr",
+      "algorithm": "astar",
+      "status": "standby",
+      "company": "Generic",
+      "description": "창고/공장에서 자재를 운반하는 자율주행 이동로봇(AGV/AMR) 샘플 항목입니다.",
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2210%22%20y%3D%2234%22%20width%3D%2244%22%20height%3D%2214%22%20rx%3D%224%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2220%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2244%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2228%22%20y%3D%2218%22%20width%3D%228%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%225%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "sizeMeters": 0.9,
+      "speedMps": 0.5
+    }
+  ]
+}
