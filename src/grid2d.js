@@ -7,26 +7,26 @@ import Stroke from 'ol/style/Stroke.js';
 import Text from 'ol/style/Text.js';
 import Fill from 'ol/style/Fill.js';
 
-/** size x size (m) 영역에 step(m) 간격의 기준선 레이어를 만든다. */
-export function buildGridLayer(size, step) {
+/** sizeX x sizeY (m) 영역에 step(m) 간격의 기준선 레이어를 만든다. */
+export function buildGridLayer(sizeX, sizeY, step) {
   const source = new VectorSource();
-  for (let x = 0; x <= size; x += step) {
+  for (let x = 0; x <= sizeX; x += step) {
     source.addFeature(
       new Feature({
         geometry: new LineString([
           [x, 0],
-          [x, size],
+          [x, sizeY],
         ]),
         label: x % (step * 5) === 0 ? `${x}m` : null,
       })
     );
   }
-  for (let y = 0; y <= size; y += step) {
+  for (let y = 0; y <= sizeY; y += step) {
     source.addFeature(
       new Feature({
         geometry: new LineString([
           [0, y],
-          [size, y],
+          [sizeX, y],
         ]),
         label: y % (step * 5) === 0 ? `${y}m` : null,
       })

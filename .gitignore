@@ -2,3 +2,8 @@ node_modules/
 dist/
 .claude/
 *.log
+
+# 100MB(GitHub 하드 리밋)를 넘거나 그에 근접하는 실측 스캔 PCD는 커밋하지 않는다.
+# 작은 생성/샘플 PCD(public/samples/*.pcd)는 그대로 추적한다.
+public/samples/Untitled_Scan_08_05_13.pcd
+public/samples/scan.pcd

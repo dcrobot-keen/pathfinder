@@ -7,6 +7,7 @@ import GeoJSON from 'ol/format/GeoJSON.js';
 import Feature from 'ol/Feature.js';
 import PointGeom from 'ol/geom/Point.js';
 import LineString from 'ol/geom/LineString.js';
+import Polygon from 'ol/geom/Polygon.js';
 import Draw from 'ol/interaction/Draw.js';
 import Snap from 'ol/interaction/Snap.js';
 import Style from 'ol/style/Style.js';
@@ -16,13 +17,14 @@ import Stroke from 'ol/style/Stroke.js';
 import Text from 'ol/style/Text.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
-import { indoorProjection, MAP_SIZE_M, pcdSource, nodeLinkSource } from '../appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource } from '../appShared.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { findNodeLinkPath, findObstaclePath } from './pathfindingApi.js';
 import { animatePathAndRobot, randomPathColor, REFERENCE_SIZE_M as DEFAULT_SIZE_M } from './robotAnimation.js';
 import { listRobots } from '../robots/robotApi.js';
 import { typeLabel } from '../robots/robotCodes.js';
+import { renderSlicePanel } from '../heightSlices.js';
 
 const MODE_CONFIG = {
   nodelink: {
@@ -100,22 +102,39 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
   const map = new OlMap({
     target: mapEl,
-    layers: [buildGridLayer(MAP_SIZE_M, 10), floorLayer, graphLayer, interactionLayer, conflictLayer],
+    layers: [buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10), floorLayer, graphLayer, interactionLayer, conflictLayer],
     view: new View({
       projection: indoorProjection,
-      center: [MAP_SIZE_M / 2, MAP_SIZE_M / 2],
-      zoom: 2,
+      center: [MAP_SIZE_X / 2, MAP_SIZE_Y / 2],
+      zoom: 1,
       minZoom: 0,
       maxZoom: 8,
       extent: [
-        -MAP_SIZE_M * 0.2,
-        -MAP_SIZE_M * 0.2,
-        MAP_SIZE_M * 1.2,
-        MAP_SIZE_M * 1.2,
+        -MAP_SIZE_X * 0.2,
+        -MAP_SIZE_Y * 0.2,
+        MAP_SIZE_X * 1.2,
+        MAP_SIZE_Y * 1.2,
       ],
+      // center만 제한 — 안 그러면 세로가 긴 데이터(200x400)를 가로로 넓은
+      // 브라우저 창에 맞출 때 extent 폭 제약이 축소를 막아 세로가 잘린다.
+      constrainOnlyCenter: true,
     }),
     controls: defaultControls().extend([new ScaleLine({ units: 'metric' })]),
   });
+  // 처음 열릴 때 200x400m 공장 부지 전체가 보이도록 맞춘다(데이터가 있으면
+  // fitToData()가 나중에 그 범위로 다시 맞춘다). updateSize()를 먼저 호출해
+  // OL이 컨테이너의 실제 크기를 측정한 뒤 fit이 계산되도록 한다.
+  map.updateSize();
+  map.getView().fit([0, 0, MAP_SIZE_X, MAP_SIZE_Y], { padding: [20, 20, 20, 20] });
+
+  // 레이어 on/off 패널 (2D 지도의 레이어 패널과 같은 컴포넌트 재사용).
+  // .slice-panel은 top/right에 고정되어 있어 좌측의 pathfinding-panel과 겹치지 않는다.
+  const layersPanelEl = document.createElement('div');
+  mapEl.appendChild(layersPanelEl);
+  renderSlicePanel(layersPanelEl, [], [], [
+    { layer: floorLayer, label: '바닥 PCD (0.5m)' },
+    { layer: graphLayer, label: '노드/링크/블록' },
+  ]);
 
   const geojsonFormat = new GeoJSON({
     dataProjection: indoorProjection,
@@ -387,15 +406,18 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   function checkConflicts() {
     let debugMsg = '';
     const conflictingKeys = new Set();
+    // priority가 작을수록 우선순위가 높다(리스트 드래그앤드롭으로 즉시 바뀔 수 있음) —
+    // 배열 순서(activeAnimations의 push 순서) 대신 매 틱 이 값 기준으로 정렬해서 비교한다.
+    const sorted = [...activeAnimations].sort((a, b) => a.priority - b.priority);
 
-    for (let j = 0; j < activeAnimations.length; j++) {
-      const lower = activeAnimations[j];
+    for (let j = 0; j < sorted.length; j++) {
+      const lower = sorted[j];
       const lowerSize = lower.sizeMeters ?? DEFAULT_SIZE_M;
       let blocked = false;
 
       for (let i = 0; i < j; i++) {
-        // i < j: 먼저 출발한(=배열에 먼저 들어온) 쪽이 우선순위가 높다.
-        const higher = activeAnimations[i];
+        // i < j: priority가 더 작은(=더 앞선) 쪽이 우선순위가 높다.
+        const higher = sorted[i];
         const higherSize = higher.sizeMeters ?? DEFAULT_SIZE_M;
 
         const higherLookahead = truncatePath(
@@ -443,9 +465,15 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       }
 
       // 위험 기준(pauseRadius 이내)이 사라지는 즉시 pause/resume을 갱신한다 —
-      // 별도의 대기(hysteresis) 없이 이번 틱 판정을 그대로 반영.
-      if (blocked && !lower.isPaused()) lower.pause();
-      if (!blocked && lower.isPaused()) {
+      // 별도의 대기(hysteresis) 없이 이번 틱 판정을 그대로 반영. 다만 재탐색(reroute)
+      // 모드에서는 정지 대신 새 경로를 찾도록 attemptReroute에 위임한다.
+      if (blocked) {
+        if (conflictModeSelect.value === 'reroute') {
+          if (!lower.rerouteInFlight) attemptReroute(lower); // fire-and-forget
+        } else if (!lower.isPaused()) {
+          lower.pause();
+        }
+      } else if (lower.isPaused() && !lower.rerouteInFlight) {
         console.log(`[deconflict] resume 로봇#${lower.id}`);
         lower.resume();
       }
@@ -491,6 +519,16 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     }
   });
 
+  // 활성 경로 목록의 우선순위를 0..n-1로 다시 매긴다(현재 priority 순서를 유지한
+  // 채 빈 자리만 메움) — 경로가 하나 끝나거나(splice) 재탐색으로 교체될 때마다
+  // 호출해서, 드래그앤드롭 정렬과 checkConflicts가 항상 연속된 값을 보게 한다.
+  function renumberPriorities() {
+    const sorted = [...activeAnimations].sort((a, b) => a.priority - b.priority);
+    sorted.forEach((a, idx) => {
+      a.priority = idx;
+    });
+  }
+
   async function requestPath(startCoord, endCoord, markerFeatures = []) {
     setStatus('경로 계산 중...');
     const featureCollection = geojsonFormat.writeFeaturesObject(nodeLinkSource.getFeatures());
@@ -505,21 +543,35 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
           ? await findNodeLinkPath({ featureCollection, start, end, algorithm })
           : await findObstaclePath({ featureCollection, start, end, algorithm, cellSize: 0.2 });
 
+      const id = nextAnimId++;
+      const color = randomPathColor();
       const anim = animatePathAndRobot(map, interactionSource, result.path, {
-        color: randomPathColor(),
+        color,
         iconSrc: selectedRobot?.icon,
         metersPerSecond: selectedRobot?.speedMps,
         sizeMeters: selectedRobot?.sizeMeters,
+        label: id, // 리스트의 번호와 동일 — 재탐색으로 경로가 바뀌어도 이 번호는 유지된다.
         onDone: () => {
           const idx = activeAnimations.indexOf(anim);
           if (idx !== -1) activeAnimations.splice(idx, 1);
+          renumberPriorities();
           // 목적지에 도착하면 이번 경로의 start/end 핀도 함께 지운다.
           markerFeatures.forEach((f) => f && interactionSource.removeFeature(f));
+          renderActiveList();
         },
       });
-      anim.id = nextAnimId++;
+      anim.id = id;
+      anim.color = color;
+      anim.priority = activeAnimations.length; // 새로 시작한 경로는 일단 맨 뒤(최저 우선순위)
+      anim.robotName = selectedRobot?.name ?? null;
+      anim.algorithm = algorithm;
+      anim.selectedRobot = selectedRobot;
+      anim.endCoord = endCoord;
+      anim.markerFeatures = markerFeatures;
+      anim.rerouteInFlight = false;
       anim.sizeMeters = selectedRobot?.sizeMeters ?? DEFAULT_SIZE_M;
       activeAnimations.push(anim);
+      renderActiveList();
       const robotNote = selectedRobot ? ` — ${selectedRobot.name}` : '';
       setStatus(`경로 거리: ${result.distance.toFixed(2)}m (${result.algorithm})${robotNote}`);
     } catch (err) {
@@ -528,15 +580,105 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     }
   }
 
+  // --- re-routing: 충돌 시 정지 대신 현재 위치에서 목적지까지 새 경로를 다시 찾는다.
+  // 상위 우선순위 로봇들의 "현재 위치"를 임시 원형 장애물로 취급해 그 주변을
+  // 피해가도록 만든다(영구 장애물이 아니라 이번 재탐색 1회에만 쓰는 임시 데이터).
+  function circlePolygonFeature(cx, cy, radius, sides = 12) {
+    const coords = [];
+    for (let i = 0; i <= sides; i++) {
+      const angle = (i / sides) * Math.PI * 2;
+      coords.push([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)]);
+    }
+    return new Feature(new Polygon([coords]));
+  }
+
+  const REROUTE_BLOCK_RADIUS_MULTIPLIER = 1.5;
+
+  async function attemptReroute(entry) {
+    if (entry.rerouteInFlight) return;
+    entry.rerouteInFlight = true;
+    entry.pause();
+    renderActiveList();
+
+    try {
+      const currentPos = entry.getPosition();
+      const entrySize = entry.sizeMeters ?? DEFAULT_SIZE_M;
+      const higherEntries = activeAnimations.filter((a) => a !== entry && a.priority < entry.priority);
+      const blockFeatures = higherEntries.map((h) => {
+        const [hx, hy] = h.getPosition();
+        const hSize = h.sizeMeters ?? DEFAULT_SIZE_M;
+        return circlePolygonFeature(hx, hy, REROUTE_BLOCK_RADIUS_MULTIPLIER * (hSize + entrySize));
+      });
+
+      const featureCollection = geojsonFormat.writeFeaturesObject([
+        ...nodeLinkSource.getFeatures(),
+        ...blockFeatures,
+      ]);
+      const start = { x: currentPos[0], y: currentPos[1] };
+      const end = { x: entry.endCoord[0], y: entry.endCoord[1] };
+
+      const result =
+        mode === 'nodelink'
+          ? await findNodeLinkPath({ featureCollection, start, end, algorithm: entry.algorithm })
+          : await findObstaclePath({ featureCollection, start, end, algorithm: entry.algorithm, cellSize: 0.2 });
+
+      // 기다리는 동안 초기화(reset)되었거나 이미 목적지에 도착해 정리된 경우 결과를 버린다.
+      if (!activeAnimations.includes(entry)) return;
+
+      entry.stop();
+      const idx = activeAnimations.indexOf(entry);
+      const newAnim = animatePathAndRobot(map, interactionSource, result.path, {
+        color: entry.color,
+        iconSrc: entry.selectedRobot?.icon,
+        metersPerSecond: entry.selectedRobot?.speedMps,
+        sizeMeters: entry.sizeMeters,
+        label: entry.id,
+        onDone: () => {
+          const i2 = activeAnimations.indexOf(newAnim);
+          if (i2 !== -1) activeAnimations.splice(i2, 1);
+          renumberPriorities();
+          entry.markerFeatures?.forEach((f) => f && interactionSource.removeFeature(f));
+          renderActiveList();
+        },
+      });
+      newAnim.id = entry.id;
+      newAnim.color = entry.color;
+      newAnim.priority = entry.priority;
+      newAnim.robotName = entry.robotName;
+      newAnim.algorithm = entry.algorithm;
+      newAnim.selectedRobot = entry.selectedRobot;
+      newAnim.endCoord = entry.endCoord;
+      newAnim.markerFeatures = entry.markerFeatures;
+      newAnim.sizeMeters = entry.sizeMeters;
+      newAnim.rerouteInFlight = false;
+
+      if (idx !== -1) {
+        activeAnimations[idx] = newAnim;
+      } else {
+        activeAnimations.push(newAnim);
+      }
+      setStatus(`로봇#${entry.id} 재탐색 완료 (${result.distance.toFixed(2)}m)`);
+      renderActiveList();
+    } catch (err) {
+      if (!activeAnimations.includes(entry)) return;
+      console.error('재탐색 실패', err);
+      entry.rerouteInFlight = false;
+      setStatus(`로봇#${entry.id} 재탐색 실패: ${err.message}`);
+      renderActiveList();
+    }
+  }
+
   function reset() {
     activeAnimations.forEach((a) => a.stop());
     activeAnimations.length = 0;
+    nextAnimId = 1;
     lastPausedCount = 0;
     conflictLineFeatures.clear();
     conflictSource.clear();
     interactionSource.clear();
     pendingRole = 'start';
     pendingStartCoord = null;
+    renderActiveList();
     setStatus(config.hint);
   }
 
@@ -567,9 +709,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   function randomFreePoint() {
     const extent = pcdSource.getExtent();
     const hasExtent = extent.every(Number.isFinite);
-    const [minX, minY, maxX, maxY] = hasExtent
-      ? extent
-      : [0, 0, MAP_SIZE_M * 0.2, MAP_SIZE_M * 0.2];
+    const [minX, minY, maxX, maxY] = hasExtent ? extent : [0, 0, MAP_SIZE_X, MAP_SIZE_Y];
     const blocks = nodeLinkSource
       .getFeatures()
       .filter((f) => f.getGeometry().getType() === 'Polygon')
@@ -659,6 +799,108 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     }
   }
   loadRobots();
+
+  const conflictModeRow = document.createElement('div');
+  conflictModeRow.className = 'pathfinding-conflict-mode';
+  const conflictModeLabel = document.createElement('span');
+  conflictModeLabel.textContent = '충돌 시:';
+  const conflictModeSelect = document.createElement('select');
+  conflictModeSelect.className = 'pathfinding-select';
+  [
+    ['pause', '정지 후 재개'],
+    ['reroute', '재탐색 (re-routing)'],
+  ].forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    conflictModeSelect.appendChild(opt);
+  });
+  conflictModeRow.append(conflictModeLabel, conflictModeSelect);
+  panelEl.appendChild(conflictModeRow);
+
+  const activeListEl = document.createElement('div');
+  activeListEl.className = 'pathfinding-active-list';
+  panelEl.appendChild(activeListEl);
+
+  // 드래그 중인 항목의 id — dragover/drop 핸들러끼리 공유하는 상태.
+  let draggedAnimId = null;
+
+  function reorderPriority(draggedId, targetId) {
+    const sorted = [...activeAnimations].sort((a, b) => a.priority - b.priority);
+    const fromIdx = sorted.findIndex((a) => a.id === draggedId);
+    const toIdx = sorted.findIndex((a) => a.id === targetId);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+
+    const [moved] = sorted.splice(fromIdx, 1);
+    sorted.splice(toIdx, 0, moved);
+    sorted.forEach((a, idx) => {
+      a.priority = idx;
+    });
+    renderActiveList();
+  }
+
+  // 로봇을 선택하는 콤보 박스 밑에, 현재 길찾기 진행 중인 경로를 실시간으로
+  // 보여준다 — 각 항목은 해당 경로 선과 같은 색 스와치 + 생성 번호(#id, 마커
+  // 아이콘 위 숫자와 동일)를 표시하고, 드래그앤드롭으로 우선순위를 바꿀 수 있다.
+  function renderActiveList() {
+    activeListEl.innerHTML = '';
+    const sorted = [...activeAnimations].sort((a, b) => a.priority - b.priority);
+
+    if (sorted.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'pathfinding-list-empty';
+      empty.textContent = '진행 중인 경로 없음';
+      activeListEl.appendChild(empty);
+      return;
+    }
+
+    sorted.forEach((anim, rank) => {
+      const row = document.createElement('div');
+      row.className = 'pathfinding-list-row';
+      row.draggable = true;
+      row.dataset.animId = String(anim.id);
+
+      const swatch = document.createElement('span');
+      swatch.className = 'pathfinding-list-swatch';
+      swatch.style.background = anim.color;
+
+      const idBadge = document.createElement('span');
+      idBadge.className = 'pathfinding-list-id';
+      idBadge.textContent = `#${anim.id}`;
+
+      const priorityBadge = document.createElement('span');
+      priorityBadge.className = 'pathfinding-list-priority';
+      priorityBadge.textContent = `우선순위 ${rank + 1}`;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'pathfinding-list-name';
+      let nameText = anim.robotName || '사용자 지정';
+      if (anim.rerouteInFlight) nameText += ' (재탐색 중...)';
+      else if (anim.isPaused()) nameText += ' (대기 중)';
+      nameEl.textContent = nameText;
+
+      row.append(swatch, idBadge, priorityBadge, nameEl);
+      activeListEl.appendChild(row);
+
+      row.addEventListener('dragstart', () => {
+        draggedAnimId = anim.id;
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        draggedAnimId = null;
+      });
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (draggedAnimId === null || draggedAnimId === anim.id) return;
+        reorderPriority(draggedAnimId, anim.id);
+      });
+    });
+  }
+  renderActiveList();
 
   const buttonRow = document.createElement('div');
   buttonRow.className = 'pathfinding-button-row';
