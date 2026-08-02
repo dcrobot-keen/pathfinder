@@ -10,7 +10,7 @@ import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
 import MousePosition from 'ol/control/MousePosition.js';
 import { createStringXY } from 'ol/coordinate.js';
-import { loadPcd, parsePcdAscii } from './pcd.js';
+import { loadPcd, parsePcd } from './pcd.js';
 import { createView3D } from './view3d.js';
 import { buildHeightBands, createSliceLayers, renderSlicePanel } from './heightSlices.js';
 import { createEditLayer } from './editLayer.js';
@@ -215,8 +215,8 @@ pcdFileInput.addEventListener('change', async () => {
   if (!file) return;
   setPcdStatus(`${file.name} 로딩 중...`);
   try {
-    const text = await file.text();
-    const { points } = parsePcdAscii(text);
+    const buffer = await file.arrayBuffer();
+    const { points } = parsePcd(buffer);
     applyPoints(points, file.name);
   } catch (err) {
     console.error(err);
