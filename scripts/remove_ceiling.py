@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from studio.moving_objects import remove_isolated_clusters
 from studio.point_cloud_io import load_point_cloud, save_point_cloud
 from studio.preprocess import remove_ceiling
 
@@ -27,6 +28,14 @@ def main() -> None:
     parser.add_argument("--outlier-k", type=int, default=16)
     parser.add_argument("--outlier-std-ratio", type=float, default=2.0)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--remove-isolated-clusters",
+        action="store_true",
+        help="also remove small spatially-isolated obstacle clusters (heuristic 'moving object' "
+        "removal -- see studio/moving_objects.py; on real scans this can catch scan-boundary "
+        "noise as much as actual moving objects, off by default until you've checked it on your data)",
+    )
+    parser.add_argument("--isolated-cluster-min-area", type=float, default=0.3, help="m^2; smaller connected clusters get removed")
     args = parser.parse_args()
 
     points, colors = load_point_cloud(args.input_ply)
@@ -44,12 +53,27 @@ def main() -> None:
         seed=args.seed,
     )
 
-    save_point_cloud(args.output_ply, result.points, result.colors)
     print(f"floor source: {result.floor_z_source}")
     print(f"ceiling z: {result.ceiling_z}")
     print(f"below-floor points removed: {result.below_floor_removed}")
     print(f"outliers removed: {result.outliers_removed}")
-    print(f"wrote {len(result.points)} points to {args.output_ply}")
+
+    out_points, out_colors = result.points, result.colors
+    if args.remove_isolated_clusters:
+        cluster_result = remove_isolated_clusters(
+            out_points, out_colors, min_component_area_m2=args.isolated_cluster_min_area
+        )
+        removed_n = int(cluster_result.removed_mask.sum())
+        out_points, out_colors = cluster_result.points, cluster_result.colors
+        print(
+            f"isolated clusters removed: {removed_n} points across "
+            f"{cluster_result.num_components - cluster_result.kept_component_count} components "
+            f"(kept {cluster_result.kept_component_count}/{cluster_result.num_components}) -- "
+            f"inspect before trusting on real data, see PLAN.md"
+        )
+
+    save_point_cloud(args.output_ply, out_points, out_colors)
+    print(f"wrote {len(out_points)} points to {args.output_ply}")
 
 
 if __name__ == "__main__":

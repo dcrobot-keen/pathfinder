@@ -32,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from studio.gltf_export import PointCloudLayer, save_overlay_glb
+from studio.moving_objects import remove_isolated_clusters
 from studio.point_cloud_io import save_point_cloud
 from studio.preprocess import remove_ceiling
 from studio.rasterize import (
@@ -120,15 +121,30 @@ def cmd_process(args: argparse.Namespace) -> None:
 
     print("[2/5] removing ceiling/floor/outliers...")
     result = remove_ceiling(mesh.vertices, colors, seed=0)
-    save_point_cloud(proj_dir / "base_map.ply", result.points, result.colors)
+    base_points, base_colors = result.points, result.colors
     scan_summary.append(
-        f"<li>베이스맵: <span class=\"stat\">{len(result.points):,}</span>개 점 "
+        f"<li>베이스맵: <span class=\"stat\">{len(base_points):,}</span>개 점 "
         f"(천장 높이 {result.ceiling_z:.2f}m, 이상치 {result.outliers_removed:,}개 제거) → <code>base_map.ply</code></li>"
     )
-    print(f"  {len(result.points)} points, ceiling_z={result.ceiling_z}")
+    print(f"  {len(base_points)} points, ceiling_z={result.ceiling_z}")
+
+    if args.remove_isolated_clusters:
+        cluster_result = remove_isolated_clusters(
+            base_points, base_colors, min_component_area_m2=args.isolated_cluster_min_area
+        )
+        base_points, base_colors = cluster_result.points, cluster_result.colors
+        removed_n = int(cluster_result.removed_mask.sum())
+        scan_summary.append(
+            f"<li>고립 클러스터(이동 물체 추정) 제거: <span class=\"stat\">{removed_n:,}</span>개 점, "
+            f"{cluster_result.num_components - cluster_result.kept_component_count}개 컴포넌트 "
+            f"(실제 데이터에서는 스캔 경계 노이즈일 수 있음 — PLAN.md 참고)</li>"
+        )
+        print(f"  removed {removed_n} points in isolated clusters")
+
+    save_point_cloud(proj_dir / "base_map.ply", base_points, base_colors)
 
     print("[3/5] rasterizing 2D map...")
-    occ = rasterize_occupancy_grid(result.points)
+    occ = rasterize_occupancy_grid(base_points)
     save_occupancy_grid_pgm(proj_dir / "map" / "map", occ)
     n_free = int((occ.grid == FREE).sum())
     n_occupied = int((occ.grid == OCCUPIED).sum())
@@ -146,8 +162,8 @@ def cmd_process(args: argparse.Namespace) -> None:
     plt.imsave(proj_dir / "map" / "map.png", np.flipud(rgb))
 
     color_map_html = ""
-    if result.colors is not None:
-        color_topdown = rasterize_color_topdown(result.points, result.colors, resolution=0.02, padding=0.5)
+    if base_colors is not None:
+        color_topdown = rasterize_color_topdown(base_points, base_colors, resolution=0.02, padding=0.5)
         save_color_topdown_png(proj_dir / "map" / "map_color.png", color_topdown)
         color_map_html = '<div><a href="map/map_color.png">map_color.png (원본 색 top-down)</a><br><img src="map/map_color.png"></div>'
     print(f"  free={n_free} occupied={n_occupied}")
@@ -191,10 +207,10 @@ def cmd_process(args: argparse.Namespace) -> None:
     viewer_html = build_overlay_viewer_html(occ, poses, title=f"{args.name} — Overlay Viewer")
     (proj_dir / "viewer.html").write_text(viewer_html, encoding="utf-8")
 
-    layer_color = result.colors if result.colors is not None else (255, 0, 0, 255)
+    layer_color = base_colors if base_colors is not None else (255, 0, 0, 255)
     save_overlay_glb(
         mesh,
-        [PointCloudLayer(name="base_map", points=result.points, color=layer_color)],
+        [PointCloudLayer(name="base_map", points=base_points, color=layer_color)],
         str(proj_dir / "overlay.glb"),
     )
 
@@ -223,6 +239,13 @@ def main() -> None:
     process_parser.add_argument("--usdz", type=Path, required=True)
     process_parser.add_argument("--robot-map", type=Path, default=None, help="robot occupancy grid prefix (.pgm/.yaml) to register against")
     process_parser.add_argument("--trajectory", type=Path, default=None, help="trajectory JSON; omit for a synthetic demo path")
+    process_parser.add_argument(
+        "--remove-isolated-clusters",
+        action="store_true",
+        help="heuristic 'moving object' removal (see studio/moving_objects.py) -- off by default, "
+        "can catch scan-boundary noise as much as real moving objects on real data",
+    )
+    process_parser.add_argument("--isolated-cluster-min-area", type=float, default=0.3, help="m^2; smaller connected clusters get removed")
     process_parser.set_defaults(func=cmd_process)
 
     args = parser.parse_args()
