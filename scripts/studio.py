@@ -29,6 +29,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from studio.gltf_export import PointCloudLayer, save_overlay_glb
@@ -84,6 +86,8 @@ REPORT_TEMPLATE = """<!doctype html>
 </div>
 
 {registration_html}
+
+{classify_html}
 
 <h2>3. 인터랙티브 뷰어</h2>
 <ul>
@@ -143,6 +147,24 @@ def cmd_process(args: argparse.Namespace) -> None:
 
     save_point_cloud(proj_dir / "base_map.ply", base_points, base_colors)
 
+    classify_html = ""
+    if args.classify:
+        from studio.classify import FLOOR, FURNITURE, WALL, classify_floor_wall_furniture, labels_to_colors
+
+        class_result = classify_floor_wall_furniture(base_points, rng=np.random.default_rng(0))
+        class_colors = labels_to_colors(class_result.labels)
+        save_point_cloud(proj_dir / "classified.ply", base_points, class_colors)
+        class_topdown = rasterize_color_topdown(base_points, class_colors, resolution=0.03, padding=0.5)
+        save_color_topdown_png(proj_dir / "map" / "classified_topdown.png", class_topdown)
+        classify_html = (
+            "<h2>2c. 바닥/벽/가구 분류</h2>"
+            f"<p>벽 평면 {class_result.num_wall_planes}개 검출 — "
+            f"바닥 {class_result.count(FLOOR):,} / 벽 {class_result.count(WALL):,} / "
+            f"가구 {class_result.count(FURNITURE):,} 점 (규칙 기반 휴리스틱, PLAN.md 참고)</p>"
+            '<img src="map/classified_topdown.png">'
+        )
+        print(f"  wall planes found: {class_result.num_wall_planes}")
+
     print("[3/5] rasterizing 2D map...")
     occ = rasterize_occupancy_grid(base_points)
     save_occupancy_grid_pgm(proj_dir / "map" / "map", occ)
@@ -153,7 +175,6 @@ def cmd_process(args: argparse.Namespace) -> None:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    import numpy as np
 
     rgb = np.zeros((*occ.grid.shape, 3), dtype=np.uint8)
     rgb[occ.grid == FREE] = (255, 255, 255)
@@ -220,6 +241,7 @@ def cmd_process(args: argparse.Namespace) -> None:
         scan_summary="".join(scan_summary),
         color_map_html=color_map_html,
         registration_html=registration_html,
+        classify_html=classify_html,
     )
     (proj_dir / "report.html").write_text(report_html, encoding="utf-8")
 
@@ -246,6 +268,12 @@ def main() -> None:
         "can catch scan-boundary noise as much as real moving objects on real data",
     )
     process_parser.add_argument("--isolated-cluster-min-area", type=float, default=0.3, help="m^2; smaller connected clusters get removed")
+    process_parser.add_argument(
+        "--classify",
+        action="store_true",
+        help="rule-based floor/wall/furniture classification (see studio/classify.py) -- off by "
+        "default, adds classified.ply + a colored top-down PNG to the report",
+    )
     process_parser.set_defaults(func=cmd_process)
 
     args = parser.parse_args()
