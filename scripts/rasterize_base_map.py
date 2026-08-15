@@ -38,6 +38,14 @@ def main() -> None:
     parser.add_argument("--obstacle-min-height", type=float, default=0.08, help="points above this height (m) count as obstacles")
     parser.add_argument("--padding", type=float, default=0.5, help="extra margin (m) around the point cloud bounds")
     parser.add_argument("--png", action="store_true", help="also write a PNG preview next to the pgm/yaml")
+    parser.add_argument(
+        "--color-resolution",
+        type=float,
+        default=0.02,
+        help="meters per cell for the colored top-down PNG (finer than --resolution by default, "
+        "since it's for visual detail, not robot navigation/registration -- pass 0 to reuse "
+        "the occupancy grid's resolution and align pixel-for-pixel with it instead)",
+    )
     args = parser.parse_args()
 
     points, colors = load_point_cloud(args.input_ply)
@@ -69,12 +77,20 @@ def main() -> None:
         print(f"wrote {png_path}")
 
         if colors is not None:
-            color_topdown = rasterize_color_topdown(
-                points, colors, origin=occ.origin, grid_shape=occ.grid.shape
-            )
+            if args.color_resolution and args.color_resolution > 0:
+                color_topdown = rasterize_color_topdown(
+                    points, colors, resolution=args.color_resolution, padding=args.padding
+                )
+            else:
+                color_topdown = rasterize_color_topdown(
+                    points, colors, origin=occ.origin, grid_shape=occ.grid.shape
+                )
             color_png_path = args.output_prefix.parent / f"{args.output_prefix.name}_color.png"
             save_color_topdown_png(color_png_path, color_topdown)
-            print(f"wrote {color_png_path} (top-down, original scan colors)")
+            print(
+                f"wrote {color_png_path} ({color_topdown.image.shape[1]}x{color_topdown.image.shape[0]} px "
+                f"@ {color_topdown.resolution} m/cell, original scan colors)"
+            )
 
 
 if __name__ == "__main__":

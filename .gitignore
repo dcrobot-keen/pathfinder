@@ -11,3 +11,6 @@ sample_data/
 # real company scan data (e.g. office.usdz) and anything derived from it --
 # never commit, this is not ours to publish
 data/
+
+# scripts/studio.py project outputs -- derived from real scans, never commit
+projects/
