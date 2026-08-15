@@ -25,15 +25,25 @@ DEFAULT_COLORS = [(255, 0, 0), (0, 140, 255), (0, 200, 100), (255, 190, 0)]
 
 
 def parse_points_arg(arg: str, default_color: tuple[int, int, int]) -> PointCloudLayer:
+    """PLY[:R,G,B]. If the color is omitted, use the PLY's own per-point
+    colors when it has them (e.g. sampled from the original scan's texture
+    via scripts/usdz_to_ply.py) -- falls back to the rotating flat-color
+    palette only if the PLY has no color data.
+    """
     path_str, _, color_str = arg.partition(":")
     path = Path(path_str)
+    points, ply_colors = load_point_cloud(path)
+
     if color_str:
         r, g, b = (int(v) for v in color_str.split(","))
+        color = (r, g, b, 255)
+    elif ply_colors is not None:
+        color = ply_colors
     else:
         r, g, b = default_color
+        color = (r, g, b, 255)
 
-    points, _ = load_point_cloud(path)
-    return PointCloudLayer(name=path.stem, points=points, color=(r, g, b, 255))
+    return PointCloudLayer(name=path.stem, points=points, color=color)
 
 
 def main() -> None:

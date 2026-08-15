@@ -127,3 +127,24 @@ def load_usdz_mesh(path: str) -> UsdzMesh:
                 texture = z.read(image_names[0])
 
     return UsdzMesh(vertices=vertices, faces=faces, uv=uv, texture=texture)
+
+
+def sample_vertex_colors(uv: np.ndarray, texture: bytes) -> np.ndarray:
+    """Sample the texture image at each vertex's UV coordinate (nearest
+    neighbor) to get a per-vertex RGB color -- there's no per-vertex color
+    primvar in typical scanning-app usdz exports (just UV + a photo texture),
+    so this is how you recover "what did this point actually look like".
+    """
+    import io
+
+    from PIL import Image
+
+    image = np.array(Image.open(io.BytesIO(texture)).convert("RGB"))
+    height, width = image.shape[:2]
+
+    u = np.clip(uv[:, 0], 0.0, 1.0)
+    v = np.clip(uv[:, 1], 0.0, 1.0)
+    col = np.clip((u * (width - 1)).astype(np.int64), 0, width - 1)
+    row = np.clip(((1.0 - v) * (height - 1)).astype(np.int64), 0, height - 1)  # USD st: v=0 at bottom
+
+    return image[row, col].astype(np.uint8)

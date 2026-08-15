@@ -20,7 +20,10 @@ from studio.usdz_import import UsdzMesh
 class PointCloudLayer:
     name: str
     points: np.ndarray  # (N, 3)
-    color: tuple[int, int, int, int] = (255, 0, 0, 255)  # RGBA 0-255
+    # a single flat RGBA to apply to every point, OR a per-point (N, 3)/(N, 4)
+    # array (e.g. the PLY's own original colors, sampled from a texture --
+    # see studio.usdz_import.sample_vertex_colors)
+    color: tuple[int, int, int, int] | np.ndarray = (255, 0, 0, 255)
 
 
 def build_overlay_scene(mesh: UsdzMesh | None, point_clouds: list[PointCloudLayer]) -> trimesh.Scene:
@@ -37,8 +40,15 @@ def build_overlay_scene(mesh: UsdzMesh | None, point_clouds: list[PointCloudLaye
         scene.add_geometry(tmesh, node_name="scan_mesh")
 
     for layer in point_clouds:
-        colors = np.tile(np.array(layer.color, dtype=np.uint8), (len(layer.points), 1))
-        cloud = trimesh.PointCloud(layer.points, colors=colors)
+        color_arr = np.asarray(layer.color)
+        if color_arr.ndim == 2:  # per-point colors already, e.g. sampled from a texture
+            colors = color_arr
+            if colors.shape[1] == 3:
+                alpha = np.full((len(colors), 1), 255, dtype=np.uint8)
+                colors = np.hstack([colors, alpha])
+        else:  # single flat RGBA applied to every point
+            colors = np.tile(color_arr.astype(np.uint8), (len(layer.points), 1))
+        cloud = trimesh.PointCloud(layer.points, colors=colors.astype(np.uint8))
         scene.add_geometry(cloud, node_name=layer.name)
 
     return scene
