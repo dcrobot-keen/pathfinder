@@ -154,6 +154,30 @@ python scripts/build_overlay_viewer.py <base_map_prefix> <output.html> [--trajec
 - 합성 방 지도(5cm 격자)로 먼저 열었을 때 배경이 체크무늬처럼 노이즈가 껴 보이는 현상 발견 → 조사해보니 **뷰어 버그가 아니라 합성 데이터 자체의 바닥 포인트 밀도가 5cm 격자 대비 너무 희박**해서 생기는 현상(이전 `tests/test_rasterize.py` 작성 때 발견했던 것과 동일한 원인). 실제 밀도 높은 office.usdz 기반 지도로 다시 열어보니 깔끔하게 렌더링됨 — 재확인하며 원인을 오진단하지 않도록 실제 데이터로 교차검증한 사례.
 - 재생 버튼 클릭 → 타임라인이 실제로 진행되고 마커가 궤적을 따라 이동하는 것까지 확인.
 
+### 3D 오버레이 뷰어 — gltf-inspector 연동 (Phase 4 확장)
+
+Phase 4의 2D 재생 뷰어와 별개로, **원본 스캔(usdz 텍스처 메시)과 처리된 포인트클라우드(ply)를 3D로 겹쳐서 눈으로 비교**하고 싶다는 요청에 따라 gltf-inspector([dcrobot-keen/gltf-inspector](https://github.com/dcrobot-keen/gltf-inspector))를 활용하는 경로를 추가함.
+
+**제약 확인**: gltf-inspector 소스(`GltfAssetLoader.ts`)를 직접 읽어 확인한 결과, 표준 three.js `GLTFLoader`를 써서 POINTS 모드(mode=0) 프리미티브도 정상 렌더링하지만, `bundle.findPrimary()` 구조상 **한 번에 glTF/GLB 하나만** 불러온다. 즉 "usdz와 ply를 오버레이해서 본다" = "가젯 두 개를 하나의 glb 파일로 합친다"로 구현해야 함.
+
+**구현**:
+- `studio/usdz_import.py`에 `load_usdz_mesh()` 추가 — usdz의 메시(정점+삼각형 인덱스), UV(`primvars:st`), 내장 텍스처 이미지(zip 안의 jpg)까지 추출 (기존 `load_usdz_points()`는 정점만 뽑아 좌표 변환 로직을 공유하도록 리팩터링)
+- `studio/gltf_export.py` — `trimesh` + `pygltflib`로 메시(텍스처 포함) + 포인트클라우드 레이어(들)를 하나의 `trimesh.Scene`으로 합쳐 `.glb`로 export
+- `scripts/build_gltf_overlay.py` — CLI:
+  ```
+  python scripts/build_gltf_overlay.py --mesh scan.usdz --points base_map.ply:255,0,0 --output overlay.glb
+  ```
+  `--points`는 반복 가능(`경로:R,G,B` 형식), 색 생략 시 기본 팔레트 순환.
+
+**gltf-inspector에 실제로 띄워서 검증**:
+- 저장소를 로컬에 클론해 `npm install && npm run dev`(Vite)로 직접 구동, Chrome 확장으로 접속해서 확인.
+- 작은 합성 큐브+포인트로 먼저 스모크 테스트(POINTS/TRIANGLES 모드가 실제로 파일에 들어가는지 `pygltflib`로도 재확인) → 파일 업로드 자동화 툴의 10MB 제한에 걸려, 실제 66MB 파일(office.usdz 메시 127만 정점/205만 삼각형 + office_base.ply 95.5만 점)은 **브라우저 안에서 `fetch()`로 직접 읽어 `<input type=file>`에 주입하는 방식**으로 우회해서 로드.
+- 결과: Triangles 2,058,684 / Vertices 2,228,818(메시+포인트 합산과 정확히 일치) / Textures 1 — 정상 파싱, 로딩 279ms.
+- **중요한 관찰**: 포인트 레이어를 켠 채로는 빨간 점들이 메시 표면을 완전히 덮어서 텍스처가 안 보임(포인트가 메시 정점의 부분집합이라 같은 위치에 있어서 생기는 당연한 현상, 버그 아님) — Explorer 트리의 눈 아이콘으로 포인트 레이어를 끄면 실제 텍스처(책상/바닥/벽 색상)가 입혀진 원본 스캔이 정상적으로 보임. 즉 **"동시에 겹쳐보기"보다 "레이어 토글로 비교하기"가 실질적인 사용 패턴**.
+- 사소한 결함: trimesh의 glb 익스포터가 `bufferView.target`을 안 채워서 `BUFFER_VIEW_TARGET_MISSING` 힌트가 5개 뜸 — 렌더링에는 영향 없는 최하위 심각도(hint)라 방치.
+
+**아직 안 한 것**: 텍스처 재매핑 없이 여러 usdz 메시를 합치는 경우(멀티 머티리얼)는 미검증 — 지금 사무실 스캔처럼 단일 메시/단일 텍스처 케이스만 확인됨.
+
 **아직 없는 것**: 실제 로봇 궤적 데이터 — 회사 방문 후 실제 pose 로그(예: `/odom` 또는 `/tf` 기록)를 `studio/trajectory.py`의 `Pose(t, x, y, theta)` 포맷으로 변환하는 어댑터가 필요할 수 있음(현재는 수동/직접 JSON 작성 또는 합성 생성기만 있음).
 
 ### Phase 1 실행 방법
