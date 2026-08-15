@@ -112,7 +112,7 @@
 | Phase 1 | 천장/바닥 제거 전처리 모듈 프로토타입 | ✅ 완료(합성 데이터 기준). `studio/preprocess.py`, `scripts/remove_ceiling.py`, `tests/test_preprocess.py` 참고 |
 | Phase 2 | 베이스맵 저장/좌표계 규약 확정, 실제 iPhone 스캔으로 end-to-end 검증 | 🟡 거의 완료 — ARKitScenes(§ 아래)에 이어 **실제 iPhone 앱 스캔 결과물(.usdz, 127만 점 규모 실제 사무실)** 로도 검증 성공. 좌표계 규약(§6 질문 3)만 아직 미확정 |
 | Phase 3 | 로봇 지도 포맷 확정 + 정합(registration) 모듈 구현 | ✅ 완료 — 베이스맵→2D occupancy grid 래스터화 + 2D ICP 정합까지 구현·검증 완료(아래 참고). 실제 로봇 지도 데이터로는 아직 미검증(§6 질문 4 미확정) |
-| Phase 4 | 오버레이 재생 뷰어(스튜디오 UI) 프로토타입 | 브라우저 기반 재생 뷰어 |
+| Phase 4 | 오버레이 재생 뷰어(스튜디오 UI) 프로토타입 | ✅ 완료(MVP) — `scripts/build_overlay_viewer.py`, 아래 참고. 실제 로봇 궤적 데이터로는 아직 미검증(합성 궤적으로만 확인) |
 | Phase 5 | 파이프라인 자동화(스캔→베이스맵→정합→재생까지 원클릭화) | "스튜디오" 통합 |
 
 ### Phase 3 진행 상황 — 베이스맵 2D 래스터화
@@ -138,6 +138,23 @@ python scripts/register_maps.py <base_map_prefix> <robot_map_prefix> --png overl
 - **한계 발견 및 대응**: 기본 `icp_2d`는 중심점 정렬만으로 초기값을 잡기 때문에 실제 회전 오차가 ±30도를 넘으면 지역 최소값에 빠져 수렴 실패함 (합성 데이터로 15/30/45/60/90/180도 오프셋을 직접 테스트해서 확인). 로봇의 초기 방향 추정이 이보다 부정확할 수 있어, 여러 회전 시드(0/45/90/.../315도)로 ICP를 각각 돌려 RMSE가 가장 낮은 결과를 채택하는 `icp_2d_multistart`를 추가 — 15~270도 전 구간에서 정확히 수렴함을 확인.
 - **검증**: (1) 합성 베이스맵에 정답 회전·이동을 가해 만든 가짜 "로봇 지도"로 ICP가 역변환을 정확히 복원하는지 확인 (`tests/test_registration.py`, PASS). (2) 실제 CLI 파이프라인(PLY→occupancy grid 저장→로드→정합→오버레이 PNG)까지 end-to-end로 실행, 벽·가구가 시각적으로 정확히 겹치는 것을 확인.
 - **아직 없는 것**: 실제 로봇이 만든 occupancy grid 데이터 — §6 질문 4(로봇 지도 수집 방식) 확정 시 실제 데이터로 재검증 필요. 지금은 순수 합성 데이터로만 알고리즘을 검증한 상태.
+
+### Phase 4 진행 상황 — 오버레이 재생 뷰어 (MVP)
+
+`scripts/build_overlay_viewer.py` — occupancy grid(.pgm+.yaml) + 궤적(JSON, `studio/trajectory.py`의 `Pose` 리스트)을 입력받아 **단일 self-contained HTML 파일**을 만든다. 지도 PNG는 base64로, 궤적은 인라인 JSON으로 파일 안에 통째로 들어가서 서버·네트워크 없이 `file://`로 바로 열리거나 어떤 정적 서버로도 서빙 가능 — 회사 내부망 이동/USB 전달 시나리오와 일관된 설계.
+
+```
+python scripts/build_overlay_viewer.py <base_map_prefix> <output.html> [--trajectory traj.json]
+```
+`--trajectory` 생략 시 지도 범위 위에 왕복(lawnmower) 패턴의 합성 궤적을 자동 생성 — 실제 로봇 궤적이 없어도 뷰어 자체는 바로 확인 가능.
+
+**기능**: 지도 배경 렌더링, 궤적 전체 경로(파란 선), 타임라인 스크러버, 재생/일시정지, 현재 위치·방향을 빨간 점+화살표로 표시, 시간/좌표/방향 텍스트 오버레이.
+
+**브라우저로 직접 검증**: Chrome 확장을 통해 로컬 서버로 띄워서 클릭 테스트까지 완료.
+- 합성 방 지도(5cm 격자)로 먼저 열었을 때 배경이 체크무늬처럼 노이즈가 껴 보이는 현상 발견 → 조사해보니 **뷰어 버그가 아니라 합성 데이터 자체의 바닥 포인트 밀도가 5cm 격자 대비 너무 희박**해서 생기는 현상(이전 `tests/test_rasterize.py` 작성 때 발견했던 것과 동일한 원인). 실제 밀도 높은 office.usdz 기반 지도로 다시 열어보니 깔끔하게 렌더링됨 — 재확인하며 원인을 오진단하지 않도록 실제 데이터로 교차검증한 사례.
+- 재생 버튼 클릭 → 타임라인이 실제로 진행되고 마커가 궤적을 따라 이동하는 것까지 확인.
+
+**아직 없는 것**: 실제 로봇 궤적 데이터 — 회사 방문 후 실제 pose 로그(예: `/odom` 또는 `/tf` 기록)를 `studio/trajectory.py`의 `Pose(t, x, y, theta)` 포맷으로 변환하는 어댑터가 필요할 수 있음(현재는 수동/직접 JSON 작성 또는 합성 생성기만 있음).
 
 ### Phase 1 실행 방법
 
