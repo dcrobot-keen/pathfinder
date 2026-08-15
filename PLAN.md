@@ -240,6 +240,19 @@ python scripts/studio.py process <project_name> --usdz scan.usdz [--robot-map ro
 
 **연동**: `scripts/classify_points.py` 단독 CLI, `studio.py process --classify` — `classified.ply` + 컬러 top-down PNG를 report.html에 추가.
 
+### Phase 5 진행 상황 — 벡터화(GeoJSON)
+
+분류(위 항목)로 벽/가구가 라벨링되니 래스터(occupancy grid)를 넘어 **벡터**(선분/폴리곤)까지 뽑을 수 있는지 문의받아, `studio/vectorize.py`로 구현.
+
+**방식 전환**: 처음엔 3D RANSAC 평면(위 분류 로직)을 그대로 벡터화에 쓰려 했으나, "벽은 결국 위에서 보면 2D 선"이라는 점에 착안해 **2D Hough 변환**(`cv2.HoughLinesP`)으로 바꿈. WALL 라벨 포인트만 별도로 2D 격자화한 뒤(가구 잡음 안 섞이게) Hough를 돌리면, 길이가 제각각인 여러 벽을 한 번에 찾을 수 있어 3D RANSAC보다 커버리지가 좋음(실제 오피스 데이터 기준 벽 3~5개 → 7개로 증가) — 반복 탐색이 필요 없어 속도도 빠름.
+
+- **후처리**: Hough 원시 출력은 노이즈가 많음(벽 하나가 여러 개의 거의 평행/중복된 짧은 선분으로 쪼개져 나옴) → `merge_collinear_segments()`가 방향+수직거리 기준으로 그룹핑해서 대표 선분 하나로 합침.
+- **가구**: FURNITURE 라벨 포인트를 연결 컴포넌트로 묶어(`studio/moving_objects.py`와 동일 패턴) 바운딩박스 폴리곤으로 출력.
+- **출력**: GeoJSON `FeatureCollection` — 벽은 `LineString`, 가구는 `Polygon`. 위경도가 아니라 로컬 평면 좌표(미터)를 그대로 좌표로 씀 — CAD/로봇 매핑 쪽에서 흔히 쓰는 방식(지리 좌표계 아님).
+- **검증**: 합성 데이터(4m×5m 방)에서 정확히 4개 벽으로 병합되고 길이도 실제 치수와 거의 일치 (`tests/test_vectorize.py`, PASS). 실제 오피스 스캔: 7개 벽 + 44개 가구 폴리곤, 51-피처 GeoJSON 생성 확인.
+- **연동**: `scripts/vectorize_map.py classified.ply output.geojson [--png ...]` — `classify_points.py` 출력을 입력으로 받음.
+- **남은 한계**: 여전히 이 복잡한 다중 공간 건물의 벽 전체(추정 10개+)를 다 못 잡음 — 일부 방은 벽이 아예 없음. 다음 개선 아이디어(영역별 탐색, 끊긴 벽 병합 등)는 여전히 유효.
+
 ### Phase 1 실행 방법
 
 ```
