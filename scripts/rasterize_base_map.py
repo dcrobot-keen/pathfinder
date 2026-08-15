@@ -20,7 +20,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from studio.point_cloud_io import load_point_cloud
-from studio.rasterize import FREE, OCCUPIED, rasterize_occupancy_grid, save_occupancy_grid_pgm
+from studio.rasterize import (
+    FREE,
+    OCCUPIED,
+    rasterize_color_topdown,
+    rasterize_occupancy_grid,
+    save_color_topdown_png,
+    save_occupancy_grid_pgm,
+)
 
 
 def main() -> None:
@@ -33,7 +40,7 @@ def main() -> None:
     parser.add_argument("--png", action="store_true", help="also write a PNG preview next to the pgm/yaml")
     args = parser.parse_args()
 
-    points, _ = load_point_cloud(args.input_ply)
+    points, colors = load_point_cloud(args.input_ply)
     print(f"loaded {len(points)} points from {args.input_ply}")
 
     occ = rasterize_occupancy_grid(
@@ -60,6 +67,14 @@ def main() -> None:
         png_path = args.output_prefix.with_suffix(".png")
         plt.imsave(png_path, np.flipud(rgb))
         print(f"wrote {png_path}")
+
+        if colors is not None:
+            color_topdown = rasterize_color_topdown(
+                points, colors, origin=occ.origin, grid_shape=occ.grid.shape
+            )
+            color_png_path = args.output_prefix.parent / f"{args.output_prefix.name}_color.png"
+            save_color_topdown_png(color_png_path, color_topdown)
+            print(f"wrote {color_png_path} (top-down, original scan colors)")
 
 
 if __name__ == "__main__":

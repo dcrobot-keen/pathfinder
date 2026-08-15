@@ -71,6 +71,70 @@ def rasterize_occupancy_grid(
     return OccupancyGrid(grid=grid, resolution=resolution, origin=(float(min_x), float(min_y)))
 
 
+@dataclass
+class ColorTopDown:
+    image: np.ndarray  # (H, W, 3) uint8; image[0] is the row at min y (matches OccupancyGrid.grid)
+    resolution: float
+    origin: tuple[float, float]
+
+
+def rasterize_color_topdown(
+    points: np.ndarray,
+    colors: np.ndarray,
+    resolution: float = 0.05,
+    padding: float = 0.5,
+    grid_shape: tuple[int, int] | None = None,
+    origin: tuple[float, float] | None = None,
+    background: tuple[int, int, int] = (255, 255, 255),
+) -> ColorTopDown:
+    """Render a top-down (orthographic, looking straight down) colored image
+    of the point cloud, for a photo-like floor plan instead of the plain
+    free/occupied/unknown occupancy grid.
+
+    Each cell shows the color of its HIGHEST point rather than an average --
+    averaging would blend a desk's color with the floor beneath it into a
+    muddy mess; taking the top point is what you'd actually see looking
+    straight down.
+
+    Pass `origin`/`grid_shape` from an already-computed OccupancyGrid (see
+    rasterize_occupancy_grid) to align this image pixel-for-pixel with it.
+    """
+    if len(points) != len(colors):
+        raise ValueError("points and colors must be the same length")
+
+    x, y, z = points[:, 0], points[:, 1], points[:, 2]
+
+    if origin is None or grid_shape is None:
+        min_x, min_y = float(x.min() - padding), float(y.min() - padding)
+        width = max(int(np.ceil((x.max() + padding - min_x) / resolution)), 1)
+        height = max(int(np.ceil((y.max() + padding - min_y) / resolution)), 1)
+    else:
+        min_x, min_y = origin
+        height, width = grid_shape
+
+    col = np.clip(((x - min_x) / resolution).astype(np.int64), 0, width - 1)
+    row = np.clip(((y - min_y) / resolution).astype(np.int64), 0, height - 1)
+
+    # Sort ascending by height: numpy fancy-index assignment keeps the LAST
+    # write per duplicate (row, col) pair, so this leaves each cell holding
+    # its highest point's color.
+    order = np.argsort(z)
+    image = np.full((height, width, 3), background, dtype=np.uint8)
+    image[row[order], col[order]] = colors[order, :3]
+
+    return ColorTopDown(image=image, resolution=resolution, origin=(float(min_x), float(min_y)))
+
+
+def save_color_topdown_png(path: str | Path, color_topdown: ColorTopDown) -> Path:
+    """Save a ColorTopDown as a PNG, row-flipped to match save_occupancy_grid_pgm
+    (image row 0 = max y)."""
+    from PIL import Image
+
+    path = Path(path)
+    Image.fromarray(np.flipud(color_topdown.image)).save(path)
+    return path
+
+
 def cell_centers_world(occ: OccupancyGrid, value: int) -> np.ndarray:
     """World-coordinate (x, y) centers of all cells matching `value`
     (FREE/OCCUPIED/UNKNOWN), e.g. for feeding into registration (studio.registration)."""
