@@ -46,6 +46,12 @@ python tests/test_registration.py    # ICP 정합 자체 검증
    → 콘솔에 회전각/이동량/RMSE 출력, `overlay.png`에 두 지도가 겹쳐진 그림 저장.
    판단 기준: RMSE가 격자 해상도(기본 5cm)의 수 배 이내면 정합 성공.
 
+## 그 외 도구
+
+- `python scripts/usdz_to_ply.py scan.usdz scan.ply` — iPhone 스캔 앱이 내보낸 .usdz를 PLY로 변환 (`usd-core` 필요)
+- `python scripts/build_overlay_viewer.py <base_map_prefix> viewer.html [--trajectory traj.json]` — 베이스맵+로봇 궤적을 하나의 self-contained HTML로 만들어 재생(타임라인 스크러버) — 서버/네트워크 불필요, 더블클릭으로 바로 열림
+- `python scripts/build_gltf_overlay.py --mesh scan.usdz --points base_map.ply:255,0,0 --output overlay.glb` — 원본 스캔(텍스처 메시)과 처리된 포인트클라우드를 하나의 glb로 합쳐서 [gltf-inspector](https://github.com/dcrobot-keen/gltf-inspector)로 3D 확인 (`trimesh`, `pygltflib`, `Pillow` 필요). gltf-inspector는 파일 하나만 불러오는 구조라 미리 합쳐야 함 — 자세한 내용은 PLAN.md의 "3D 오버레이 뷰어" 절 참고.
+
 ## 문제 생기면
 
 - `pip install` 실패(오프라인) → 위 체크리스트의 `vendor_wheels` 방법 사용
