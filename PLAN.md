@@ -110,7 +110,7 @@
 |---|---|---|
 | Phase 0 | 계획 문서화 (현재 단계) | 본 문서 |
 | Phase 1 | 천장/바닥 제거 전처리 모듈 프로토타입 | ✅ 완료(합성 데이터 기준). `studio/preprocess.py`, `scripts/remove_ceiling.py`, `tests/test_preprocess.py` 참고 |
-| Phase 2 | 베이스맵 저장/좌표계 규약 확정, 실제 iPhone 스캔으로 end-to-end 검증 | 🟡 부분 완료 — 실제 iPhone/iPad LiDAR 데이터(Apple ARKitScenes 공개 데이터셋)로 검증 성공 (아래 참고). 좌표계 규약은 아직 미확정 |
+| Phase 2 | 베이스맵 저장/좌표계 규약 확정, 실제 iPhone 스캔으로 end-to-end 검증 | 🟡 거의 완료 — ARKitScenes(§ 아래)에 이어 **실제 iPhone 앱 스캔 결과물(.usdz, 127만 점 규모 실제 사무실)** 로도 검증 성공. 좌표계 규약(§6 질문 3)만 아직 미확정 |
 | Phase 3 | 로봇 지도 포맷 확정 + 정합(registration) 모듈 구현 | ✅ 완료 — 베이스맵→2D occupancy grid 래스터화 + 2D ICP 정합까지 구현·검증 완료(아래 참고). 실제 로봇 지도 데이터로는 아직 미검증(§6 질문 4 미확정) |
 | Phase 4 | 오버레이 재생 뷰어(스튜디오 UI) 프로토타입 | 브라우저 기반 재생 뷰어 |
 | Phase 5 | 파이프라인 자동화(스캔→베이스맵→정합→재생까지 원클릭화) | "스튜디오" 통합 |
@@ -155,6 +155,15 @@ python scripts/remove_ceiling.py <input.ply> <output.ply>        # 실제/샘플
   - 결과 이미지: `sample_data/arkitscenes_raw.png` (원본) vs `arkitscenes_base.png` (천장 제거 후)
   - **수정 완료 (당초 알려진 한계)**: 정규화 후 바닥 기준 최저점이 z≈-0.24로, 약 24cm 바닥 아래로 내려가는 잔차가 있었음. 처음엔 "평면 피팅 기울어짐"으로 추정해 RANSAC 반복 최소자승 정제를 추가했으나 효과 없었음(-0.237→-0.240, 실행 시간만 5배↑). 원인을 시각화로 재확인한 결과 방 전체의 기울기가 아니라 **가구 밑 등 국소적으로 뭉친 메시 재구성 노이즈 클러스터**였음 — 뭉쳐있어 k-NN 기반 통계적 이상치 제거로는 탐지 불가. 천장 컷오프와 대칭으로 `floor_margin`(기본 5cm) 바닥 컷오프를 추가해 해결 (`studio/preprocess.py`의 `remove_ceiling`). 결과: 바닥 최저점 -0.24m → -0.05m로 정상화, 실제 스캔에서 17,534개 노이즈 포인트 제거 확인. RANSAC 반복 정제(`refinement_passes`)는 효과가 없어 기본값을 3→1로 낮춰 비용만 줄여둠.
   - 아이폰 앱으로 직접 찍은 실제 스캔은 아직 미확보 — 확보 시 이 섹션 재검증 필요 (파라미터 튜닝 가능성 있음: `--distance-threshold`, `--ceiling-margin` 등)
+
+### Phase 2 진행 상황 — 실제 iPhone 앱 스캔(.usdz) 검증
+
+실제 iPhone 스캐닝 앱으로 촬영한 **사무실 스캔(office.usdz, 약 127만 정점, 20m×20m 규모 복수 공간)** 을 확보해서 검증함.
+
+- `studio/usdz_import.py` + `scripts/usdz_to_ply.py` 추가: `usd-core`(Pixar OpenUSD 파이썬 바인딩, Python 3.13 휠 있음)로 USDZ 내부 메시를 읽어 world transform 적용 + **Y-up → Z-up 좌표 변환**까지 처리 (iPhone 스캔 앱은 보통 ARKit 관례상 Y-up으로 내보냄).
+- **실제 데이터에서 심각한 버그 발견·수정**: `_refine_plane`이 `np.linalg.svd`를 기본 옵션(`full_matrices=True`)으로 호출해서, inlier가 많을 때(19만 개) (N,N) 크기의 U 행렬을 할당하려다 **272GiB 메모리 요청으로 크래시**. 지금까지 테스트한 합성 데이터·ARKitScenes 샘플은 이 정도로 큰 inlier 집합이 안 나와서 발견되지 않았던 버그. `full_matrices=False`로 수정(Vt만 쓰므로 U는 애초에 불필요) — 대규모 실제 스캔에서만 드러난 문제였음.
+- 수정 후 정상 처리: 127만 점 → 95.5만 점, 천장 높이 2.68m 검출(실제 사무실 층고와 합리적으로 일치), 2D occupancy grid 래스터화까지 성공 — 여러 방으로 나뉜 복잡한 평면도와 책상/파티션으로 보이는 구조물이 그럴듯하게 나타남.
+- **주의**: `office.usdz`와 이로부터 파생된 모든 파일은 회사의 실제 스캔 데이터라 `data/`를 `.gitignore`에 추가해서 커밋 대상에서 제외함 — 절대 공개 저장소에 올리면 안 됨.
 
 ---
 
