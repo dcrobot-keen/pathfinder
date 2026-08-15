@@ -237,3 +237,12 @@ def labels_to_colors(labels: np.ndarray) -> np.ndarray:
     for label, color in LABEL_COLORS.items():
         colors[labels == label] = color
     return colors
+
+
+def colors_to_labels(colors: np.ndarray) -> np.ndarray:
+    """Inverse of labels_to_colors -- decode a classified.ply's colors back
+    into FLOOR/WALL/FURNITURE labels (exact match against LABEL_COLORS)."""
+    labels = np.full(len(colors), FURNITURE, dtype=np.int8)
+    for label, color in LABEL_COLORS.items():
+        labels[np.all(colors == color, axis=1)] = label
+    return labels
