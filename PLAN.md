@@ -126,6 +126,7 @@ python scripts/rasterize_base_map.py <base_map.ply> <output_prefix> --png
 - 실제 ARKitScenes 베이스맵으로 검증: 방 벽 윤곽이 occupied로 뚜렷하게 나타나고, 내부 대부분이 free, 큰 가구/잡동사니 클러스터가 별도 occupied 덩어리로 표시됨. `obstacle_min_height` 0.08m vs 0.20m 비교 결과 거의 동일 — 기본값이 안정적.
 - `tests/test_rasterize.py`로 합성 데이터 기준 free/occupied/unknown 분류 정확성 검증 완료 (PASS)
 - **다음 단계**: 로봇이 생성한 실제 occupancy grid(같은 포맷)와 이 베이스맵 래스터를 2D ICP 등으로 정합하는 모듈은 아직 미구현 (§6 질문 4 확정 후 진행)
+- **컬러 top-down 이미지 추가**: occupancy grid(흑백/회색, 로봇 정합용 표준 포맷이라 그대로 유지)와 별개로, `rasterize_color_topdown()`이 입력 PLY에 색이 있으면 **셀별 최고 높이 지점의 색**을 사용해 항공사진처럼 보이는 컬러 평면도를 만듦(평균이 아니라 최고점 선택 — 평균을 쓰면 가구 색이 바닥과 섞여 지저분해짐). `rasterize_base_map.py --png`가 컬러 PLY를 입력받으면 자동으로 `<prefix>_color.png`도 같이 생성. 실제 오피스 스캔으로 확인 — 카펫 색, 책상 배치, 복도까지 알아볼 수 있는 수준.
 
 ### Phase 3 진행 상황 — 2D ICP 정합
 
