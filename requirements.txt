@@ -2,3 +2,4 @@ numpy
 scipy
 plyfile
 matplotlib
+usd-core  # only needed for studio/usdz_import.py (reading .usdz/.usd scans)

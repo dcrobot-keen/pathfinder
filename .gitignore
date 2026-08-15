@@ -7,3 +7,7 @@ venv/
 # downloaded third-party sample data + generated outputs (PLY/PGM/PNG/etc.) -
 # not our code, regenerate via the scripts in scripts/ instead of committing
 sample_data/
+
+# real company scan data (e.g. office.usdz) and anything derived from it --
+# never commit, this is not ours to publish
+data/

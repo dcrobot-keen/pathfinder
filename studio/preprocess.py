@@ -102,7 +102,10 @@ def _refine_plane(points: np.ndarray, inlier_mask: np.ndarray, fallback: Plane) 
     if len(inliers) < 3:
         return fallback
     centroid = inliers.mean(axis=0)
-    _, _, vt = np.linalg.svd(inliers - centroid)
+    # full_matrices=False: U is (N, 3) instead of the default (N, N) -- with a
+    # large inlier set (real scans easily have 10^5+ points on the floor
+    # alone) the full U blows up memory for no reason, since only Vt is used.
+    _, _, vt = np.linalg.svd(inliers - centroid, full_matrices=False)
     normal = vt[-1]
     normal = normal / np.linalg.norm(normal)
     d = -np.dot(normal, centroid)
