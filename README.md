@@ -27,15 +27,28 @@ python tests/test_registration.py    # ICP 정합 자체 검증
 
 ## 회사에서 할 일 (실제 로봇 지도로 검증)
 
+### 방법 A — 한 번에 (권장)
+
+```
+ros2 run nav2_map_server map_saver_cli -f robot_map   # 로봇 쪽에서 지도 내보내기
+
+python scripts/studio.py new officescan
+python scripts/studio.py process officescan --usdz <scan.usdz> --robot-map robot_map
+```
+`projects/officescan/report.html`을 열면 원본→베이스맵→2D지도→정합결과→뷰어 링크까지 한 페이지에 다 나옴 (`--robot-map` 생략하면 정합 단계만 건너뜀).
+
+### 방법 B — 단계별로 (디버깅용)
+
 1. **로봇 쪽에서 지도 내보내기**
    ```
    ros2 run nav2_map_server map_saver_cli -f robot_map
    ```
    → `robot_map.pgm` + `robot_map.yaml` 생성
 
-2. **베이스맵 준비** (iPhone으로 같은 공간을 스캔한 PLY가 있다면 그걸로, 없으면 임시로 아무 스캔 PLY로)
+2. **베이스맵 준비**
    ```
-   python scripts/remove_ceiling.py <scan.ply> base_map.ply
+   python scripts/usdz_to_ply.py <scan.usdz> raw.ply
+   python scripts/remove_ceiling.py raw.ply base_map.ply
    python scripts/rasterize_base_map.py base_map.ply base_map/map --png
    ```
 
@@ -45,6 +58,8 @@ python tests/test_registration.py    # ICP 정합 자체 검증
    ```
    → 콘솔에 회전각/이동량/RMSE 출력, `overlay.png`에 두 지도가 겹쳐진 그림 저장.
    판단 기준: RMSE가 격자 해상도(기본 5cm)의 수 배 이내면 정합 성공.
+
+방법 A가 실패하면 방법 B로 어느 단계에서 막히는지 좁혀보는 용도로 사용.
 
 ## 그 외 도구
 

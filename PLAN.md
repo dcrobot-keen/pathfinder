@@ -113,7 +113,7 @@
 | Phase 2 | 베이스맵 저장/좌표계 규약 확정, 실제 iPhone 스캔으로 end-to-end 검증 | 🟡 거의 완료 — ARKitScenes(§ 아래)에 이어 **실제 iPhone 앱 스캔 결과물(.usdz, 127만 점 규모 실제 사무실)** 로도 검증 성공. 좌표계 규약(§6 질문 3)만 아직 미확정 |
 | Phase 3 | 로봇 지도 포맷 확정 + 정합(registration) 모듈 구현 | ✅ 완료 — 베이스맵→2D occupancy grid 래스터화 + 2D ICP 정합까지 구현·검증 완료(아래 참고). 실제 로봇 지도 데이터로는 아직 미검증(§6 질문 4 미확정) |
 | Phase 4 | 오버레이 재생 뷰어(스튜디오 UI) 프로토타입 | ✅ 완료(MVP) — `scripts/build_overlay_viewer.py`, 아래 참고. 실제 로봇 궤적 데이터로는 아직 미검증(합성 궤적으로만 확인) |
-| Phase 5 | 파이프라인 자동화(스캔→베이스맵→정합→재생까지 원클릭화) | "스튜디오" 통합 |
+| Phase 5 | 파이프라인 자동화(스캔→베이스맵→정합→재생까지 원클릭화) | 🟡 1단계 완료 — 프로젝트 폴더+오케스트레이터(`scripts/studio.py`) 구현·검증. 아래 "스튜디오 제품 방향" 참고 |
 
 ### Phase 3 진행 상황 — 베이스맵 2D 래스터화
 
@@ -182,6 +182,37 @@ Phase 4의 2D 재생 뷰어와 별개로, **원본 스캔(usdz 텍스처 메시)
 **후속 개선 — 포인트클라우드 원본 색상**: 처음엔 포인트 레이어를 임의 단색(빨강)으로 표시했는데, 원본 색으로 비교하고 싶다는 요청에 따라 개선함. usdz에 정점별 컬러(`primvars:displayColor`)는 없는 것으로 확인(비어 있음) — 대신 `studio/usdz_import.py`의 `sample_vertex_colors()`가 UV로 텍스처 이미지를 샘플링해 정점별 색을 복원. `scripts/usdz_to_ply.py`가 기본으로 이 색을 저장하고, `remove_ceiling.py`가 이미 색을 그대로 통과시키는 구조라 베이스맵까지 자연스럽게 이어짐. `build_gltf_overlay.py`는 이제 `--points`에 색을 명시하지 않으면 PLY 자체의 색을 우선 사용(없으면 팔레트로 폴백). gltf-inspector에서 실제로 흰색/베이지/초록 톤으로 렌더링되는 것까지 확인함.
 
 **아직 없는 것**: 실제 로봇 궤적 데이터 — 회사 방문 후 실제 pose 로그(예: `/odom` 또는 `/tf` 기록)를 `studio/trajectory.py`의 `Pose(t, x, y, theta)` 포맷으로 변환하는 어댑터가 필요할 수 있음(현재는 수동/직접 JSON 작성 또는 합성 생성기만 있음).
+
+## 스튜디오 제품 방향 (§7 벤치마킹 이후 종합 제안)
+
+Phase 1~4까지 각 기능을 개별 CLI 스크립트로 검증한 뒤, "이걸 하나의 스튜디오로 만들려면 어떤 모습이어야 하나"를 다시 정리한 결과.
+
+**문제의식**: 지금까지 만든 6개 스크립트(`usdz_to_ply` → `remove_ceiling` → `rasterize_base_map` → `register_maps` → `build_overlay_viewer` / `build_gltf_overlay`)는 각각 잘 동작하지만, 사용자가 순서와 인자를 다 기억해서 손으로 이어붙여야 하는 상태였음 — "스튜디오"라기보단 "라이브러리".
+
+**채택한 방향** (FJD Trion Model의 "프로젝트 생성 → 데이터 로딩 → 처리 → 확인" 흐름에서 프로젝트 폴더 개념만 차용, UI는 데스크톱 앱이 아니라 CLI+웹뷰어 조합 유지):
+1. **프로젝트 폴더** — `projects/<name>/` 밑에 원본·베이스맵·지도·정합결과·뷰어가 고정된 구조로 쌓임
+2. **오케스트레이터 한 번 호출** — 5단계를 손으로 잇지 않고 `studio.py process`로 한 번에
+3. **결과 리포트 페이지** — 처리 끝나면 요약 수치 + 지도 2종 + 뷰어 링크를 모은 `report.html` 하나로 전체를 훑어볼 수 있게
+
+**향후 기능 우선순위 제안** (§7 백로그 중 아직 안 한 것 기준):
+1. **이동 물체 제거** — 실제 iPhone으로 스캔하면 사람이 지나가면서 찍힐 가능성이 높은데 지금 파이프라인엔 대응이 없음. 다음 순위로 추천.
+2. **자동/수동 분류(바닥/벽/가구)** — 있으면 정합 정확도와 occupancy grid 품질이 함께 개선됨.
+3. **평면절단(단면)** — "진짜 CAD 도면"이 필요해지면 그때 우선순위 상향.
+
+### Phase 5 진행 상황 — 프로젝트 폴더 + 오케스트레이터
+
+`scripts/studio.py` 구현. 서브커맨드 2개:
+```
+python scripts/studio.py new <project_name>
+python scripts/studio.py process <project_name> --usdz scan.usdz [--robot-map robot_map_prefix] [--trajectory traj.json]
+```
+`process`가 5단계(usdz 임포트 → 천장/바닥/이상치 제거 → 2D 래스터화(흑백+컬러) → [robot-map 있으면] 정합 → 2D/3D 뷰어 생성)를 한 번에 실행하고, `projects/<name>/report.html`에 요약을 남김.
+
+- `scripts/build_overlay_viewer.py`의 HTML 템플릿을 `studio/viewer_html.py`로 빼서 오케스트레이터와 공유(중복 방지)
+- 실제 office.usdz로 end-to-end 검증: 5단계 전부 정상 실행, `report.html`에서 지도 이미지와 `viewer.html` 링크가 브라우저에서 실제로 열리는 것까지 확인
+- `projects/`는 실제 스캔 파생 데이터라 `.gitignore`에 추가(`data/`, `sample_data/`와 동일한 이유)
+
+**아직 없는 것**: `--robot-map`을 실제로 넣어서 정합까지 포함한 end-to-end 실행은 미검증(로봇 지도 데이터 자체가 아직 없음, §6 참고). 위 "향후 기능 우선순위"의 이동 물체 제거/분류/단면은 오케스트레이터에 아직 통합 안 됨.
 
 ### Phase 1 실행 방법
 
