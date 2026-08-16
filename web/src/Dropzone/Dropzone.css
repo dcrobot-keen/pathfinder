@@ -1,0 +1,24 @@
+.s2m-dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  padding: 28px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+.s2m-dropzone:hover {
+  border-color: var(--accent);
+}
+
+.s2m-dropzone__label b {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.s2m-dropzone__hint {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  margin-top: 4px;
+}

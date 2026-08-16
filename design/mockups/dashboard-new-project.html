@@ -1,0 +1,95 @@
+<!-- @dsCard group="Dashboard" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>scan-to-map-studio — 새 프로젝트 마법사</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#121722; --panel-2:#1a212c; --border:#232b38;
+    --text:#e7ecf3; --text-dim:#8b96a8; --text-faint:#525c6c;
+    --accent:#4fd1c5; --accent-2:#22d3ee; --warn:#f5a623; --danger:#ef4444; --success:#34d399;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+    --font-mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .backdrop{position:fixed;inset:0;background:rgba(6,8,12,.7);display:flex;align-items:center;justify-content:center}
+  .modal{width:640px;background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .m-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .m-head h2{font-size:15px;font-weight:600}
+  .m-head .x{color:var(--text-faint);font-size:16px;cursor:pointer}
+  .steps{display:flex;gap:0;padding:16px 24px 0}
+  .step{flex:1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-faint);padding-bottom:14px;border-bottom:2px solid var(--border)}
+  .step.active{color:var(--accent);border-color:var(--accent)}
+  .step.done{color:var(--success)}
+  .step .n{width:18px;height:18px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--font-mono)}
+  .body{padding:24px}
+  label{font-size:12.5px;color:var(--text-dim);display:block;margin-bottom:6px;font-weight:600}
+  input[type=text]{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;margin-bottom:18px}
+  .drop{border:1.5px dashed var(--border);border-radius:10px;padding:28px;text-align:center;color:var(--text-faint);font-size:13px;margin-bottom:8px}
+  .drop b{color:var(--accent-2);font-weight:600}
+  .drop .fmt{font-size:11px;font-family:var(--font-mono);margin-top:4px}
+  .filepill{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:8px}
+  .filepill .ic{width:26px;height:26px;border-radius:6px;background:rgba(79,209,197,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+  .filepill .meta{flex:1}
+  .filepill .name{font-weight:600}
+  .filepill .size{color:var(--text-faint);font-family:var(--font-mono);font-size:11px}
+  .skip{font-size:12px;color:var(--text-faint);margin-top:10px;text-align:center;text-decoration:underline;cursor:pointer}
+  .opt-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+  .opt-row:last-child{border-bottom:none}
+  .opt-title{font-size:13px;font-weight:600}
+  .opt-desc{font-size:11.5px;color:var(--text-faint);margin-top:2px;font-family:var(--font-mono)}
+  .toggle{width:38px;height:22px;border-radius:999px;background:var(--border);position:relative;cursor:pointer;flex-shrink:0}
+  .toggle.on{background:var(--accent)}
+  .toggle .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff}
+  .toggle.on .knob{left:18px}
+  .m-foot{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .btn{border:1px solid var(--border);background:var(--panel-2);color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#03191a}
+</style>
+</head>
+<body>
+  <div class="backdrop">
+    <div class="modal">
+      <div class="m-head">
+        <h2>새 프로젝트</h2>
+        <span class="x">✕</span>
+      </div>
+      <div class="steps">
+        <div class="step done"><span class="n">✓</span>이름</div>
+        <div class="step active"><span class="n">2</span>로봇 지도(선택)</div>
+        <div class="step"><span class="n">3</span>처리 옵션</div>
+      </div>
+      <div class="body">
+        <label>로봇 SLAM 지도 (occupancy grid)</label>
+        <div class="drop">
+          <div><b>robot_map.pgm</b> + <b>robot_map.yaml</b> 드래그, 또는 클릭해서 선택</div>
+          <div class="fmt">nav2 map_server 표준 포맷 — 없으면 정합(registration) 단계는 건너뜁니다</div>
+        </div>
+        <div class="filepill">
+          <div class="ic">▦</div>
+          <div class="meta">
+            <div class="name">robot_map.pgm</div>
+            <div class="size">512×480 · 5cm/px</div>
+          </div>
+          <span style="color:var(--success);font-size:11px;font-weight:600">✓ 로드됨</span>
+        </div>
+        <div class="filepill">
+          <div class="ic">⚙</div>
+          <div class="meta">
+            <div class="name">robot_map.yaml</div>
+            <div class="size">resolution 0.05 · origin [-12.4, -9.1, 0]</div>
+          </div>
+          <span style="color:var(--success);font-size:11px;font-weight:600">✓ 로드됨</span>
+        </div>
+        <div class="skip">로봇 지도 없이 베이스맵만 생성 →</div>
+      </div>
+      <div class="m-foot">
+        <button class="btn">← 이전</button>
+        <button class="btn primary">다음: 처리 옵션 →</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
