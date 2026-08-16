@@ -5,7 +5,8 @@
   "shape": "package",
   "cssEntry": "./dist/index.css",
   "overrides": {
-    "AppShell": { "cardMode": "column" }
+    "AppShell": { "cardMode": "column" },
+    "Modal": { "cardMode": "single", "viewport": "700x560" }
   },
   "readmeHeader": ".design-sync/conventions.md"
 }

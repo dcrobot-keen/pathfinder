@@ -56,4 +56,4 @@ No `bg-*`/`text-*` utility classes exist — style with `var(--token)` in inline
 </AppShell>
 ```
 
-Only 4 components exist so far (`Button`, `AppShell`, `ProjectCard`, `NewProjectCard`) — this is an early, small slice of the scan-to-map-studio web UI, not the full design system. New screens (new-project wizard, pipeline processing, report/viewer — see the project's `design/mockups/*.html` and the `design_handoff_scan_to_map_studio/` folder in this Claude Design project) still need their own components built and synced.
+23 components now cover the full scan-to-map-studio web UI: the project dashboard (`AppShell`, `Button`, `ProjectCard`, `NewProjectCard`), the new-project wizard (`Modal`, `StepIndicator`, `Dropzone`, `FilePill`), the pipeline processing screen (`ScreenHeader`, `Ribbon`, `RibbonTools`, `StepRail`, `LogConsole`, `ProgressPill`, `ParamSlider`), and the report/viewer screen (`LayerThumbList`, `ToggleLegend`, `Timeline`, `SidePanel`, `SidePanelSection`, `StatGrid`, `RegistrationSummary`, `LinksList`). Compose new screens from these rather than inventing raw HTML/CSS equivalents.
