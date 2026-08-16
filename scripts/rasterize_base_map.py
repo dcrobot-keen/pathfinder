@@ -13,12 +13,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-
 from studio.point_cloud_io import load_point_cloud
 from studio.rasterize import (
     FREE,
@@ -27,6 +21,7 @@ from studio.rasterize import (
     rasterize_occupancy_grid,
     save_color_topdown_png,
     save_occupancy_grid_pgm,
+    save_occupancy_preview_png,
 )
 
 
@@ -68,12 +63,8 @@ def main() -> None:
     print(f"wrote {pgm_path}, {yaml_path}")
 
     if args.png:
-        rgb = np.zeros((*occ.grid.shape, 3), dtype=np.uint8)
-        rgb[occ.grid == FREE] = (255, 255, 255)
-        rgb[occ.grid == OCCUPIED] = (0, 0, 0)
-        rgb[occ.grid == -1] = (128, 128, 128)
         png_path = args.output_prefix.with_suffix(".png")
-        plt.imsave(png_path, np.flipud(rgb))
+        save_occupancy_preview_png(png_path, occ)
         print(f"wrote {png_path}")
 
         if colors is not None:

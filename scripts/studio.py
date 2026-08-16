@@ -21,245 +21,75 @@ Output layout (projects/<name>/):
     align.html             -- interactive alignment verify/fine-tune viewer (only if --robot-map given)
     viewer.html           -- 2D playback viewer (self-contained HTML)
     overlay.glb            -- 3D mesh+points overlay for gltf-inspector
-    report.html             -- single-page summary linking everything above
+    output.geojson          -- room outline(s) + furniture footprints (vector)
+    report.html / report.json -- single-page summary / same stats as JSON
 """
 from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
-
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from studio.gltf_export import PointCloudLayer, save_overlay_glb
-from studio.moving_objects import remove_isolated_clusters
-from studio.point_cloud_io import save_point_cloud
-from studio.preprocess import remove_ceiling
-from studio.rasterize import (
-    FREE,
-    OCCUPIED,
-    cell_centers_world,
-    load_occupancy_grid_pgm,
-    rasterize_color_topdown,
-    rasterize_occupancy_grid,
-    save_color_topdown_png,
-    save_occupancy_grid_pgm,
-)
-from studio.align_viewer_html import build_alignment_viewer_html
-from studio.registration import icp_2d_multistart
-from studio.trajectory import generate_lawnmower_trajectory, load_trajectory
-from studio.usdz_import import load_usdz_mesh, sample_vertex_colors
-from studio.viewer_html import build_overlay_viewer_html
-
-PROJECTS_ROOT = Path(__file__).resolve().parent.parent / "projects"
-
-REPORT_TEMPLATE = """<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<title>{name} — Scan-to-Map Studio Report</title>
-<style>
-  body {{ font-family: system-ui, sans-serif; background: #1e1e1e; color: #eee; max-width: 900px; margin: 0 auto; padding: 24px; }}
-  h1 {{ font-size: 20px; }}
-  h2 {{ font-size: 15px; margin-top: 28px; border-bottom: 1px solid #444; padding-bottom: 6px; }}
-  .meta {{ color: #999; font-size: 13px; }}
-  .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }}
-  img {{ max-width: 100%; border: 1px solid #444; border-radius: 4px; }}
-  a {{ color: #6db8ff; }}
-  .stat {{ font-variant-numeric: tabular-nums; }}
-  ul {{ line-height: 1.7; }}
-  code {{ background: #2a2a2a; padding: 1px 5px; border-radius: 3px; }}
-</style>
-</head>
-<body>
-<h1>{name}</h1>
-<div class="meta">generated {timestamp}</div>
-
-<h2>1. 스캔 → 베이스맵</h2>
-<ul>{scan_summary}</ul>
-
-<h2>2. 2D 지도</h2>
-<div class="grid">
-  <div><a href="map/map.png">map.png (occupancy grid)</a><br><img src="map/map.png"></div>
-  {color_map_html}
-</div>
-
-{registration_html}
-
-{classify_html}
-
-<h2>3. 인터랙티브 뷰어</h2>
-<ul>
-  <li><a href="viewer.html">viewer.html</a> — 궤적 재생 (2D, 브라우저에서 바로 열기)</li>
-  <li><code>overlay.glb</code> — <a href="https://github.com/dcrobot-keen/gltf-inspector" target="_blank">gltf-inspector</a>에 드래그&드롭해서 3D로 확인 (원본 스캔 메시 + 처리된 포인트클라우드)</li>
-</ul>
-
-</body>
-</html>
-"""
+from studio.pipeline import run_pipeline
+from studio.project import PROJECTS_ROOT, create_project
 
 
 def cmd_new(args: argparse.Namespace) -> None:
-    proj_dir = PROJECTS_ROOT / args.name
-    if proj_dir.exists():
-        print(f"project already exists: {proj_dir}")
+    try:
+        proj_dir = create_project(args.name)
+    except FileExistsError:
+        print(f"project already exists: {PROJECTS_ROOT / args.name}")
         return
-    (proj_dir / "map").mkdir(parents=True)
     print(f"created project: {proj_dir}")
+
+
+def _print_progress(step_key: str, status: str, data: dict) -> None:
+    """Reconstructs the original cmd_process print() lines from
+    studio.pipeline.run_pipeline's structured progress callback, so CLI
+    output is unchanged by the refactor. See studio/pipeline.py's docstring."""
+    if step_key == "import" and status == "active":
+        print("[1/5] importing scan...")
+    elif step_key == "import" and status == "done":
+        print(f"  {data['num_vertices']} vertices, texture={'yes' if data['has_texture'] else 'no'}")
+    elif step_key == "preprocess" and status == "active":
+        print("[2/5] removing ceiling/floor/outliers...")
+    elif step_key == "preprocess" and status == "done":
+        print(f"  {data['num_points']} points, ceiling_z={data['ceiling_z']}")
+        if data["isolated_clusters_removed"] is not None:
+            print(f"  removed {data['isolated_clusters_removed']} points in isolated clusters")
+    elif step_key == "classify" and status == "done":
+        print(f"  wall planes found: {data['num_wall_planes']}")
+    elif step_key == "rasterize" and status == "active":
+        print("[3/5] rasterizing 2D map...")
+    elif step_key == "rasterize" and status == "done":
+        print(f"  free={data['n_free']} occupied={data['n_occupied']}")
+    elif step_key == "registration" and status == "active":
+        print("[4/5] registering robot map...")
+    elif step_key == "registration" and status == "done":
+        print(f"  rotation={data['rotation_deg']:.2f}deg rmse={data['rmse']:.4f}")
+    elif step_key == "registration" and status == "skip":
+        print("[4/5] no --robot-map given, skipping registration")
+    elif step_key == "vectorize" and status == "done":
+        print(f"  rooms={data['num_rooms']} furniture={data['num_furniture']} -> output.geojson")
+    elif step_key == "viewer" and status == "active":
+        print("[5/5] building viewers...")
 
 
 def cmd_process(args: argparse.Namespace) -> None:
     proj_dir = PROJECTS_ROOT / args.name
-    (proj_dir / "map").mkdir(parents=True, exist_ok=True)
-    scan_summary: list[str] = []
-
-    print("[1/5] importing scan...")
-    mesh = load_usdz_mesh(str(args.usdz))
-    colors = None
-    if mesh.uv is not None and mesh.texture is not None:
-        colors = sample_vertex_colors(mesh.uv, mesh.texture)
-    save_point_cloud(proj_dir / "raw.ply", mesh.vertices, colors)
-    scan_summary.append(f"<li>원본 스캔: <span class=\"stat\">{len(mesh.vertices):,}</span>개 정점 (텍스처: {'있음' if mesh.texture else '없음'}) → <code>raw.ply</code></li>")
-    print(f"  {len(mesh.vertices)} vertices, texture={'yes' if mesh.texture else 'no'}")
-
-    print("[2/5] removing ceiling/floor/outliers...")
-    result = remove_ceiling(mesh.vertices, colors, seed=0)
-    base_points, base_colors = result.points, result.colors
-    scan_summary.append(
-        f"<li>베이스맵: <span class=\"stat\">{len(base_points):,}</span>개 점 "
-        f"(천장 높이 {result.ceiling_z:.2f}m, 이상치 {result.outliers_removed:,}개 제거) → <code>base_map.ply</code></li>"
+    result = run_pipeline(
+        proj_dir,
+        args.usdz,
+        robot_map_prefix=args.robot_map,
+        trajectory_path=args.trajectory,
+        remove_isolated_clusters=args.remove_isolated_clusters,
+        isolated_cluster_min_area=args.isolated_cluster_min_area,
+        classify=args.classify,
+        on_progress=_print_progress,
     )
-    print(f"  {len(base_points)} points, ceiling_z={result.ceiling_z}")
-
-    if args.remove_isolated_clusters:
-        cluster_result = remove_isolated_clusters(
-            base_points, base_colors, min_component_area_m2=args.isolated_cluster_min_area
-        )
-        base_points, base_colors = cluster_result.points, cluster_result.colors
-        removed_n = int(cluster_result.removed_mask.sum())
-        scan_summary.append(
-            f"<li>고립 클러스터(이동 물체 추정) 제거: <span class=\"stat\">{removed_n:,}</span>개 점, "
-            f"{cluster_result.num_components - cluster_result.kept_component_count}개 컴포넌트 "
-            f"(실제 데이터에서는 스캔 경계 노이즈일 수 있음 — PLAN.md 참고)</li>"
-        )
-        print(f"  removed {removed_n} points in isolated clusters")
-
-    save_point_cloud(proj_dir / "base_map.ply", base_points, base_colors)
-
-    classify_html = ""
-    if args.classify:
-        from studio.classify import FLOOR, FURNITURE, WALL, classify_floor_wall_furniture, labels_to_colors
-
-        class_result = classify_floor_wall_furniture(base_points, rng=np.random.default_rng(0))
-        class_colors = labels_to_colors(class_result.labels)
-        save_point_cloud(proj_dir / "classified.ply", base_points, class_colors)
-        class_topdown = rasterize_color_topdown(base_points, class_colors, resolution=0.03, padding=0.5)
-        save_color_topdown_png(proj_dir / "map" / "classified_topdown.png", class_topdown)
-        classify_html = (
-            "<h2>2c. 바닥/벽/가구 분류</h2>"
-            f"<p>벽 평면 {class_result.num_wall_planes}개 검출 — "
-            f"바닥 {class_result.count(FLOOR):,} / 벽 {class_result.count(WALL):,} / "
-            f"가구 {class_result.count(FURNITURE):,} 점 (규칙 기반 휴리스틱, PLAN.md 참고)</p>"
-            '<img src="map/classified_topdown.png">'
-        )
-        print(f"  wall planes found: {class_result.num_wall_planes}")
-
-    print("[3/5] rasterizing 2D map...")
-    occ = rasterize_occupancy_grid(base_points)
-    save_occupancy_grid_pgm(proj_dir / "map" / "map", occ)
-    n_free = int((occ.grid == FREE).sum())
-    n_occupied = int((occ.grid == OCCUPIED).sum())
-
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    rgb = np.zeros((*occ.grid.shape, 3), dtype=np.uint8)
-    rgb[occ.grid == FREE] = (255, 255, 255)
-    rgb[occ.grid == OCCUPIED] = (0, 0, 0)
-    rgb[occ.grid == -1] = (128, 128, 128)
-    plt.imsave(proj_dir / "map" / "map.png", np.flipud(rgb))
-
-    color_map_html = ""
-    if base_colors is not None:
-        color_topdown = rasterize_color_topdown(base_points, base_colors, resolution=0.02, padding=0.5)
-        save_color_topdown_png(proj_dir / "map" / "map_color.png", color_topdown)
-        color_map_html = '<div><a href="map/map_color.png">map_color.png (원본 색 top-down)</a><br><img src="map/map_color.png"></div>'
-    print(f"  free={n_free} occupied={n_occupied}")
-
-    registration_html = ""
-    if args.robot_map:
-        print("[4/5] registering robot map...")
-        robot_occ = load_occupancy_grid_pgm(args.robot_map)
-        base_pts = cell_centers_world(occ, OCCUPIED)
-        robot_pts = cell_centers_world(robot_occ, OCCUPIED)
-        reg = icp_2d_multistart(source=robot_pts, target=base_pts, max_correspondence_distance=0.5)
-
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax.scatter(base_pts[:, 0], base_pts[:, 1], s=2, c="gray", label="base map")
-        ax.scatter(reg.aligned_source[:, 0], reg.aligned_source[:, 1], s=2, c="red", alpha=0.6, label="robot map (aligned)")
-        ax.set_aspect("equal")
-        ax.legend()
-        ax.set_title(f"registration: rot={reg.rotation_deg:.1f}deg, rmse={reg.rmse:.3f}m")
-        fig.savefig(proj_dir / "registration.png", dpi=150)
-
-        align_html = build_alignment_viewer_html(
-            base_points=base_pts,
-            robot_points=robot_pts,
-            initial_rotation_deg=reg.rotation_deg,
-            initial_translation=tuple(reg.translation),
-            initial_rmse=reg.rmse,
-            resolution=occ.resolution,
-            title=f"{args.name} — 정합 정렬 확인/조정",
-        )
-        (proj_dir / "align.html").write_text(align_html, encoding="utf-8")
-
-        registration_html = (
-            "<h2>2b. 로봇 지도 정합</h2>"
-            f'<p>자동 ICP 초기값: 회전 {reg.rotation_deg:.1f}&deg;, 이동 {reg.translation}, RMSE {reg.rmse:.3f}m '
-            f"({reg.iterations}회 반복) — 실내 지도는 부분 중첩/대칭 구조 때문에 자동 정합이 틀릴 수 있으니 "
-            f'<a href="align.html">align.html</a>에서 눈으로 확인하고 필요하면 직접 미세조정하세요.</p>'
-            '<img src="registration.png">'
-        )
-        print(f"  rotation={reg.rotation_deg:.2f}deg rmse={reg.rmse:.4f}")
-    else:
-        print("[4/5] no --robot-map given, skipping registration")
-
-    print("[5/5] building viewers...")
-    if args.trajectory:
-        poses = load_trajectory(args.trajectory)
-    else:
-        height, width = occ.grid.shape
-        x_min = occ.origin[0] + width * occ.resolution * 0.15
-        x_max = occ.origin[0] + width * occ.resolution * 0.85
-        y_min = occ.origin[1] + height * occ.resolution * 0.15
-        y_max = occ.origin[1] + height * occ.resolution * 0.85
-        poses = generate_lawnmower_trajectory((x_min, x_max), (y_min, y_max))
-    viewer_html = build_overlay_viewer_html(occ, poses, title=f"{args.name} — Overlay Viewer")
-    (proj_dir / "viewer.html").write_text(viewer_html, encoding="utf-8")
-
-    layer_color = base_colors if base_colors is not None else (255, 0, 0, 255)
-    save_overlay_glb(
-        mesh,
-        [PointCloudLayer(name="base_map", points=base_points, color=layer_color)],
-        str(proj_dir / "overlay.glb"),
-    )
-
-    report_html = REPORT_TEMPLATE.format(
-        name=args.name,
-        timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        scan_summary="".join(scan_summary),
-        color_map_html=color_map_html,
-        registration_html=registration_html,
-        classify_html=classify_html,
-    )
-    (proj_dir / "report.html").write_text(report_html, encoding="utf-8")
-
-    print(f"\ndone. open {proj_dir / 'report.html'}")
+    print(f"\ndone. open {result.report_html_path}")
 
 
 def main() -> None:

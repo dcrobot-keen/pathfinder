@@ -178,6 +178,25 @@ def save_occupancy_grid_pgm(path_prefix: str | Path, occ: OccupancyGrid) -> tupl
     return pgm_path, yaml_path
 
 
+def save_occupancy_preview_png(path: str | Path, occ: OccupancyGrid) -> Path:
+    """Save a free(white)/occupied(black)/unknown(gray) PNG preview of an
+    OccupancyGrid -- a quick-look image, distinct from the .pgm/.yaml pair
+    (that's the machine-readable nav2 format; this is for a browser/report).
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    path = Path(path)
+    rgb = np.zeros((*occ.grid.shape, 3), dtype=np.uint8)
+    rgb[occ.grid == FREE] = (255, 255, 255)
+    rgb[occ.grid == OCCUPIED] = (0, 0, 0)
+    rgb[occ.grid == UNKNOWN] = (128, 128, 128)
+    plt.imsave(path, np.flipud(rgb))
+    return path
+
+
 def _parse_map_yaml(yaml_path: Path) -> dict[str, str]:
     """Minimal, tolerant parser for ROS map_server-style YAML: plain
     `key: value` lines, `#` comments (whole-line or trailing), any key/value
