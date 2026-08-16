@@ -51,6 +51,8 @@ TEMPLATE = """<!doctype html>
   #readout .warn {{ color: #ffca5b; }}
   .row {{ display: flex; gap: 8px; }}
   .swatch {{ display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }}
+  #tfOutput {{ display: none; width: 100%; margin-top: 8px; background: #161616; color: #ddd; border: 1px solid #555; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11.5px; padding: 8px; white-space: pre-wrap; word-break: break-all; overflow-x: auto; box-sizing: border-box; cursor: pointer; }}
+  #tfOutput.shown {{ display: block; }}
 </style>
 </head>
 <body>
@@ -77,6 +79,8 @@ TEMPLATE = """<!doctype html>
     </fieldset>
     <button id="resetBtn">자동 정렬(ICP)로 리셋</button>
     <button id="exportBtn">변환값 내보내기 (JSON)</button>
+    <button id="tfBtn">ROS tf 명령어 보기</button>
+    <pre id="tfOutput"></pre>
   </div>
 </div>
 <script>
@@ -304,6 +308,32 @@ document.getElementById('exportBtn').addEventListener('click', () => {{
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}});
+
+// -- ROS2 static tf (frame_id -> child_frame_id): mirrors studio/tf_export.py's
+// static_transform_from_registration + build_static_transform_publisher_command
+// exactly (round to 4dp, same --x/--y/--z/--roll/--pitch/--yaw/--frame-id/
+// --child-frame-id argument order) so CLI and browser output always agree.
+const tfFrameId = 'scan_basemap';
+const tfChildFrameId = 'map';
+
+function buildTfCommand(rotDeg, tx, ty) {{
+  const yaw = (rotDeg * Math.PI / 180).toFixed(4);
+  const x = tx.toFixed(4), y = ty.toFixed(4);
+  return `ros2 run tf2_ros static_transform_publisher --x ${{x}} --y ${{y}} --z 0.0 --roll 0.0 --pitch 0.0 --yaw ${{yaw}} --frame-id ${{tfFrameId}} --child-frame-id ${{tfChildFrameId}}`;
+}}
+
+const tfOutput = document.getElementById('tfOutput');
+document.getElementById('tfBtn').addEventListener('click', () => {{
+  const tr = currentTransform();
+  const command = buildTfCommand(state.rotationDeg, tr.tx, tr.ty);
+  tfOutput.textContent = command + '\\n\\n(클릭해서 클립보드로 복사)';
+  tfOutput.classList.add('shown');
+  tfOutput.onclick = () => {{
+    navigator.clipboard.writeText(command).then(() => {{
+      tfOutput.textContent = command + '\\n\\n(복사됨)';
+    }});
+  }};
 }});
 
 draw();

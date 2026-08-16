@@ -147,6 +147,12 @@ python scripts/register_maps.py <base_map_prefix> <robot_map_prefix> --png overl
 - **실제 데이터로 뜻밖의 검증 사례 발견**: 실제 오피스 지도(가짜 부분중첩 "로봇맵" 조작)로 end-to-end 테스트하다가, 실제 회전 12도인데 ICP가 -4.03도로 **완전히 틀리게 수렴**하는 걸 발견 — 그런데 겹침%는 93.1%로 높게 나옴 (복도가 일정 간격으로 반복되는 구조라 국소적으로는 잘 들어맞은 것). 정확히 "수치만 보면 속는다"는 이 UI를 만든 이유 그 자체를 실증한 사례. 화면으로 보면 건물 윤곽이 어긋난 게 바로 보임.
 - **참고**: 아직 실제 로봇 지도로는 검증 못 함(§6 질문 4) — 위 사례는 실제 로봇 지도 대신 오피스 베이스맵을 회전/부분샘플링해서 만든 대역(stand-in) 데이터.
 
+**정합 결과를 로봇 앱에 전달하는 방법 — ROS 정적 tf (`studio/tf_export.py`)**: "정합 좌표를 로봇 앱에 어떻게 알려줄지" 논의 결과, GeoJSON/occupancy grid를 로봇 좌표계로 재투영해서 통째로 넘기는 대신 **`static_transform_publisher`용 고정 tf 하나**로 내보내기로 결정.
+- **왜 tf인가**: 재투영 방식은 로봇이 재매핑할 때마다 우리가 매번 새 파일을 다시 만들어줘야 함. tf는 ROS/nav2 생태계(RViz, costmap, `tf2_echo` 등)가 이미 표준으로 이해하는 방식이라 로봇 쪽에 커스텀 파싱 코드가 전혀 필요 없고, 변환 하나만 관리하면 우리가 만든 GeoJSON/occupancy grid는 원래 좌표계 그대로 두고 tf 조회로 언제든 로봇 좌표계에 옮겨 쓸 수 있음.
+- **프레임 이름 규칙(제일 헷갈리는 부분)**: 로봇 자신의 실시간 SLAM 프레임은 거의 항상 이미 `map`이라는 이름을 쓰고 있어서, 우리 iPhone 스캔 프레임에 `map`을 쓰면 이름이 충돌함. 그래서 `frame_id`(기준, 고정) = 베이스맵 프레임 = 기본값 `scan_basemap`, `child_frame_id`(자식) = 로봇의 기존 `map`으로 정함. `icp_2d_multistart(source=robot_points, target=base_points)`가 계산하는 변환은 정확히 "로봇 점 → 베이스맵 좌표"이고, tf의 `frame_id → child_frame_id`는 "child_frame_id가 frame_id에서 어떻게 보이는지"를 뜻하므로 이 방향이 정확히 일치함.
+- **구현**: `static_transform_from_registration(rotation_deg, translation, frame_id, child_frame_id)`가 (x, y, z=0, roll=0, pitch=0, yaw=rotation_deg를 라디안으로) 6DOF를 만들고, `build_static_transform_publisher_command()`는 최신 ROS2(Humble+) 이름있는 인자 형태(`--x --y --z --roll --pitch --yaw --frame-id --child-frame-id`, 옛 위치인자 형태는 deprecated라 안 씀)의 CLI 명령어를, `build_launch_py_snippet()`은 launch.py에 바로 붙여넣을 `Node(...)` 블록을 생성. `scripts/export_tf.py`가 `align.html`이 내보낸 JSON을 읽어 두 형태를 출력/파일저장. `align.html`에도 "ROS tf 명령어 보기" 버튼을 추가해 현재(수동조정 포함) 변환값으로 같은 명령어를 브라우저에서 바로 뽑아 클립보드 복사 가능 — JS 쪽 계산식이 Python `tf_export.py`와 정확히 같은 반올림(소수 4자리)·인자 순서를 쓰도록 맞춰서 둘이 항상 같은 값을 냄.
+- **검증**: `tests/test_tf_export.py` — 90도 회전이 yaw≈π/2로 정확히 변환되는지, 프레임 이름 커스터마이징이 명령어/launch snippet에 반영되는지 확인 (PASS). `scripts/export_tf.py`를 실제 JSON 파일로 end-to-end 실행해 CLI 명령어와 launch.py 스니펫이 올바르게 나오는 것도 확인.
+
 ### Phase 4 진행 상황 — 오버레이 재생 뷰어 (MVP)
 
 `scripts/build_overlay_viewer.py` — occupancy grid(.pgm+.yaml) + 궤적(JSON, `studio/trajectory.py`의 `Pose` 리스트)을 입력받아 **단일 self-contained HTML 파일**을 만든다. 지도 PNG는 base64로, 궤적은 인라인 JSON으로 파일 안에 통째로 들어가서 서버·네트워크 없이 `file://`로 바로 열리거나 어떤 정적 서버로도 서빙 가능 — 회사 내부망 이동/USB 전달 시나리오와 일관된 설계.
