@@ -163,7 +163,19 @@ python scripts/register_maps.py <base_map_prefix> <robot_map_prefix> --png overl
 - **JS 쪽은 SVD 대신 4-파라미터 선형최소제곱**: `x'=a·x-b·y+tx, y'=b·x+a·y+ty`로 놓고 (a,b,tx,ty)를 선형최소제곱으로 직접 풂 — 반사(mirror) 케이스를 아예 안 다루면(바닥 도면엔 필요 없음) Umeyama의 SVD 해와 수학적으로 완전히 같은 답이 나오면서 SVD를 JS로 옮겨 적을 필요가 없어짐. Node.js로 Python `fit_similarity_transform`과 동일한 합성 대응쌍을 넣어 교차검증 — `scale=2.5, rotation_deg=17.000000000000007, tx=3, ty=-1`로 부동소수점 오차 수준까지 일치 확인.
 - **좌표 변환 자체(`transform_geojson`)는 GeoJSON 지오메트리 타입별 분기 없이, "이 리스트가 [x,y]/[x,y,z] 리프 좌표인가, 아니면 자식 리스트들인가"만 재귀적으로 판별** — Point/LineString/Polygon/Multi*가 좌표 배열을 서로 다른 깊이로 중첩하는데 이 판별 하나로 전부 처리됨(z 좌표는 있으면 그대로 보존, 변환 안 함). `tests/test_geojson_align.py`에서 Point(2D/3D)·LineString·Polygon 전부에 대해 검증.
 - **연동**: `scripts/align_geojson.py base.geojson incoming.geojson --html align.html`로 피커 화면 생성. 한 번 기준점을 찍어서 변환값을 뽑아두면, `scripts/apply_geojson_transform.py incoming.geojson transform.json output.geojson`로 같은 변환을 다른 파일에도 스크립트로 재적용 가능(같은 출처에서 온 두 번째 파일 등).
-- **아직 없는 것**: 이미지(스캔한 도면 사진 등) 지오레퍼런싱은 미착수 — GeoJSON과 달리 좌표 개념이 원래 없어서 완전히 다른 UI(이미지 위에 랜드마크 클릭)가 필요함.
+
+### 좌표 보정 — 이미지 지오레퍼런싱 (`studio/image_align.py`, `studio/image_align_viewer_html.py`)
+
+"좌표 보정" 메뉴의 세 번째 조각(로봇 지도 정합 → GeoJSON → 이미지). GeoJSON 정렬과 UI 흐름(캔버스 2개, 기준점 클릭해서 짝짓기, 유사변환 피팅)은 그대로 재사용하되, 이미지 특유의 함정 하나를 처리해야 함.
+
+- **왜 별도 도구인가**: 이미지(스캔한 도면 사진 등)는 GeoJSON과 달리 애초에 좌표 개념이 없음 — 벡터 지오메트리가 아니라 픽셀 그리드라, "왼쪽 캔버스=베이스맵, 오른쪽 캔버스=이미지(픽셀 좌표)"로 바꾸고 오른쪽 클릭은 이미지 픽셀(col, row)을 기록하는 것만 다름. 피팅 자체는 `studio.geojson_align.fit_similarity_transform`을 그대로 재사용(중복 구현 안 함).
+- **함정 — 픽셀 Y축과 월드 Y축이 반대 방향**: 이미지는 row가 아래로 갈수록 증가하는데, 이 프로젝트의 월드 좌표(및 `studio.rasterize`/`studio.registration`)는 y가 위로 갈수록 증가하는 관례. 즉 정상적인(뒤집히지 않은) 사진을 월드 좌표에 맞추는 건 **반사(reflection)가 포함된 변환**인데, Umeyama 피팅은 `det(U)*det(V)<0`일 때 부호를 뒤집어 **반사 해를 원천적으로 거부**하도록 설계돼 있어서(GeoJSON 쪽에서 "뒤집힌 도면이 나오면 안 되니까" 넣은 바로 그 로직), 픽셀 (col, row)를 그대로 넣으면 나쁜/퇴화된 결과가 나옴. **해결**: 피팅 전에 픽셀의 row 부호만 뒤집어서(`(col, -row)`) 넣음 — 이러면 축반전이 상쇄되고 남는 건 순수한 회전+축척+이동이라 Umeyama가 정상적으로 풂 (`studio/image_align.py::fit_pixel_to_world_transform`).
+- **출력 — 월드 파일(.pgw/.jgw/.tfw/...)**: 이미지를 우리가 직접 리샘플링/워핑해서 새 이미지를 만드는 대신, ESRI 월드 파일(6줄 텍스트: `world_x=A·col+B·row+C`, `world_y=D·col+E·row+F`, 파일에는 A,D,B,E,C,F 순서로 씀)만 옆에 만들어줌 — 모든 GIS/CAD 툴이 읽을 줄 아는 표준 방식이라 픽셀 원본은 하나도 안 건드리고 좌표만 등록. 계수 유도: row 반전 트릭으로 피팅했으므로 `world = scale·R(θ)·(col,-row) + t`를 전개하면 `A=s·cosθ, B=s·sinθ, D=s·sinθ, E=-s·cosθ`. **회전 0도일 때 A=+scale, E=**-scale**로 부호가 다른지(픽셀 row-증가-아래 vs 월드 y-증가-위)** 별도로 검증(`tests/test_image_align.py`) — 부호를 놓치면 이미지가 상하 반전된 위치에 등록되는데 조용히 "그럴듯해 보이는" 틀린 결과가 나올 수 있어서 이 부호 하나가 제일 위험한 지점.
+- **큰 스캔 이미지 처리**: 실제 도면 스캔은 해상도가 커서 HTML에 원본을 그대로 인라인하면 파일이 비대해짐 — `scripts/align_image.py`가 `--max-display-dim`(기본 1600px)보다 크면 축소 복사본만 임베드하고, `display_scale`을 뷰어에 같이 넘겨서 클릭한 픽셀 좌표를 **원본 해상도 기준으로 환산**(`원본_px = 표시_px / display_scale`)한 뒤 월드 파일을 만듦 — 월드 파일은 항상 원본 이미지 기준이어야 GIS 툴이 제대로 읽음.
+- **검증**: 합성 픽셀→월드 매핑(축척 0.05, 회전 8도, 이동 (10,20))을 정확히 복원 (`tests/test_image_align.py`, PASS). 회전 0도 부호 검증(A=+2, D≈0, B≈0, E=-2) 통과. JS/Python 피팅 결과 Node.js로 교차검증 — `scale≈0.05, rotation_deg≈8.0, tx=10, ty=20`으로 부동소수점 오차 수준까지 일치.
+- **연동**: `scripts/align_image.py base.geojson floorplan.png --html align_image.html`로 피커 화면 생성. "월드 파일 내보내기"(`.pgw` 등, 원본 이미지 옆에 두면 바로 지오레퍼런싱된 상태)와 "변환값 내보내기"(JSON, 픽셀 row 반전 컨벤션이라는 점을 값 안에 명시) 지원.
+
+이걸로 "좌표 보정" 메뉴 3종(로봇 지도=ICP+수동조정, GeoJSON=기준점+유사변환, 이미지=지오레퍼런싱) 전부 1차 구현 완료.
 
 ### Phase 4 진행 상황 — 오버레이 재생 뷰어 (MVP)
 
