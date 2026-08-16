@@ -35,7 +35,7 @@ ros2 run nav2_map_server map_saver_cli -f robot_map   # 로봇 쪽에서 지도 
 python scripts/studio.py new officescan
 python scripts/studio.py process officescan --usdz <scan.usdz> --robot-map robot_map
 ```
-`projects/officescan/report.html`을 열면 원본→베이스맵→2D지도→정합결과→뷰어 링크까지 한 페이지에 다 나옴 (`--robot-map` 생략하면 정합 단계만 건너뜀).
+`projects/officescan/report.html`을 열면 원본→베이스맵→2D지도→정합결과→뷰어 링크까지 한 페이지에 다 나옴 (`--robot-map` 생략하면 정합 단계만 건너뜀). 리포트의 `align.html` 링크에서 정합 결과를 눈으로 확인/조정하고, 최종 값을 `python scripts/export_tf.py`에 넘기면 로봇 쪽에 등록할 ROS tf 명령어가 나옴 — 자세한 이유는 방법 B의 3~4단계 참고.
 
 ### 방법 B — 단계별로 (디버깅용)
 
@@ -52,12 +52,18 @@ python scripts/studio.py process officescan --usdz <scan.usdz> --robot-map robot
    python scripts/rasterize_base_map.py base_map.ply base_map/map --png
    ```
 
-3. **정합 실행**
+3. **정합 실행 + 눈으로 확인/조정**
    ```
-   python scripts/register_maps.py base_map/map robot_map --png overlay.png
+   python scripts/register_maps.py base_map/map robot_map --png overlay.png --align-html align.html
    ```
-   → 콘솔에 회전각/이동량/RMSE 출력, `overlay.png`에 두 지도가 겹쳐진 그림 저장.
-   판단 기준: RMSE가 격자 해상도(기본 5cm)의 수 배 이내면 정합 성공.
+   → 콘솔에 자동 ICP 회전각/이동량/RMSE 출력, `overlay.png`에 두 지도가 겹쳐진 그림 저장.
+   **`align.html`을 브라우저로 열어서 반드시 눈으로 확인할 것** — 실내 지도는 복도·방이 반복되는 구조라 ICP가 국소적으로 그럴듯하지만 전역적으로 틀린 정렬에 빠질 수 있고, RMSE/겹침 수치만으로는 이걸 못 잡아냄 (실제 사례: 회전 12도가 정답인데 ICP가 -4도로 잘못 수렴했는데 겹침%는 93%로 높게 나왔음). 화면에서 두 지도 윤곽이 어긋나 보이면 드래그(이동) / Shift+드래그(로봇맵 제자리 회전)로 직접 맞추고, "변환값 내보내기" 버튼으로 최종 회전/이동을 `registration_transform.json`으로 저장.
+
+4. **로봇 쪽에 좌표변환 전달 (ROS tf)**
+   ```
+   python scripts/export_tf.py registration_transform.json
+   ```
+   → `ros2 run tf2_ros static_transform_publisher ...` 명령어와 `launch.py` `Node()` 스니펫을 둘 다 출력. 베이스맵을 통째로 로봇 좌표계로 재투영해서 넘기는 대신, `frame_id=scan_basemap`(이 베이스맵) ↔ `child_frame_id=map`(로봇 자신의 SLAM 프레임)으로 고정 tf 하나만 등록해두는 방식 — 로봇 쪽 nav2/RViz가 별도 파싱 코드 없이 표준 tf 조회만으로 바로 두 좌표계를 연결해서 씀. `align.html`에서 "ROS tf 명령어 보기" 버튼으로 같은 걸 바로 확인할 수도 있음.
 
 방법 A가 실패하면 방법 B로 어느 단계에서 막히는지 좁혀보는 용도로 사용.
 
