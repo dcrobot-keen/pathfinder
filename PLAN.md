@@ -153,6 +153,18 @@ python scripts/register_maps.py <base_map_prefix> <robot_map_prefix> --png overl
 - **구현**: `static_transform_from_registration(rotation_deg, translation, frame_id, child_frame_id)`가 (x, y, z=0, roll=0, pitch=0, yaw=rotation_deg를 라디안으로) 6DOF를 만들고, `build_static_transform_publisher_command()`는 최신 ROS2(Humble+) 이름있는 인자 형태(`--x --y --z --roll --pitch --yaw --frame-id --child-frame-id`, 옛 위치인자 형태는 deprecated라 안 씀)의 CLI 명령어를, `build_launch_py_snippet()`은 launch.py에 바로 붙여넣을 `Node(...)` 블록을 생성. `scripts/export_tf.py`가 `align.html`이 내보낸 JSON을 읽어 두 형태를 출력/파일저장. `align.html`에도 "ROS tf 명령어 보기" 버튼을 추가해 현재(수동조정 포함) 변환값으로 같은 명령어를 브라우저에서 바로 뽑아 클립보드 복사 가능 — JS 쪽 계산식이 Python `tf_export.py`와 정확히 같은 반올림(소수 4자리)·인자 순서를 쓰도록 맞춰서 둘이 항상 같은 값을 냄.
 - **검증**: `tests/test_tf_export.py` — 90도 회전이 yaw≈π/2로 정확히 변환되는지, 프레임 이름 커스터마이징이 명령어/launch snippet에 반영되는지 확인 (PASS). `scripts/export_tf.py`를 실제 JSON 파일로 end-to-end 실행해 CLI 명령어와 launch.py 스니펫이 올바르게 나오는 것도 확인.
 
+### 좌표 보정 — GeoJSON 정렬 (`studio/geojson_align.py`, `studio/geojson_align_viewer_html.py`)
+
+"tf처럼 여러 종류의 외부 좌표 자산(GeoJSON, 이미지 등)을 베이스 좌표계에 맞춰주는 메뉴가 있으면 좋겠다"는 제안에서 시작 — 그 중 GeoJSON부터 구현. 로봇 지도 정합(`align.html`)과는 근본적으로 다른 문제라 별도 도구로 분리함.
+
+- **왜 ICP가 아니라 기준점 매칭인가**: `align.html`의 ICP는 두 점군이 이미 같은 단위(미터)의 조밀한 점 데이터라서 가능한 방식. 외부 CAD/측량 툴에서 온 GeoJSON은 (1) 벽 몇 개·모서리 몇 점 수준의 **희소한** 벡터 데이터라 ICP의 최근접점 대응이 애초에 잘 안 되고, (2) 단위/원점이 우리와 같다는 보장이 전혀 없음(cm 단위일 수도, 임의의 로컬 측량 좌표계일 수도) — **회전+이동뿐 아니라 축척(scale)까지** 필요할 수 있음. 그래서 측량/GIS에서 쓰는 고전적 방법인 **기준점(control point) 2개 이상을 사람이 직접 짝지어 클릭**하고, 그 대응쌍으로부터 최적의 **유사변환(similarity transform: 회전+등방 축척+이동)**을 피팅하는 방식을 채택.
+- **피팅 알고리즘 — Umeyama (1991)**: `studio.registration`의 Kabsch(강체, 축척 없음)를 축척까지 포함하도록 일반화한 버전. 두 점집합을 각자의 중심으로 정렬 → 교차공분산의 SVD → `det(U)*det(V) < 0`이면 부호를 뒤집어 반사(mirror) 해를 방지(바닥 도면 정렬에서 뒤집힌 해가 나오면 안 되므로) → 축척은 특이값 대 소스 분산의 비율 → 이동은 나머지. 합성 데이터(축척 2.5, 회전 17도, 이동 (3,-1))로 대응쌍 6개를 만들어 검증한 결과 잔차 최대 3.66e-15(수치오차 수준)로 정확히 복원 (`tests/test_geojson_align.py`, PASS).
+- **UI**: `geojson_align_viewer_html.py` — **캔버스 2개를 나란히** 배치(왼쪽=베이스맵 GeoJSON, 오른쪽=가져올 GeoJSON), 각자 독립적인 축척으로 맞춰서 보여줌(두 좌표계 크기가 아예 다를 수 있으므로 하나의 뷰로 겹쳐 보여줄 수가 없음). 왼쪽 클릭 → 오른쪽 클릭으로 대응점 한 쌍 확정, 2쌍 이상부터 실시간으로 변환을 계산해서 왼쪽 캔버스 위에 변환된 오른쪽 지오메트리를 점선으로 미리보기. 최대/평균 오차를 베이스맵 크기 대비 %로 보여줘서 오정합 클릭을 바로 알아챌 수 있게 함. "정렬된 GeoJSON 내보내기"(변환 적용된 GeoJSON 전체)와 "변환값 내보내기"(`{scale, rotation_deg, translation}` JSON) 둘 다 지원.
+- **JS 쪽은 SVD 대신 4-파라미터 선형최소제곱**: `x'=a·x-b·y+tx, y'=b·x+a·y+ty`로 놓고 (a,b,tx,ty)를 선형최소제곱으로 직접 풂 — 반사(mirror) 케이스를 아예 안 다루면(바닥 도면엔 필요 없음) Umeyama의 SVD 해와 수학적으로 완전히 같은 답이 나오면서 SVD를 JS로 옮겨 적을 필요가 없어짐. Node.js로 Python `fit_similarity_transform`과 동일한 합성 대응쌍을 넣어 교차검증 — `scale=2.5, rotation_deg=17.000000000000007, tx=3, ty=-1`로 부동소수점 오차 수준까지 일치 확인.
+- **좌표 변환 자체(`transform_geojson`)는 GeoJSON 지오메트리 타입별 분기 없이, "이 리스트가 [x,y]/[x,y,z] 리프 좌표인가, 아니면 자식 리스트들인가"만 재귀적으로 판별** — Point/LineString/Polygon/Multi*가 좌표 배열을 서로 다른 깊이로 중첩하는데 이 판별 하나로 전부 처리됨(z 좌표는 있으면 그대로 보존, 변환 안 함). `tests/test_geojson_align.py`에서 Point(2D/3D)·LineString·Polygon 전부에 대해 검증.
+- **연동**: `scripts/align_geojson.py base.geojson incoming.geojson --html align.html`로 피커 화면 생성. 한 번 기준점을 찍어서 변환값을 뽑아두면, `scripts/apply_geojson_transform.py incoming.geojson transform.json output.geojson`로 같은 변환을 다른 파일에도 스크립트로 재적용 가능(같은 출처에서 온 두 번째 파일 등).
+- **아직 없는 것**: 이미지(스캔한 도면 사진 등) 지오레퍼런싱은 미착수 — GeoJSON과 달리 좌표 개념이 원래 없어서 완전히 다른 UI(이미지 위에 랜드마크 클릭)가 필요함.
+
 ### Phase 4 진행 상황 — 오버레이 재생 뷰어 (MVP)
 
 `scripts/build_overlay_viewer.py` — occupancy grid(.pgm+.yaml) + 궤적(JSON, `studio/trajectory.py`의 `Pose` 리스트)을 입력받아 **단일 self-contained HTML 파일**을 만든다. 지도 PNG는 base64로, 궤적은 인라인 JSON으로 파일 안에 통째로 들어가서 서버·네트워크 없이 `file://`로 바로 열리거나 어떤 정적 서버로도 서빙 가능 — 회사 내부망 이동/USB 전달 시나리오와 일관된 설계.
