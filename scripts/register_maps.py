@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from studio.align_viewer_html import build_alignment_viewer_html
 from studio.rasterize import FREE, OCCUPIED, UNKNOWN, cell_centers_world, load_occupancy_grid_pgm
 from studio.registration import icp_2d_multistart
 
@@ -26,6 +27,7 @@ def main() -> None:
     parser.add_argument("robot_map_prefix", type=Path, help="robot map .pgm/.yaml prefix (source, gets aligned)")
     parser.add_argument("--max-correspondence-distance", type=float, default=0.5, help="meters; ignore ICP matches farther than this")
     parser.add_argument("--png", type=Path, default=None, help="write an overlay PNG (base=gray, robot map aligned=red) here")
+    parser.add_argument("--align-html", type=Path, default=None, help="write an interactive alignment-verification/fine-tune HTML page here")
     args = parser.parse_args()
 
     base_occ = load_occupancy_grid_pgm(args.base_map_prefix)
@@ -56,6 +58,18 @@ def main() -> None:
         ax.set_title(f"registration: rot={result.rotation_deg:.1f}deg, rmse={result.rmse:.3f}m")
         fig.savefig(args.png, dpi=150)
         print(f"wrote {args.png}")
+
+    if args.align_html:
+        html = build_alignment_viewer_html(
+            base_points=base_points,
+            robot_points=robot_points,
+            initial_rotation_deg=result.rotation_deg,
+            initial_translation=tuple(result.translation),
+            initial_rmse=result.rmse,
+            resolution=base_occ.resolution,
+        )
+        args.align_html.write_text(html, encoding="utf-8")
+        print(f"wrote {args.align_html}")
 
 
 if __name__ == "__main__":

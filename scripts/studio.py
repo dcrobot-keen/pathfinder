@@ -18,6 +18,7 @@ Output layout (projects/<name>/):
     map/map.png          -- free/occupied/unknown preview
     map/map_color.png    -- top-down colored floor plan (if raw.ply had color)
     registration.png      -- robot map overlay (only if --robot-map given)
+    align.html             -- interactive alignment verify/fine-tune viewer (only if --robot-map given)
     viewer.html           -- 2D playback viewer (self-contained HTML)
     overlay.glb            -- 3D mesh+points overlay for gltf-inspector
     report.html             -- single-page summary linking everything above
@@ -47,6 +48,7 @@ from studio.rasterize import (
     save_color_topdown_png,
     save_occupancy_grid_pgm,
 )
+from studio.align_viewer_html import build_alignment_viewer_html
 from studio.registration import icp_2d_multistart
 from studio.trajectory import generate_lawnmower_trajectory, load_trajectory
 from studio.usdz_import import load_usdz_mesh, sample_vertex_colors
@@ -205,10 +207,22 @@ def cmd_process(args: argparse.Namespace) -> None:
         ax.set_title(f"registration: rot={reg.rotation_deg:.1f}deg, rmse={reg.rmse:.3f}m")
         fig.savefig(proj_dir / "registration.png", dpi=150)
 
+        align_html = build_alignment_viewer_html(
+            base_points=base_pts,
+            robot_points=robot_pts,
+            initial_rotation_deg=reg.rotation_deg,
+            initial_translation=tuple(reg.translation),
+            initial_rmse=reg.rmse,
+            resolution=occ.resolution,
+            title=f"{args.name} — 정합 정렬 확인/조정",
+        )
+        (proj_dir / "align.html").write_text(align_html, encoding="utf-8")
+
         registration_html = (
             "<h2>2b. 로봇 지도 정합</h2>"
-            f'<p>회전 {reg.rotation_deg:.1f}&deg;, 이동 {reg.translation}, RMSE {reg.rmse:.3f}m '
-            f"({reg.iterations}회 반복)</p>"
+            f'<p>자동 ICP 초기값: 회전 {reg.rotation_deg:.1f}&deg;, 이동 {reg.translation}, RMSE {reg.rmse:.3f}m '
+            f"({reg.iterations}회 반복) — 실내 지도는 부분 중첩/대칭 구조 때문에 자동 정합이 틀릴 수 있으니 "
+            f'<a href="align.html">align.html</a>에서 눈으로 확인하고 필요하면 직접 미세조정하세요.</p>'
             '<img src="registration.png">'
         )
         print(f"  rotation={reg.rotation_deg:.2f}deg rmse={reg.rmse:.4f}")

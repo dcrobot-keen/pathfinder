@@ -15,10 +15,14 @@ from studio.classify import classify_floor_wall_furniture
 from studio.preprocess import remove_ceiling
 from studio.synthetic_room import generate_room
 from studio.vectorize import (
+    _polygon_area_m2,
     detect_wall_lines,
     merge_collinear_segments,
+    rasterize_interior_mask,
     rasterize_label_mask,
+    rectify_orthogonal,
     to_geojson,
+    trace_room_polygons,
 )
 from studio.classify import WALL
 
@@ -32,6 +36,40 @@ def run() -> None:
     result = classify_floor_wall_furniture(base.points, rng=np.random.default_rng(0))
     print(f"wall points: {result.count(WALL)}")
 
+    # Primary approach: contour-traced room outline (replaces the Hough-line
+    # approach below as the main GeoJSON output -- see studio/vectorize.py
+    # module docstring for why: closed by construction, unlike stitched
+    # line segments).
+    interior = rasterize_interior_mask(base.points, resolution=0.05)
+    rooms = trace_room_polygons(interior)
+    print(f"room polygons: {len(rooms)}")
+    assert len(rooms) == 1, f"expected exactly 1 connected room for a single synthetic room, got {len(rooms)}"
+    ring = rooms[0]
+    area = _polygon_area_m2(ring)
+    print(f"  {len(ring)} corners, area={area:.2f} m^2 (true={ROOM_WIDTH * ROOM_DEPTH:.2f})")
+    assert 4 <= len(ring) <= 8, f"expected a roughly rectangular polygon (4-8 corners), got {len(ring)}"
+    assert abs(area - ROOM_WIDTH * ROOM_DEPTH) < 4.0, f"room polygon area {area:.2f} too far from expected {ROOM_WIDTH * ROOM_DEPTH:.2f}"
+
+    room_geojson = to_geojson(rooms=rooms)
+    assert room_geojson["features"][0]["geometry"]["type"] == "Polygon"
+    assert room_geojson["features"][0]["properties"]["category"] == "room"
+
+    # Orthogonal snapping: every corner of a rectified polygon should turn
+    # by exactly +/-90 degrees.
+    rectified = rectify_orthogonal(ring)
+    print(f"rectified: {len(rectified)} corners, area={_polygon_area_m2(rectified):.2f} m^2")
+    assert len(rectified) == 4, f"expected the rectified rectangle to keep exactly 4 corners, got {len(rectified)}"
+    pts = np.array(rectified)
+    n = len(pts)
+    for i in range(n):
+        v1 = pts[i] - pts[i - 1]
+        v2 = pts[(i + 1) % n] - pts[i]
+        cos_turn = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        assert abs(abs(cos_turn) - 0.0) < 1e-6, f"corner {i} is not a right angle (cos={cos_turn:.4f})"
+    assert abs(_polygon_area_m2(rectified) - ROOM_WIDTH * ROOM_DEPTH) < 1.0, "rectified area drifted too far from the true room size"
+
+    # Secondary/debug: legacy Hough-line wall segments, kept for regression
+    # coverage (still a valid, if less robust, output mode).
     wall_grid = rasterize_label_mask(base.points, result.labels, WALL, resolution=0.05)
     raw_segments = detect_wall_lines(wall_grid)
     print(f"raw Hough segments: {len(raw_segments)}")
