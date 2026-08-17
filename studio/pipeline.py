@@ -52,7 +52,14 @@ from studio.rasterize import (
 from studio.registration import icp_2d_multistart
 from studio.trajectory import generate_lawnmower_trajectory, load_trajectory
 from studio.usdz_import import load_usdz_mesh, sample_vertex_colors
-from studio.vectorize import detect_furniture_polygons, rasterize_interior_mask, to_geojson
+from studio.vectorize import (
+    _polygon_area_m2,
+    detect_furniture_polygons,
+    dominant_angle_deg,
+    rasterize_interior_mask,
+    rectify_orthogonal,
+    to_geojson,
+)
 from studio.viewer_html import build_overlay_viewer_html
 
 OnProgress = Callable[[str, str, dict], None]
@@ -298,6 +305,21 @@ def run_pipeline(
     furniture = None
     if class_result is not None:
         furniture = detect_furniture_polygons(base_points, class_result.labels)
+
+    # Snap to the building's dominant angle -- the raw traced contour is
+    # still pixel-noisy (100+ corners on a real scan); see
+    # studio/vectorize.py's module docstring for why. Furniture shares the
+    # room's angle since individual pieces are too small/noisy to estimate
+    # their own reliably.
+    if rooms or furniture:
+        angle = dominant_angle_deg(max(rooms, key=_polygon_area_m2)) if rooms else dominant_angle_deg(max(furniture, key=lambda f: f.area_m2).corners)
+        rooms = [rectify_orthogonal(ring, angle_deg=angle) for ring in rooms]
+        if furniture:
+            furniture = [
+                type(item)(corners=rectify_orthogonal(item.corners, angle_deg=angle), area_m2=item.area_m2)
+                for item in furniture
+            ]
+
     geojson = to_geojson(rooms=rooms, furniture=furniture)
     geojson_path = project_dir / "output.geojson"
     import json as _json

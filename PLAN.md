@@ -304,6 +304,7 @@ python scripts/studio.py process <project_name> --usdz scan.usdz [--robot-map ro
   - **검증**: 17도 회전시킨 합성 사각형에서 4개 꼭짓점 모두 정확히 90.00도 회전각, 면적 오차 0.01m² 이내로 정확 복원 확인 (`tests/test_vectorize.py`, PASS). 실제 오피스 스캔: 대표 각도 54.5도 자동 검출, 방 폴리곤이 117개 → 49개 꼭짓점으로 정리되면서 모든 모서리가 정확히 직각인 CAD 스타일 도형으로 변환됨.
   - **가구에도 동일 각도 적용**: 가구 폴리곤 각각은 개별적으로 대표 각도를 추정하기엔 너무 작고 노이즈가 많아서, 방 폴리곤에서 구한 건물 전체 각도를 공유해서 스냅함(`scripts/vectorize_map.py`).
   - `scripts/vectorize_map.py`는 이제 기본적으로 직각 스냅까지 적용(`--no-rectify`로 끌 수 있음).
+  - **버그 수정**: 웹앱 실제 파이프라인(`studio/pipeline.py`)이 `trace_room_polygons`는 호출하면서 `rectify_orthogonal`은 빠뜨려서, 실제 서비스에서 나오는 `output.geojson`은 각진(직각 스냅 전) 버전이었음 — `scripts/vectorize_map.py` CLI로만 테스트하다 보니 놓쳤던 부분. `run_pipeline`의 벡터화 단계에도 동일한 각도-공유 로직(방 폴리곤에서 각도 검출 → 방+가구 공통 적용)을 추가해 CLI와 웹앱 출력이 일치하도록 수정. 합성 방(가구 있음/없음 두 경로)으로 회귀 확인.
 
 ### Phase 1 실행 방법
 
