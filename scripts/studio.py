@@ -81,7 +81,8 @@ def cmd_process(args: argparse.Namespace) -> None:
     proj_dir = PROJECTS_ROOT / args.name
     result = run_pipeline(
         proj_dir,
-        args.usdz,
+        usdz_path=args.usdz,
+        ply_path=args.ply,
         robot_map_prefix=args.robot_map,
         trajectory_path=args.trajectory,
         remove_isolated_clusters=args.remove_isolated_clusters,
@@ -102,7 +103,15 @@ def main() -> None:
 
     process_parser = subparsers.add_parser("process", help="run the full pipeline for a project")
     process_parser.add_argument("name")
-    process_parser.add_argument("--usdz", type=Path, required=True)
+    scan_source = process_parser.add_mutually_exclusive_group(required=True)
+    scan_source.add_argument("--usdz", type=Path, default=None)
+    scan_source.add_argument(
+        "--ply",
+        type=Path,
+        default=None,
+        help="already-built point cloud (Z-up meters), skips the usdz->ply import step -- "
+        "e.g. dc-vps's pipeline/export_pointcloud.py output",
+    )
     process_parser.add_argument("--robot-map", type=Path, default=None, help="robot occupancy grid prefix (.pgm/.yaml) to register against")
     process_parser.add_argument("--trajectory", type=Path, default=None, help="trajectory JSON; omit for a synthetic demo path")
     process_parser.add_argument(

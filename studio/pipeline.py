@@ -36,7 +36,7 @@ import numpy as np
 from studio.align_viewer_html import build_alignment_viewer_html
 from studio.gltf_export import PointCloudLayer, save_overlay_glb
 from studio.moving_objects import remove_isolated_clusters as remove_isolated_clusters_fn
-from studio.point_cloud_io import save_point_cloud
+from studio.point_cloud_io import load_point_cloud, save_point_cloud
 from studio.preprocess import remove_ceiling
 from studio.rasterize import (
     FREE,
@@ -136,7 +136,8 @@ class PipelineResult:
 
 def run_pipeline(
     project_dir: str | Path,
-    usdz_path: str | Path,
+    usdz_path: str | Path | None = None,
+    ply_path: str | Path | None = None,
     robot_map_prefix: str | Path | None = None,
     trajectory_path: str | Path | None = None,
     remove_isolated_clusters: bool = False,
@@ -148,7 +149,15 @@ def run_pipeline(
     classification / vectorization) -> viewers -> report pipeline for one
     project. Behavior-equivalent to the original scripts/studio.py
     cmd_process, plus GeoJSON export and report.json (see module docstring).
+
+    Exactly one of `usdz_path`/`ply_path` must be given. `ply_path` skips the
+    usdz->point-cloud import (e.g. for a point cloud already produced by
+    another pipeline, such as dc-vps's pipeline/export_pointcloud.py) --
+    everything from `remove_ceiling` onward is identical either way.
     """
+    if (usdz_path is None) == (ply_path is None):
+        raise ValueError("usdz_path와 ply_path 중 정확히 하나만 지정해야 한다")
+
     progress = on_progress or _noop_progress
     project_dir = Path(project_dir)
     (project_dir / "map").mkdir(parents=True, exist_ok=True)
@@ -157,20 +166,30 @@ def run_pipeline(
 
     # --- 1. import -----------------------------------------------------
     progress("import", "active", {})
-    mesh = load_usdz_mesh(str(usdz_path))
-    colors = None
-    if mesh.uv is not None and mesh.texture is not None:
-        colors = sample_vertex_colors(mesh.uv, mesh.texture)
-    save_point_cloud(project_dir / "raw.ply", mesh.vertices, colors)
+    if usdz_path is not None:
+        overlay_mesh = load_usdz_mesh(str(usdz_path))
+        vertices = overlay_mesh.vertices
+        colors = None
+        if overlay_mesh.uv is not None and overlay_mesh.texture is not None:
+            colors = sample_vertex_colors(overlay_mesh.uv, overlay_mesh.texture)
+        has_texture = bool(overlay_mesh.texture)
+    else:
+        # PLY 입력은 텍스처가 입혀진 삼각메시가 아니라 순수 포인트클라우드라 overlay.glb의
+        # 원본 메시 레이어로 쓸 게 없다 -- save_overlay_glb(mesh=None, ...)면 포인트클라우드
+        # 레이어만 넣는다 (studio/gltf_export.py 참고).
+        overlay_mesh = None
+        vertices, colors = load_point_cloud(ply_path)
+        has_texture = colors is not None
+    save_point_cloud(project_dir / "raw.ply", vertices, colors)
     scan_summary.append(
-        f"<li>원본 스캔: <span class=\"stat\">{len(mesh.vertices):,}</span>개 정점 "
-        f"(텍스처: {'있음' if mesh.texture else '없음'}) → <code>raw.ply</code></li>"
+        f"<li>원본 스캔: <span class=\"stat\">{len(vertices):,}</span>개 정점 "
+        f"(텍스처: {'있음' if has_texture else '없음'}) → <code>raw.ply</code></li>"
     )
-    progress("import", "done", {"num_vertices": len(mesh.vertices), "has_texture": bool(mesh.texture)})
+    progress("import", "done", {"num_vertices": len(vertices), "has_texture": has_texture})
 
     # --- 2. preprocess ---------------------------------------------------
     progress("preprocess", "active", {})
-    result = remove_ceiling(mesh.vertices, colors, seed=0)
+    result = remove_ceiling(vertices, colors, seed=0)
     base_points, base_colors = result.points, result.colors
     scan_summary.append(
         f"<li>베이스맵: <span class=\"stat\">{len(base_points):,}</span>개 점 "
@@ -343,7 +362,7 @@ def run_pipeline(
 
     layer_color = base_colors if base_colors is not None else (255, 0, 0, 255)
     save_overlay_glb(
-        mesh,
+        overlay_mesh,
         [PointCloudLayer(name="base_map", points=base_points, color=layer_color)],
         str(project_dir / "overlay.glb"),
     )
@@ -365,7 +384,7 @@ def run_pipeline(
     report_json = {
         "name": project_name,
         "timestamp": timestamp,
-        "num_raw_points": len(mesh.vertices),
+        "num_raw_points": len(vertices),
         "num_base_points": len(base_points),
         "ceiling_z": result.ceiling_z,
         "outliers_removed": result.outliers_removed,
@@ -384,7 +403,7 @@ def run_pipeline(
 
     return PipelineResult(
         project_dir=project_dir,
-        num_raw_points=len(mesh.vertices),
+        num_raw_points=len(vertices),
         num_base_points=len(base_points),
         ceiling_z=result.ceiling_z,
         outliers_removed=result.outliers_removed,
