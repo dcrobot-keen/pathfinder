@@ -84,6 +84,22 @@ export function getStatus(name: string): Promise<StatusResponse> {
   return fetch(`/api/projects/${encodeURIComponent(name)}/status`).then((res) => asJson<StatusResponse>(res));
 }
 
+export function alignGeojson(name: string, geojson: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.set('geojson', geojson);
+  return fetch(`/api/projects/${encodeURIComponent(name)}/align/geojson`, { method: 'POST', body: form }).then((res) =>
+    asJson<{ url: string }>(res),
+  );
+}
+
+export function alignImage(name: string, image: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.set('image', image);
+  return fetch(`/api/projects/${encodeURIComponent(name)}/align/image`, { method: 'POST', body: form }).then((res) =>
+    asJson<{ url: string }>(res),
+  );
+}
+
 export function getReport(name: string): Promise<ReportJson> {
   return fetch(fileUrl(name, 'report.json')).then((res) => asJson<ReportJson>(res));
 }

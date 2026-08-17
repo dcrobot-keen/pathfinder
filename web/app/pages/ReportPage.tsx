@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, DragEvent, ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ScreenHeader,
@@ -9,10 +10,11 @@ import {
   StatGrid,
   RegistrationSummary,
   LinksList,
+  Dropzone,
   Button,
   type Layer,
 } from '../../src/index';
-import { fileUrl, getReport, type ReportJson } from '../api';
+import { alignGeojson, alignImage, fileUrl, getReport, type ReportJson } from '../api';
 
 interface LayerDef {
   key: string;
@@ -22,12 +24,46 @@ interface LayerDef {
   path: string;
 }
 
+/** Dropzone is presentational-only in the s2m-ui library (no onDrop/hidden
+ * input of its own) -- ported verbatim from WizardPage.tsx, which solves the
+ * same "wrap it with real file I/O" problem for the upload wizard. */
+function FileDrop(props: { label: ReactNode; hint: ReactNode; accept?: string; multiple?: boolean; onFiles: (files: FileList) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) props.onFiles(e.dataTransfer.files);
+  }
+
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) props.onFiles(e.target.files);
+  }
+
+  return (
+    <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+      <input
+        ref={inputRef}
+        type="file"
+        hidden
+        accept={props.accept}
+        multiple={props.multiple}
+        onChange={handleChange}
+      />
+      <Dropzone label={props.label} hint={props.hint} onClick={() => inputRef.current?.click()} />
+    </div>
+  );
+}
+
 export function ReportPage() {
   const { name = '' } = useParams();
   const navigate = useNavigate();
   const [report, setReport] = useState<ReportJson | null>(null);
   const [totalRoomArea, setTotalRoomArea] = useState<number | null>(null);
   const [selected, setSelected] = useState('occupancy');
+  const [geojsonUploading, setGeojsonUploading] = useState(false);
+  const [geojsonError, setGeojsonError] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
     getReport(name).then(setReport).catch(() => setReport(null));
@@ -67,6 +103,36 @@ export function ReportPage() {
   }));
 
   const selectedDef = layerDefs.find((d) => d.key === selected);
+
+  async function handleGeojsonFiles(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+    setGeojsonUploading(true);
+    setGeojsonError(null);
+    try {
+      const { url } = await alignGeojson(name, file);
+      window.open(fileUrl(name, url), '_blank');
+    } catch (err) {
+      setGeojsonError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeojsonUploading(false);
+    }
+  }
+
+  async function handleImageFiles(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      const { url } = await alignImage(name, file);
+      window.open(fileUrl(name, url), '_blank');
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImageUploading(false);
+    }
+  }
 
   return (
     <div style={{ background: 'var(--bg)', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -136,6 +202,49 @@ export function ReportPage() {
               ]}
             />
           ) : null}
+
+          <SidePanelSection title="좌표 보정">
+            {report?.registration ? (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--text-dim)', fontWeight: 600, marginBottom: 6 }}>
+                  로봇 지도 정합 확인/조정
+                </div>
+                <Button onClick={() => window.open(fileUrl(name, 'align.html'), '_blank')}>align.html 열기</Button>
+              </div>
+            ) : null}
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--text-dim)', fontWeight: 600, marginBottom: 6 }}>GeoJSON 정렬</div>
+              <FileDrop
+                accept=".geojson,.json"
+                label={<><b>.geojson</b> 드래그, 또는 클릭해서 선택</>}
+                hint="output.geojson을 기준으로 대응점을 찍어 정렬"
+                onFiles={handleGeojsonFiles}
+              />
+              {geojsonUploading ? (
+                <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>업로드 중…</div>
+              ) : null}
+              {geojsonError ? (
+                <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>{geojsonError}</div>
+              ) : null}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-dim)', fontWeight: 600, marginBottom: 6 }}>이미지 지오레퍼런싱</div>
+              <FileDrop
+                accept="image/*"
+                label={<>도면 <b>이미지</b> 드래그, 또는 클릭해서 선택</>}
+                hint="output.geojson을 기준으로 대응점을 찍어 정렬 (world file 내보내기)"
+                onFiles={handleImageFiles}
+              />
+              {imageUploading ? (
+                <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>업로드 중…</div>
+              ) : null}
+              {imageError ? (
+                <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>{imageError}</div>
+              ) : null}
+            </div>
+          </SidePanelSection>
 
           <SidePanelSection title="산출물">
             <LinksList

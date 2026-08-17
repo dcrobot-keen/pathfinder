@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from studio.project import PROJECTS_ROOT, create_project, list_projects
 from studio.status import read_status, write_status
+from server.align import align_geojson, align_image
 from server.jobs import is_running, start_process_job
 
 app = FastAPI(title="scan-to-map-studio API")
@@ -120,6 +121,22 @@ def api_get_status(name: str) -> dict:
     if not project_dir.exists():
         raise HTTPException(status_code=404, detail=f"project not found: {name}")
     return read_status(project_dir)
+
+
+@app.post("/api/projects/{name}/align/geojson")
+async def api_align_geojson(name: str, geojson: UploadFile = File(...)) -> dict:
+    project_dir = PROJECTS_ROOT / name
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail=f"project not found: {name}")
+    return await align_geojson(name, project_dir, geojson)
+
+
+@app.post("/api/projects/{name}/align/image")
+async def api_align_image(name: str, image: UploadFile = File(...)) -> dict:
+    project_dir = PROJECTS_ROOT / name
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail=f"project not found: {name}")
+    return await align_image(name, project_dir, image)
 
 
 # Serve every project's files (map.png, viewer.html, output.geojson, overlay.glb,
