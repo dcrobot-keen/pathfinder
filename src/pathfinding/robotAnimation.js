@@ -29,7 +29,11 @@ function numberLabelStyle(label) {
 
 // tab.js의 시뮬레이션 애니메이션과 liveRobotPose.js의 실시간 마커가 같은 아이콘
 // 렌더링 규칙(등록된 로봇 크기 비례, 회전 등)을 공유하도록 export한다.
-export function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFERENCE_SIZE_M, label, rotation } = {}) {
+export function robotMarkerStyle(
+  color,
+  iconSrc,
+  { paused = false, sizeMeters = REFERENCE_SIZE_M, label, rotation, dashed = false } = {}
+) {
   const sizeRatio = sizeMeters / REFERENCE_SIZE_M;
   const text = numberLabelStyle(label);
 
@@ -48,7 +52,9 @@ export function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = 
     image: new CircleStyle({
       radius,
       fill: new Fill({ color: paused ? 'rgba(150,150,150,0.6)' : color }),
-      stroke: new Stroke({ color: '#fff', width: 2 }),
+      // dashed: 시뮬레이터 로봇(실제로 존재하지 않는 가상 개체)을 실제 로봇과
+      // 혼동하지 않도록, 색상 외에도 테두리 자체를 점선으로 구분한다.
+      stroke: new Stroke({ color: '#fff', width: 2, lineDash: dashed ? [3, 2] : undefined }),
     }),
     text,
   });

@@ -6,8 +6,10 @@
 //     (ROS 없이 vps_localizer_node.py의 tf2 lookup을 대체하는 수학).
 //  2. server/index.mjs -- PUT /api/live-pose/:robotId로 pose를 밀어넣으면
 //     WebSocket 구독자에게 fan-out되고, 새로 접속한 구독자는 현재 상태를 즉시 받는지.
-// 캡처 브리지 페이지(카메라 필요)는 이 스크립트로 검증하지 않는다 -- README "알려진
-// 제한" 참고.
+//  3. server/index.mjs -- PUT /api/drive-request/:robotId(폐루프 제어, 시뮬레이터
+//     주행 릴레이)도 구독자에게 fan-out되는지.
+// 캡처 브리지 페이지(카메라 필요)와 ros-chromium 쪽 sim-driver(시뮬레이터 필요)는
+// 이 스크립트로 검증하지 않는다 -- README "알려진 제한" 참고.
 //
 //   node scripts/live-pose-smoke.mjs
 import { spawn } from 'node:child_process';
@@ -114,8 +116,34 @@ try {
   });
   check('숫자가 아닌 x는 400으로 거부됨', badRes.status === 400);
 
+  // --- 3. /api/drive-request -- 폐루프 제어(시뮬레이터 주행) 릴레이 ---
+  const driveSub = new WebSocket(`ws://localhost:${PORT}/api/drive-request/stream`);
+  const driveMessages = [];
+  driveSub.on('message', (data) => driveMessages.push(JSON.parse(data.toString())));
+  await new Promise((resolve) => driveSub.on('open', resolve));
+
+  const drivePutRes = await fetch(`http://localhost:${PORT}/api/drive-request/tb3-sim-01`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: [[0, 0], [1, 0], [1, 1]] }),
+  });
+  check('PUT /api/drive-request/:robotId -> 200', drivePutRes.status === 200);
+  await wait(150);
+  check(
+    '구독자가 drive-request를 실시간으로 받는다',
+    driveMessages.some((m) => m.robotId === 'tb3-sim-01' && m.path.length === 3)
+  );
+
+  const emptyPathRes = await fetch(`http://localhost:${PORT}/api/drive-request/tb3-sim-01`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: [] }),
+  });
+  check('빈 path는 400으로 거부됨', emptyPathRes.status === 400);
+
   early.close();
   late.close();
+  driveSub.close();
 } catch (err) {
   console.log(`FAIL  unexpected error: ${err.stack || err}`);
   failures++;

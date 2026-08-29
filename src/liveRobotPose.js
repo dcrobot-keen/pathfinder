@@ -14,6 +14,17 @@ import { robotMarkerStyle } from './pathfinding/robotAnimation.js';
 import { listRobots } from './robots/robotApi.js';
 
 const RECONNECT_DELAY_MS = 2000;
+const UNKNOWN_ROBOT_COLOR = '#e91e63';
+// ros-chromium의 apps/sim-driver + manifests/tb3-sim.manifest.json이 쓰는 로봇 id
+// 규칙("tb3-sim-01" 등, "-sim-" 또는 "sim-"/"-sim"을 포함)을 그대로 재사용한다 --
+// 실제로 존재하지 않는 가상 로봇을 실제 로봇과 같은 마커로 보여주면 혼동을
+// 일으키므로, 색상+점선 테두리+라벨로 구분한다(doc/architecture-improvements.md 참고).
+const SIM_ROBOT_ID_RE = /(^|-)sim(-|$)/i;
+const SIM_ROBOT_COLOR = '#9b59b6';
+
+function isSimRobotId(robotId) {
+  return SIM_ROBOT_ID_RE.test(robotId);
+}
 
 /**
  * WebSocket 연결을 시작하고 들어오는 pose로 source를 계속 갱신한다.
@@ -45,13 +56,15 @@ export function startLiveRobotPoseTracking(source) {
       feature.getGeometry().setCoordinates([pose.x, pose.y]);
     }
     const robot = robotsById.get(robotId);
+    const sim = isSimRobotId(robotId);
     feature.setStyle(
-      robotMarkerStyle(robot ? undefined : '#e91e63', robot?.icon, {
+      robotMarkerStyle(robot ? undefined : sim ? SIM_ROBOT_COLOR : UNKNOWN_ROBOT_COLOR, robot?.icon, {
         sizeMeters: robot?.sizeMeters,
         // OL Icon의 rotation은 화면 기준 시계방향(라디안), pathfinder 좌표계는
         // 수학 표준(반시계 방향이 양의 각도)이라 부호를 뒤집는다.
         rotation: -pose.headingRad,
-        label: robot?.name ?? robotId,
+        label: sim ? `SIM · ${robot?.name ?? robotId}` : robot?.name ?? robotId,
+        dashed: sim,
       })
     );
   }

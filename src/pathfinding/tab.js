@@ -21,11 +21,16 @@ import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, im
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
-import { findNodeLinkPath, findObstaclePath } from './pathfindingApi.js';
+import { findNodeLinkPath, findObstaclePath, sendDriveRequest } from './pathfindingApi.js';
 import { animatePathAndRobot, randomPathColor, REFERENCE_SIZE_M as DEFAULT_SIZE_M } from './robotAnimation.js';
 import { listRobots } from '../robots/robotApi.js';
 import { typeLabel } from '../robots/robotCodes.js';
 import { renderSlicePanel } from '../heightSlices.js';
+
+// ros-chromium/robot-os-chromium의 apps/sim-driver + manifests/tb3-sim.manifest.json
+// 기본값과 맞춘 시뮬레이터 로봇 id. sim-driver 인스턴스가 하나뿐이므로 지금은
+// 상수 하나로 충분하다 -- 여러 시뮬레이터를 동시에 띄우게 되면 그때 선택 UI로 바꾼다.
+const SIM_ROBOT_ID = 'tb3-sim-01';
 
 const MODE_CONFIG = {
   nodelink: {
@@ -597,6 +602,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       anim.selectedRobot = selectedRobot;
       anim.endCoord = endCoord;
       anim.markerFeatures = markerFeatures;
+      anim.pathCoords = result.path; // "시뮬레이터로 실행" 버튼이 그대로 drive-request로 보낼 원본 경로
       anim.rerouteInFlight = false;
       anim.sizeMeters = selectedRobot?.sizeMeters ?? DEFAULT_SIZE_M;
       activeAnimations.push(anim);
@@ -679,6 +685,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       newAnim.selectedRobot = entry.selectedRobot;
       newAnim.endCoord = entry.endCoord;
       newAnim.markerFeatures = entry.markerFeatures;
+      newAnim.pathCoords = result.path;
       newAnim.sizeMeters = entry.sizeMeters;
       newAnim.rerouteInFlight = false;
 
@@ -909,7 +916,28 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       else if (anim.isPaused()) nameText += ' (대기 중)';
       nameEl.textContent = nameText;
 
-      row.append(swatch, idBadge, priorityBadge, nameEl);
+      const simBtn = document.createElement('button');
+      simBtn.className = 'pathfinding-list-sim-button';
+      simBtn.textContent = '시뮬레이터로 실행';
+      simBtn.title = `이 경로를 ${SIM_ROBOT_ID} 시뮬레이터로 전송 (ros-chromium/simulator)`;
+      // 드래그앤드롭 정렬용 row.draggable=true 아래 버튼이라, 클릭이 드래그로
+      // 오인되지 않도록 mousedown 전파를 막는다.
+      simBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+      simBtn.addEventListener('click', async () => {
+        if (!anim.pathCoords) return;
+        simBtn.disabled = true;
+        try {
+          await sendDriveRequest(SIM_ROBOT_ID, anim.pathCoords);
+          setStatus(`로봇#${anim.id} 경로를 시뮬레이터(${SIM_ROBOT_ID})로 전송했습니다.`);
+        } catch (err) {
+          console.error('시뮬레이터 전송 실패', err);
+          setStatus(`시뮬레이터 전송 실패: ${err.message}`);
+        } finally {
+          simBtn.disabled = false;
+        }
+      });
+
+      row.append(swatch, idBadge, priorityBadge, nameEl, simBtn);
       activeListEl.appendChild(row);
 
       row.addEventListener('dragstart', () => {

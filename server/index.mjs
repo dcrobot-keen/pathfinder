@@ -108,33 +108,62 @@ app.get('/api/live-pose', (req, res) => {
   res.json(Object.fromEntries(latestPoseByRobot));
 });
 
+// 폐루프 제어 릴레이 -- pf-obstacle 탭에서 찾은 경로를 "시뮬레이터로 실행" 버튼으로
+// 보내면, ros-chromium(robot-os-chromium)의 apps/sim-driver가 이 스트림을 구독해
+// PathFollowerNode에 넘기고, 그 결과(cmd_vel)가 시뮬레이터를 실제로 움직인다.
+// live-pose와 달리 "현재 상태" 개념이 없다 -- 주행 요청은 발생 시점에만 의미 있는
+// 1회성 명령이라, 새로 접속한 구독자에게 지난 요청을 다시 보내주지 않는다.
+function isDriveRequest(body) {
+  return (
+    body &&
+    Array.isArray(body.path) &&
+    body.path.length > 0 &&
+    body.path.every((p) => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number'))
+  );
+}
+
+app.put('/api/drive-request/:robotId', (req, res) => {
+  if (!isDriveRequest(req.body)) {
+    res.status(400).json({ error: 'path([[x,y], ...], 1개 이상)가 필요합니다.' });
+    return;
+  }
+  const { robotId } = req.params;
+  broadcastOn(driveRequestWss, { robotId, path: req.body.path });
+  res.json({ ok: true });
+});
+
 const PORT = process.env.PORT || 3001;
 const httpServer = createServer(app);
 
-// noServer 모드로 만들고 /api/live-pose/stream 경로만 직접 라우팅한다 -- 이 서버가
-// 나중에 다른 용도로 업그레이드 요청을 받게 되더라도(지금은 없음) 서로 다른 경로를
-// 각자 검사 없이 가로채지 않도록.
-const wss = new WebSocketServer({ noServer: true });
+// 두 WebSocket 스트림을 경로별로 분리한다 -- noServer 모드 + 수동 라우팅. 서로 다른
+// 업그레이드 요청을 검사 없이 서로가 가로채지 않도록.
+const livePoseWss = new WebSocketServer({ noServer: true });
+const driveRequestWss = new WebSocketServer({ noServer: true });
 httpServer.on('upgrade', (req, socket, head) => {
-  if (req.url !== '/api/live-pose/stream') {
+  const wss = { '/api/live-pose/stream': livePoseWss, '/api/drive-request/stream': driveRequestWss }[req.url];
+  if (!wss) {
     socket.destroy();
     return;
   }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
-wss.on('connection', (ws) => {
+livePoseWss.on('connection', (ws) => {
   // 새로 붙은 탭이 다음 업데이트를 기다리지 않고 바로 현재 상태를 보게 한다.
   for (const [robotId, pose] of latestPoseByRobot) {
     ws.send(JSON.stringify({ robotId, pose }));
   }
 });
 
-function broadcastPose(robotId, pose) {
-  const payload = JSON.stringify({ robotId, pose });
+function broadcastOn(wss, payloadObj) {
+  const payload = JSON.stringify(payloadObj);
   for (const client of wss.clients) {
     if (client.readyState === client.OPEN) client.send(payload);
   }
+}
+
+function broadcastPose(robotId, pose) {
+  broadcastOn(livePoseWss, { robotId, pose });
 }
 
 httpServer.listen(PORT, () => {
