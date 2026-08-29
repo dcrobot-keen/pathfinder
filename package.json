@@ -10,6 +10,7 @@
     "dev:pathfinder": "cd pathfinder && go run ./server",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node scripts/live-pose-smoke.mjs",
     "test:pathfinder": "cd pathfinder && go test ./...",
     "build:wasm": "node scripts/build-wasm.mjs"
   },
@@ -17,7 +18,8 @@
     "express": "^5.2.1",
     "lowdb": "^7.0.1",
     "ol": "^10.3.1",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "concurrently": "^10.0.4",

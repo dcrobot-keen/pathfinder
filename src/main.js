@@ -17,8 +17,9 @@ import VectorLayer from 'ol/layer/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, importedObstacleSource } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, importedObstacleSource, liveRobotPoseSource } from './appShared.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
+import { startLiveRobotPoseTracking } from './liveRobotPose.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
 
@@ -48,9 +49,14 @@ const gridLayer = buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10);
 // scan-to-map-studio에서 가져온(import) 장애물 블록 레이어 (공유 소스, appShared.js 참고)
 const importedObstacleLayer = new VectorLayer({ source: importedObstacleSource, style: importedObstacleStyle });
 
+// 실시간 로봇 위치 레이어. WebSocket 연결은 여기서 한 번만 시작하고, 길찾기(장애물)
+// 탭은 같은 liveRobotPoseSource를 자기 레이어로만 감싼다(appShared.js 참고).
+const liveRobotPoseLayer = new VectorLayer({ source: liveRobotPoseSource, zIndex: 20 });
+startLiveRobotPoseTracking(liveRobotPoseSource);
+
 const map = new Map({
   target: 'map',
-  layers: [blueprintLayer, gridLayer, importedObstacleLayer],
+  layers: [blueprintLayer, gridLayer, importedObstacleLayer, liveRobotPoseLayer],
   view: new View({
     projection: indoorProjection,
     center: [MAP_SIZE_X / 2, MAP_SIZE_Y / 2],
@@ -120,6 +126,7 @@ renderSlicePanel(document.getElementById('slice-panel'), [], [], [
   { layer: blueprintLayer, label: '배경 도면' },
   { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
   { layer: editLayerApi.layer, label: '노드/링크/블록' },
+  { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
 ]);
 
 // 탭 전환 (2D 지도 / 3D 뷰 / 길찾기 두 모드). 3D 뷰와 길찾기 탭은 처음 열릴 때 지연 초기화한다.
@@ -205,6 +212,7 @@ function applyPoints(points, label) {
     { layer: blueprintLayer, label: '배경 도면' },
     { layer: editLayerApi.layer, label: '노드/링크/블록' },
     { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
+    { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
     { layer: pcdLayer, label: `전체 (비분류) — ${label}`, checked: false },
   ]);
 

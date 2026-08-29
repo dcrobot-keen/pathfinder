@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>VPS 캡처 브리지</title>
+<style>
+  body { font: 14px sans-serif; max-width: 640px; margin: 20px auto; padding: 0 12px; color: #1b2226; }
+  fieldset { margin-bottom: 16px; border: 1px solid #ccc; border-radius: 4px; }
+  label { display: block; margin: 6px 0 2px; font-size: 12.5px; color: #555; }
+  input, textarea { width: 100%; box-sizing: border-box; padding: 5px 7px; font: 13px monospace; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  video { width: 100%; background: #000; }
+  button { padding: 8px 16px; margin-right: 8px; margin-top: 8px; cursor: pointer; }
+  #log { white-space: pre-wrap; font: 12px monospace; background: #f0f0f0; padding: 10px; height: 180px; overflow-y: auto; border-radius: 4px; }
+  .note { font-size: 12.5px; color: #a6392f; }
+</style>
+</head>
+<body>
+<h1>VPS 캡처 브리지</h1>
+<p>
+  카메라 프레임을 <a href="https://github.com/dcrobot-keen/vps-system" target="_blank" rel="noopener">vps-system</a>
+  의 <code>/localize</code>에 직접 POST하고, scan-to-map-studio가 계산한 정합값으로 map 프레임으로 옮긴 뒤
+  pathfinder의 <code>/api/live-pose/:robotId</code>에 PUT합니다. ROS2를 전혀 거치지 않습니다
+  (doc/architecture-improvements.md ② 참고).
+</p>
+<p class="note">
+  ⚠️ getUserMedia는 카메라 내부 파라미터(fx/fy/cx/cy)를 제공하지 않습니다 — 아래 값은 실제 카메라의
+  사전 캘리브레이션 결과를 직접 입력해야 합니다(대략적인 값은 부정확한 위치추정으로 이어집니다).
+</p>
+
+<fieldset>
+  <legend>연결 설정</legend>
+  <div class="row">
+    <div>
+      <label>vps-system 서버 URL</label>
+      <input id="vpsUrl" value="http://localhost:8000/localize" />
+    </div>
+    <div>
+      <label>pathfinder 서버 URL (비우면 이 페이지와 같은 origin)</label>
+      <input id="pathfinderUrl" placeholder="예: http://localhost:3001" />
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>robot ID (pathfinder 로봇 등록 id와 일치해야 마커가 아이콘으로 표시됨)</label>
+      <input id="robotId" value="former-01" />
+    </div>
+    <div>
+      <label>쿼리 주기(초) — VPS 서버 요청은 느리므로(수백ms~수십 초) 매 프레임 호출하지 않음</label>
+      <input id="periodSec" type="number" value="2" min="0.5" step="0.5" />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>카메라 내부 파라미터 (실제 카메라 캘리브레이션 값)</legend>
+  <div class="row">
+    <div><label>fx</label><input id="fx" type="number" value="600" /></div>
+    <div><label>fy</label><input id="fy" type="number" value="600" /></div>
+    <div><label>cx</label><input id="cx" type="number" value="320" /></div>
+    <div><label>cy</label><input id="cy" type="number" value="240" /></div>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>scan-to-map-studio 정합값 (registration_transform.json 내용을 그대로 붙여넣기)</legend>
+  <textarea id="calibration" rows="2">{"rotation_deg": 0, "translation": [0, 0]}</textarea>
+</fieldset>
+
+<video id="preview" autoplay muted playsinline></video>
+<div>
+  <button id="btnStartCamera">카메라 시작</button>
+  <button id="btnToggle" disabled>측위 시작</button>
+</div>
+
+<h3>로그</h3>
+<div id="log"></div>
+
+<script type="module">
+  // scan-to-map-studio의 registration_transform.json({rotation_deg, translation:[tx,ty]})은
+  // "map(로봇 SLAM) 좌표 -> scan_basemap 좌표" 방향이다:
+  //   scan_basemap_point = R(rotation_deg) @ map_point + translation
+  // vps-system의 /localize는 scan_basemap 프레임 pose를 주므로 map 프레임으로
+  // 옮기려면 역변환이 필요하다. src/livePoseTransform.js와 동일한 수학이며(그쪽은
+  // scripts/live-pose-smoke.mjs로 테스트됨), 이 페이지는 Vite 번들에 들어가지 않는
+  // 독립 정적 페이지라 여기 그대로 다시 적었다 -- 수정 시 두 곳을 같이 바꿀 것.
+  function yawFromQuaternion([x, y, z, w]) {
+    return Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
+  }
+  function scanBasemapToMap(pose, calibration) {
+    const theta = (calibration.rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    const [tx, ty] = calibration.translation;
+    const dx = pose.x - tx;
+    const dy = pose.y - ty;
+    return { x: cos * dx + sin * dy, y: -sin * dx + cos * dy, headingRad: pose.headingRad - theta };
+  }
+
+  const logEl = document.getElementById('log');
+  function log(msg) {
+    const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logEl.textContent = `${line}\n${logEl.textContent}`.slice(0, 8000);
+  }
+
+  const video = document.getElementById('preview');
+  const btnStartCamera = document.getElementById('btnStartCamera');
+  const btnToggle = document.getElementById('btnToggle');
+  const canvas = document.createElement('canvas');
+
+  let running = false;
+  let timer = null;
+
+  btnStartCamera.addEventListener('click', async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = stream;
+      btnToggle.disabled = false;
+      log('카메라 연결됨');
+    } catch (err) {
+      log(`카메라 접근 실패: ${err.message}`);
+    }
+  });
+
+  btnToggle.addEventListener('click', () => {
+    running = !running;
+    btnToggle.textContent = running ? '측위 정지' : '측위 시작';
+    if (running) {
+      tick();
+      const periodMs = Number(document.getElementById('periodSec').value) * 1000;
+      timer = setInterval(tick, periodMs);
+    } else {
+      clearInterval(timer);
+    }
+  });
+
+  async function tick() {
+    try {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return;
+
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+
+      const form = new FormData();
+      form.append('image', blob, 'query.jpg');
+      form.append('fx', document.getElementById('fx').value);
+      form.append('fy', document.getElementById('fy').value);
+      form.append('cx', document.getElementById('cx').value);
+      form.append('cy', document.getElementById('cy').value);
+      form.append('width', String(width));
+      form.append('height', String(height));
+
+      const vpsUrl = document.getElementById('vpsUrl').value;
+      const vpsRes = await fetch(vpsUrl, { method: 'POST', body: form });
+      if (!vpsRes.ok) {
+        log(`VPS 로컬라이제이션 실패 (HTTP ${vpsRes.status})`);
+        return;
+      }
+      const result = await vpsRes.json();
+
+      const calibrationInput = JSON.parse(document.getElementById('calibration').value);
+      const calibration = {
+        rotationDeg: calibrationInput.rotation_deg,
+        translation: calibrationInput.translation,
+      };
+      const scanBasemapPose = {
+        x: result.translation[0],
+        y: result.translation[1],
+        headingRad: yawFromQuaternion(result.quaternion),
+      };
+      const mapPose = scanBasemapToMap(scanBasemapPose, calibration);
+
+      const robotId = document.getElementById('robotId').value;
+      const pathfinderBase = document.getElementById('pathfinderUrl').value || '';
+      const putRes = await fetch(`${pathfinderBase}/api/live-pose/${encodeURIComponent(robotId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: mapPose.x, y: mapPose.y, headingRad: mapPose.headingRad }),
+      });
+
+      log(
+        `room=${result.room_id ?? '(단일 DB)'} inliers=${result.num_inliers} ` +
+          `map=(${mapPose.x.toFixed(2)}, ${mapPose.y.toFixed(2)}) heading=${mapPose.headingRad.toFixed(2)}rad ` +
+          `-> pathfinder ${putRes.ok ? 'OK' : `실패 (HTTP ${putRes.status})`}`
+      );
+    } catch (err) {
+      log(`오류: ${err.message}`);
+    }
+  }
+</script>
+</body>
+</html>

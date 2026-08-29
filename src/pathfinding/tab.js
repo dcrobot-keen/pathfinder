@@ -17,7 +17,7 @@ import Stroke from 'ol/style/Stroke.js';
 import Text from 'ol/style/Text.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource } from '../appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource } from '../appShared.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
@@ -97,6 +97,8 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   });
   const graphLayer = new VectorLayer({ source: nodeLinkSource, style: nodeLinkStyle });
   const importedObstacleLayer = new VectorLayer({ source: importedObstacleSource, style: importedObstacleStyle });
+  // WebSocket 연결은 main.js가 한 번만 시작한다 — 여기서는 같은 공유 소스를 감싸기만 함.
+  const liveRobotPoseLayer = new VectorLayer({ source: liveRobotPoseSource, zIndex: 20 });
   const interactionSource = new VectorSource();
   const interactionLayer = new VectorLayer({ source: interactionSource, zIndex: 10 });
   const conflictSource = new VectorSource();
@@ -109,6 +111,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       floorLayer,
       graphLayer,
       importedObstacleLayer,
+      liveRobotPoseLayer,
       interactionLayer,
       conflictLayer,
     ],
@@ -144,6 +147,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     { layer: floorLayer, label: '바닥 PCD (0.5m)' },
     { layer: graphLayer, label: '노드/링크/블록' },
     { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
+    { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
   ]);
 
   const geojsonFormat = new GeoJSON({

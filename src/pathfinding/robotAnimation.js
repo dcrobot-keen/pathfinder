@@ -27,7 +27,9 @@ function numberLabelStyle(label) {
   });
 }
 
-function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFERENCE_SIZE_M, label } = {}) {
+// tab.js의 시뮬레이션 애니메이션과 liveRobotPose.js의 실시간 마커가 같은 아이콘
+// 렌더링 규칙(등록된 로봇 크기 비례, 회전 등)을 공유하도록 export한다.
+export function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFERENCE_SIZE_M, label, rotation } = {}) {
   const sizeRatio = sizeMeters / REFERENCE_SIZE_M;
   const text = numberLabelStyle(label);
 
@@ -37,7 +39,7 @@ function robotMarkerStyle(color, iconSrc, { paused = false, sizeMeters = REFEREN
     // 명시해두므로 자연 크기를 그대로 읽어 scale만으로 최종 크기를 정한다.
     const scale = Math.min(1.2, Math.max(0.15, BASE_ICON_SCALE * sizeRatio));
     return new Style({
-      image: new Icon({ src: iconSrc, scale, opacity: paused ? 0.35 : 1 }),
+      image: new Icon({ src: iconSrc, scale, opacity: paused ? 0.35 : 1, rotation }),
       text,
     });
   }

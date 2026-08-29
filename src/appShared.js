@@ -25,3 +25,7 @@ export const nodeLinkSource = new VectorSource();
 // nodeLinkSource와는 별도로 관리해, 재가져오기(re-import)가 수동 편집 데이터를
 // 절대 건드리지 않게 한다. 경로탐색 요청을 만들 때 nodeLinkSource와 합쳐서 보낸다.
 export const importedObstacleSource = new VectorSource();
+
+// 실시간 로봇 위치(liveRobotPose.js가 채움) — 2D 지도 탭과 길찾기(장애물) 탭이
+// 하나의 WebSocket 연결과 이 소스를 공유하고, 각 탭은 자기 VectorLayer로만 감싼다.
+export const liveRobotPoseSource = new VectorSource();

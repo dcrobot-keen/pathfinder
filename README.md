@@ -17,6 +17,7 @@
 - [Express](https://expressjs.com/) + [lowdb](https://github.com/typicode/lowdb) — 노드/링크/블록 편집 결과를 GeoJSON 파일로 저장하는 초경량 API 서버
 - Go(표준 라이브러리만 사용) — 경로탐색 알고리즘(Dijkstra/A*/Grid A*/Hybrid A*) + HTTP API 서버
 - Node.js 스크립트 — PCD 샘플 생성, PCD → 메쉬 변환 CLI
+- [ws](https://github.com/websockets/ws) — 실시간 로봇 위치를 브라우저에 fan-out하는 WebSocket 릴레이
 
 ## 실행
 
@@ -24,6 +25,7 @@
 npm install
 npm run dev          # Vite(5173) + lowdb API(3001) + Go pathfinder API(3002) 동시 실행
 npm run build         # 프로덕션 빌드 (dist/)
+npm test              # JS 테스트 (좌표 변환 + 실시간 위치 API/WebSocket)
 npm run test:pathfinder  # Go 경로탐색 알고리즘 테스트
 ```
 
@@ -75,6 +77,8 @@ src/
   geojsonApi.js            편집 레이어의 GeoJSON 저장/조회 API 클라이언트
   importedObstacles.js     "스캔 장애물" 패널 (scan-to-map-studio에서 가져온 방 목록 선택/불러오기) + 스타일
   importedObstaclesApi.js  가져온 장애물 목록/조회 API 클라이언트
+  livePoseTransform.js     scan_basemap <-> map 좌표 역/정변환 (ROS 없이, vps-capture.html과 동일 수학)
+  liveRobotPose.js         /api/live-pose/stream WebSocket 구독 + 로봇 아이콘 마커 갱신
   pathfinding/
     tab.js                 길찾기 탭 공통 팩토리 (노드/링크·장애물 두 모드, 현재 UI에는 장애물 탭만 노출) — deconfliction(가시화/우선순위 드래그앤드롭/재탐색) 포함
     pathfindingApi.js        Go pathfinder API 클라이언트
@@ -87,7 +91,8 @@ src/
 shared/
   robotIcons.mjs           로봇 타입별 기본 SVG 아이콘 (서버 시드 + 프론트 폼 미리보기 공용)
 server/
-  index.mjs               Express + lowdb API 서버 (/api/nodelink)
+  index.mjs               Express + lowdb API 서버 (/api/nodelink) + 실시간 로봇 위치 릴레이
+                            (/api/live-pose, WebSocket /api/live-pose/stream)
   robots.mjs                로봇 등록 CRUD API (/api/robots) + 기본 4종 자동 시드
 pathfinder/               Go 모듈 — 경로탐색 알고리즘 + HTTP API + WASM
   graph/                   Dijkstra/A*, 그래프 스냅/가상노드 삽입
@@ -103,8 +108,11 @@ scripts/
   pcd-to-mesh.mjs           PCD → 메쉬(PLY) 변환 CLI
   import-scan-to-map-studio.mjs   scan-to-map-studio의 output.geojson -> data/imported/<room>.geojson 변환
   build-wasm.mjs           pathfinder/wasm -> dist-wasm/pathfinder.wasm + wasm_exec.js 빌드
+  live-pose-smoke.mjs      pathfinder의 첫 JS 자동 테스트 -- 좌표 변환 + 서버 PUT/WebSocket 릴레이 검증
 public/samples/            샘플 PCD 파일들 (앱이 초기 로드에 사용). 100MB를 넘는 실측 스캔 파일은
                             GitHub 용량 제한 때문에 git에 커밋하지 않고 로컬에만 둠(.gitignore 참고).
+public/vps-capture.html    카메라 → vps-system /localize → map 프레임 변환 → /api/live-pose PUT까지
+                            하는 독립 정적 페이지(Vite 번들에 안 들어감, ROS 없음)
 data/nodelink.geojson       노드/링크/블록 편집 결과 GeoJSON 파일 DB
 data/robots.json            로봇 등록 CRUD 데이터 (최초 실행 시 4종 자동 시드)
 data/imported/<room>.geojson  scan-to-map-studio에서 가져온 장애물(스크립트로만 생성, git에는 커밋 안 함)
@@ -183,6 +191,45 @@ GET /api/imported-obstacles/:room   # 해당 방의 FeatureCollection (읽기 �
 경로탐색 요청을 만들 때 `nodeLinkSource`(수동 편집)와 자동으로 합쳐집니다. `data/nodelink.geojson`은
 전혀 건드리지 않으므로 재가져오기는 언제든 안전합니다.
 
+## 실시간 로봇 위치 (vps-system 연동, ROS 없음)
+
+[vps-system](https://github.com/dcrobot-keen/vps-system)의 VPS 로컬라이제이션 서버(`POST /localize`)와
+[scan-to-map-studio](https://github.com/dcrobot-keen/scan-to-map-studio)의 정합 결과(`registration_transform.json`)를
+**ROS2를 전혀 거치지 않고** 직접 조합해 실제 로봇 위치를 지도에 표시합니다. vps-system에도 이미
+`ros2_ws/src/dc_vps_bridge`(ROS2 노드, tf2 기반)가 있지만 그건 로봇의 Nav2/EKF 스택에 pose를 먹이는
+용도이고, 이건 그와 별개인 **브라우저 전용 경로**입니다 — Nav2/EKF가 필요 없는 pathfinder 입장에서
+ROS2 설치·tf2·메시지 타입을 전부 우회할 수 있습니다.
+
+```bash
+GET  /api/live-pose               # 현재 알려진 모든 로봇의 최신 pose 스냅샷
+PUT  /api/live-pose/:robotId      # { x, y, headingRad, timestamp? } -- 캡처 브리지가 씀
+# WebSocket ws://.../api/live-pose/stream -- 새 pose가 들어올 때마다 모든 구독자에게 fan-out.
+# 새로 접속한 구독자는 다음 업데이트를 기다리지 않고 현재 스냅샷을 바로 받는다.
+```
+
+`public/vps-capture.html`(카메라가 있는 기기에서 열기)이 실제 파이프라인입니다: `getUserMedia`로
+프레임을 캡처 → vps-system `/localize`에 직접 HTTP POST(카메라가 scan_basemap/hloc-world 프레임
+pose를 받음) → `src/livePoseTransform.js`와 동일한 수학(역변환)으로 scan-to-map-studio의 정합값을
+적용해 map 프레임으로 변환 → 위 `PUT /api/live-pose/:robotId`. `robotId`가 로봇 등록의 실제 id와
+일치하면 등록된 아이콘/이름으로 표시되고, 아니면 기본 마커로 표시됩니다.
+
+**"바깥쪽이 막힘" 대신 알아둘 점 — 카메라 내부 파라미터:** `getUserMedia`는 fx/fy/cx/cy 같은 카메라
+캘리브레이션 값을 제공하지 않습니다. `vps_localizer_node.py`(ROS2 버전)는 이미 보정된 `CameraInfo`
+토픽에서 이 값을 받지만, 브라우저 카메라는 그런 정보가 없어서 `vps-capture.html`에서 수동으로
+입력해야 합니다 — 부정확한 값은 위치추정 정확도를 직접적으로 떨어뜨립니다.
+
+**좌표 변환:** scan-to-map-studio의 `registration_transform.json`은 `map(로봇 SLAM) 좌표 →
+scan_basemap 좌표` 방향(`scan_basemap_point = R(rotation_deg) @ map_point + translation`)이므로,
+vps-system이 돌려주는 scan_basemap 프레임 pose를 pathfinder가 쓰는 map 프레임으로 옮기려면
+**역변환**을 적용해야 합니다 — `dc_vps_bridge`가 ROS2 tf2 lookup으로 자동으로 하던 걸
+`src/livePoseTransform.js`가 순수 함수로 직접 계산합니다(`scripts/live-pose-smoke.mjs`로 왕복 검증).
+
+**검증 범위:** 좌표 변환 함수와 서버의 PUT/WebSocket 릴레이는 `npm test`(`scripts/live-pose-smoke.mjs`,
+pathfinder의 첫 JS 자동 테스트)로 검증되고, 실제 Chrome에서 서버에 pose를 PUT했을 때 지도에 등록된
+로봇 아이콘이 정확한 좌표로 나타나는 것까지 수동으로 확인했습니다. `vps-capture.html`의 카메라
+캡처·실제 vps-system 서버 호출 구간은 실제 카메라/서버가 없어 검증하지 못했습니다 — "알려진 제한"
+참고.
+
 ## PCD 샘플 생성 스크립트
 
 ```bash
@@ -208,3 +255,6 @@ node scripts/pcd-to-mesh.mjs <input.pcd> [--out=output.ply] [--voxel=0.08] [--is
 - scan-to-map-studio에서 가져온 `category: "room"`(방 전체 윤곽)은 아직 장애물로 변환하지 않습니다 — 벽 자체를 "바깥쪽이 막힌" 장애물로 표현하려면 홀(hole) 폴리곤이 필요한데, Go `RasterizeBlocks`가 홀을 실제로 지원하는지 검증되지 않았습니다.
 - 스캔 장애물 가져오기는 방 하나가 pathfinder 좌표계 전체를 그대로 쓴다고 가정합니다(1:1, 변환 없음). 여러 방을 동시에 다른 좌표계로 다루려면 `project.md`가 설명하는 미구현 "project"(좌표계/맵 단위 선택) 개념이 먼저 필요합니다.
 - 기본 로봇 아이콘(Atlas/MoBED/SPOT/AGV·AMR)은 이미지 생성 도구 없이 손으로 그린 단순 플랫 스타일 SVG로, 실제 로고/사진이 아닌 개략적인 형태 아이콘입니다. 필요하면 폼에서 직접 업로드해 교체할 수 있습니다.
+- `public/vps-capture.html`의 좌표 변환 함수는 `src/livePoseTransform.js`와 동일한 코드를 그대로 다시 적어둔 것입니다(이 페이지가 Vite 번들에 안 들어가는 독립 정적 파일이라 import를 못 씀) — 수정 시 두 곳을 같이 바꿔야 하고, 잊으면 조용히 어긋날 수 있습니다.
+- 실시간 로봇 위치는 방 하나 = pathfinder 좌표계 전체(1:1, 변환 없음)라는, 스캔 장애물 가져오기와 같은 가정을 그대로 물려받습니다 — 다중 방은 `project.md`의 미구현 "project" 개념이 선행되어야 합니다.
+- `vps-capture.html`의 카메라 캡처 → 실제 vps-system 서버 호출 구간은 실제 카메라도 실제로 돌아가는 vps-system 서버도 없어 실행 검증을 못 했습니다. 좌표 변환 수학과 pathfinder 서버 쪽(PUT/WebSocket)만 자동 테스트로 검증됨.
