@@ -44,6 +44,7 @@ npm run test:pathfinder  # Go 경로탐색 알고리즘 테스트
 4. **3D 메쉬 변환** — 점군을 복셀 밀도 필드로 만들고 마칭 큐브(Marching Cubes)로 등위면을 추출해 컬러 메쉬 생성. "3D 뷰" 탭에서 포인트/메쉬 토글, 또는 CLI로 임의의 PCD를 메쉬 파일(PLY)로 변환.
 5. **업로드 시 2D/3D 동시 갱신** — 새 PCD를 업로드하면 좌표 범위·높이 슬라이스·3D 점군/카메라가 모두 그 파일 기준으로 자동 재계산.
 6. **노드/링크/블록 편집 레이어** — 2D 지도 위에서 노드(point)/링크(line)/블록(polygon)을 그리고 수정·삭제. "저장" 시 GeoJSON `FeatureCollection`으로 API 서버를 통해 `data/nodelink.geojson` 파일에 저장되고, 다음 접속 시 자동으로 다시 불러옴. PCD로부터 장애물/격자를 자동 생성하는 기능은 시도했다가 정확도가 낮아 제거했고, 지금은 이 레이어에서 수동 편집하는 방식만 사용합니다.
+6-1. **스캔 장애물 (scan-to-map-studio 연동)** — 자매 저장소 [scan-to-map-studio](../scan-to-map-studio)가 iPhone LiDAR 스캔에서 뽑아낸 방 하나 분량의 `output.geojson`(가구 발자국·벽 세그먼트·방 윤곽선)을 `scripts/import-scan-to-map-studio.mjs`로 변환해 `data/imported/<room>.geojson`에 저장합니다. 화면의 "스캔 장애물" 패널에서 방을 골라 불러오면 편집 지도/길찾기(장애물) 탭 모두에 빨간색 블록으로 표시되고, 경로탐색 요청을 만들 때 `nodeLinkSource`(수동 편집)와 자동으로 합쳐져서 Go pathfinder API로 전송됩니다. `data/nodelink.geojson`(사용자가 손으로 편집하는 파일)은 전혀 건드리지 않으므로 재가져오기(re-import)가 항상 안전합니다. 자세한 설계 배경은 [`../doc/architecture-improvements.md`](../doc/architecture-improvements.md) 참고.
 7. **길찾기 (노드/링크)** — (현재 탭 메뉴에는 없음, 코드는 `pathfinding/tab.js`의 `mode: 'nodelink'`로 유지) 링크 위를 클릭(스냅 지원)해 시작/도착점을 지정하거나 "랜덤 생성"으로 그래프 위 임의의 두 점을 골라 Dijkstra/A*로 경로 탐색.
 8. **길찾기 (장애물 회피)** — 노드/링크 그래프는 무시하고 block(폴리곤)만 장애물로 판단, occupancy grid 위에서 Grid A* 또는 Hybrid A*(연속 좌표+진행방향 고려)로 경로 탐색. 클릭 또는 랜덤 생성으로 시작/도착점 지정. 경로는 랜덤 색 선으로 표시되고, 로봇 마커가 실제 m/s 속도로 지나가며 지나간 구간은 지워짐(속도는 로봇 미선택 시 기본 1.0m/s). 도착하면 로봇 마커·남은 경로선·start/end 핀이 모두 지도에서 사라짐.
    - **등록된 로봇 선택** — 로봇을 고르면 그 로봇의 알고리즘이 자동 적용(수동 선택 잠금)되고, 로봇 마커가 원형 점 대신 해당 로봇의 아이콘으로, **등록된 실제 속도(m/s)·크기(m)**에 맞춰 표시/이동함. 로봇 목록은 유효한 알고리즘(gridastar/hybridastar)을 가진 로봇만 필터링해서 보여줌.
@@ -72,6 +73,8 @@ src/
   view3d.js               Three.js 3D orbit 뷰어 (점군/메쉬 렌더링)
   editLayer.js            노드/링크/블록 그리기·수정·삭제 + 저장/불러오기 툴바
   geojsonApi.js            편집 레이어의 GeoJSON 저장/조회 API 클라이언트
+  importedObstacles.js     "스캔 장애물" 패널 (scan-to-map-studio에서 가져온 방 목록 선택/불러오기) + 스타일
+  importedObstaclesApi.js  가져온 장애물 목록/조회 API 클라이언트
   pathfinding/
     tab.js                 길찾기 탭 공통 팩토리 (노드/링크·장애물 두 모드, 현재 UI에는 장애물 탭만 노출) — deconfliction(가시화/우선순위 드래그앤드롭/재탐색) 포함
     pathfindingApi.js        Go pathfinder API 클라이언트
@@ -95,10 +98,12 @@ scripts/
   generate-sample-pcd.mjs   고정 샘플 방 PCD 생성
   generate-random-pcd.mjs   랜덤 방 PCD 여러 개 생성 (업로드 테스트용)
   pcd-to-mesh.mjs           PCD → 메쉬(PLY) 변환 CLI
+  import-scan-to-map-studio.mjs   scan-to-map-studio의 output.geojson -> data/imported/<room>.geojson 변환
 public/samples/            샘플 PCD 파일들 (앱이 초기 로드에 사용). 100MB를 넘는 실측 스캔 파일은
                             GitHub 용량 제한 때문에 git에 커밋하지 않고 로컬에만 둠(.gitignore 참고).
 data/nodelink.geojson       노드/링크/블록 편집 결과 GeoJSON 파일 DB
 data/robots.json            로봇 등록 CRUD 데이터 (최초 실행 시 4종 자동 시드)
+data/imported/<room>.geojson  scan-to-map-studio에서 가져온 장애물(스크립트로만 생성, git에는 커밋 안 함)
 ```
 
 ## 경로탐색 API (Go)
@@ -127,6 +132,30 @@ DELETE /api/robots/:id    # 삭제
 양수만 허용되며 잘못된 값은 기본값(0.5m / 1.0m/s)이나 기존 값으로 대체됩니다. `icon`은 data URI
 문자열(업로드한 이미지 또는 `shared/robotIcons.mjs`의 기본 SVG)로 저장됩니다.
 
+## 스캔 장애물 가져오기 (scan-to-map-studio 연동)
+
+```bash
+# scan-to-map-studio 프로젝트 폴더(예: ../scan-to-map-studio/projects/bedroom)를
+# data/imported/<room>.geojson으로 변환
+node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15]
+```
+
+`output.geojson`의 `category: "furniture"`(가구 발자국)와 `category: "wall"`(벽 세그먼트, 지정한
+두께로 얇은 사각형 block으로 변환)만 `kind: "block"` 장애물로 변환됩니다. `category: "room"`(방
+전체 윤곽)은 장애물로 바꾸지 않고 `kind: "room-outline"` 참고용으로만 보존합니다 — "바깥쪽이
+막힘"을 표현하려면 홀(hole) 폴리곤이 필요한데 Go `RasterizeBlocks`의 홀 지원 여부가 검증되지
+않았기 때문입니다(2단계 과제).
+
+```bash
+GET /api/imported-obstacles         # { rooms: string[] } -- 가져온 방 목록
+GET /api/imported-obstacles/:room   # 해당 방의 FeatureCollection (읽기 전용, 쓰기 API 없음)
+```
+
+화면에서는 "스캔 장애물" 패널(2D 지도 탭·길찾기(장애물) 탭 왼쪽 아래)에서 방을 골라 "불러오기"를
+누르면 공유 소스(`importedObstacleSource`, `src/appShared.js`)에 반영되어 두 탭에 동시에 표시되고,
+경로탐색 요청을 만들 때 `nodeLinkSource`(수동 편집)와 자동으로 합쳐집니다. `data/nodelink.geojson`은
+전혀 건드리지 않으므로 재가져오기는 언제든 안전합니다.
+
 ## PCD 샘플 생성 스크립트
 
 ```bash
@@ -148,5 +177,7 @@ node scripts/pcd-to-mesh.mjs <input.pcd> [--out=output.ply] [--voxel=0.08] [--is
 - Hybrid A*는 실시간 데모 목적의 단순화된 구현(고정 스텝 길이의 자전거 모델 조향 프리미티브, analytic expansion 없음)으로, 실제 로보틱스용 구현 대비 정밀도는 낮음.
 - 장애물 회피 경로탐색은 start/end 주변 지역 범위(local search bounds)로만 occupancy grid를 만들고, 그 범위 밖의 장애물은 미리 걸러냅니다(`pathfinder/server/main.go`) — 부지가 커도(200x400m) 계산량이 site 전체 크기에 비례해 늘어나지 않도록 하기 위함. 격자 칸 수가 너무 커지면 `adaptiveCellSize`가 자동으로 해상도를 낮춥니다.
 - re-routing은 상위 우선순위 로봇의 "현재 위치"만 임시 원형 장애물로 반영하는 단순한 구현입니다 — 그 로봇이 이동 중인 미래 경로까지 예측해서 피하지는 않습니다.
-- PCD에서 장애물 폴리곤/길찾기용 격자를 자동 생성하는 기능은 시도했으나 정확도가 낮아 제거했습니다(`geometryfrompcd.md`에 있던 계획). 지금은 노드/링크/블록을 지도 위에서 직접 그려서 편집합니다.
+- PCD에서 장애물 폴리곤/길찾기용 격자를 자동 생성하는 기능은 시도했으나 정확도가 낮아 제거했습니다(`geometryfrompcd.md`에 있던 계획). 지금은 노드/링크/블록을 지도 위에서 직접 그리거나, scan-to-map-studio에서 가져와서(위 "스캔 장애물 가져오기" 참고) 편집합니다.
+- scan-to-map-studio에서 가져온 `category: "room"`(방 전체 윤곽)은 아직 장애물로 변환하지 않습니다 — 벽 자체를 "바깥쪽이 막힌" 장애물로 표현하려면 홀(hole) 폴리곤이 필요한데, Go `RasterizeBlocks`가 홀을 실제로 지원하는지 검증되지 않았습니다.
+- 스캔 장애물 가져오기는 방 하나가 pathfinder 좌표계 전체를 그대로 쓴다고 가정합니다(1:1, 변환 없음). 여러 방을 동시에 다른 좌표계로 다루려면 `project.md`가 설명하는 미구현 "project"(좌표계/맵 단위 선택) 개념이 먼저 필요합니다.
 - 기본 로봇 아이콘(Atlas/MoBED/SPOT/AGV·AMR)은 이미지 생성 도구 없이 손으로 그린 단순 플랫 스타일 SVG로, 실제 로고/사진이 아닌 개략적인 형태 아이콘입니다. 필요하면 폼에서 직접 업로드해 교체할 수 있습니다.

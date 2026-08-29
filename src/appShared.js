@@ -20,3 +20,8 @@ export const pcdSource = new VectorSource();
 
 // 노드/링크/블록 편집 데이터 (편집 탭과 길찾기 탭이 공유)
 export const nodeLinkSource = new VectorSource();
+
+// scan-to-map-studio에서 가져온(import) 장애물 블록. 사용자가 손으로 그린
+// nodeLinkSource와는 별도로 관리해, 재가져오기(re-import)가 수동 편집 데이터를
+// 절대 건드리지 않게 한다. 경로탐색 요청을 만들 때 nodeLinkSource와 합쳐서 보낸다.
+export const importedObstacleSource = new VectorSource();

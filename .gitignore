@@ -3,6 +3,10 @@ dist/
 .claude/
 *.log
 
+# scan-to-map-studio에서 가져온(scripts/import-scan-to-map-studio.mjs) 장애물 데이터 --
+# 외부 저장소의 스캔 결과에서 재생성 가능하므로 커밋하지 않는다.
+data/imported/
+
 # 100MB(GitHub 하드 리밋)를 넘거나 그에 근접하는 실측 스캔 PCD는 커밋하지 않는다.
 # 작은 생성/샘플 PCD(public/samples/*.pcd)는 그대로 추적한다.
 public/samples/Untitled_Scan_08_05_13.pcd

@@ -13,9 +13,12 @@ import { createStringXY } from 'ol/coordinate.js';
 import { parsePcd } from './pcd.js';
 import { createView3D } from './view3d.js';
 import { buildHeightBands, createSliceLayers, renderSlicePanel } from './heightSlices.js';
+import VectorLayer from 'ol/layer/Vector.js';
+import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, importedObstacleSource } from './appShared.js';
+import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
 
@@ -42,9 +45,12 @@ const blueprintLayer = new ImageLayer({
 
 const gridLayer = buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10);
 
+// scan-to-map-studio에서 가져온(import) 장애물 블록 레이어 (공유 소스, appShared.js 참고)
+const importedObstacleLayer = new VectorLayer({ source: importedObstacleSource, style: importedObstacleStyle });
+
 const map = new Map({
   target: 'map',
-  layers: [blueprintLayer, gridLayer],
+  layers: [blueprintLayer, gridLayer, importedObstacleLayer],
   view: new View({
     projection: indoorProjection,
     center: [MAP_SIZE_X / 2, MAP_SIZE_Y / 2],
@@ -97,10 +103,22 @@ map.addLayer(pcdLayer);
 // 노드/링크/블록 편집 레이어 (GeoJSON 파일 DB에 저장)
 const editLayerApi = createEditLayer(map, indoorProjection, document.getElementById('edit-panel'));
 
+// "스캔 장애물" 패널: scan-to-map-studio에서 가져온(import) 방을 골라 불러온다.
+const importedGeojsonFormat = new GeoJSON({
+  dataProjection: indoorProjection,
+  featureProjection: indoorProjection,
+});
+createImportedObstaclesPanel(
+  document.getElementById('imported-obstacles-panel'),
+  importedGeojsonFormat,
+  map
+);
+
 // PCD를 아직 업로드하지 않은 초기 상태에도 레이어 토글 패널이 보이도록 먼저 한 번 그린다
 // (배경 도면 / 노드·링크·블록만 — 높이 슬라이스·원본 PCD는 업로드 후에 채워짐).
 renderSlicePanel(document.getElementById('slice-panel'), [], [], [
   { layer: blueprintLayer, label: '배경 도면' },
+  { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
   { layer: editLayerApi.layer, label: '노드/링크/블록' },
 ]);
 
@@ -186,6 +204,7 @@ function applyPoints(points, label) {
   renderSlicePanel(document.getElementById('slice-panel'), bands, sliceLayers, [
     { layer: blueprintLayer, label: '배경 도면' },
     { layer: editLayerApi.layer, label: '노드/링크/블록' },
+    { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
     { layer: pcdLayer, label: `전체 (비분류) — ${label}`, checked: false },
   ]);
 

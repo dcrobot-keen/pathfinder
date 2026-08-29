@@ -17,9 +17,10 @@ import Stroke from 'ol/style/Stroke.js';
 import Text from 'ol/style/Text.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource } from '../appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource } from '../appShared.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
+import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
 import { findNodeLinkPath, findObstaclePath } from './pathfindingApi.js';
 import { animatePathAndRobot, randomPathColor, REFERENCE_SIZE_M as DEFAULT_SIZE_M } from './robotAnimation.js';
 import { listRobots } from '../robots/robotApi.js';
@@ -95,6 +96,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     },
   });
   const graphLayer = new VectorLayer({ source: nodeLinkSource, style: nodeLinkStyle });
+  const importedObstacleLayer = new VectorLayer({ source: importedObstacleSource, style: importedObstacleStyle });
   const interactionSource = new VectorSource();
   const interactionLayer = new VectorLayer({ source: interactionSource, zIndex: 10 });
   const conflictSource = new VectorSource();
@@ -102,7 +104,14 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
   const map = new OlMap({
     target: mapEl,
-    layers: [buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10), floorLayer, graphLayer, interactionLayer, conflictLayer],
+    layers: [
+      buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10),
+      floorLayer,
+      graphLayer,
+      importedObstacleLayer,
+      interactionLayer,
+      conflictLayer,
+    ],
     view: new View({
       projection: indoorProjection,
       center: [MAP_SIZE_X / 2, MAP_SIZE_Y / 2],
@@ -134,12 +143,19 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   renderSlicePanel(layersPanelEl, [], [], [
     { layer: floorLayer, label: '바닥 PCD (0.5m)' },
     { layer: graphLayer, label: '노드/링크/블록' },
+    { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
   ]);
 
   const geojsonFormat = new GeoJSON({
     dataProjection: indoorProjection,
     featureProjection: indoorProjection,
   });
+
+  // "스캔 장애물" 패널: scan-to-map-studio에서 가져온 방을 골라 importedObstacleSource에
+  // 불러온다. 이 소스는 여러 탭이 공유하므로 다른 탭(2D 지도)에서 불러와도 여기 즉시 반영된다.
+  const importedObstaclesPanelEl = document.createElement('div');
+  mapEl.appendChild(importedObstaclesPanelEl);
+  createImportedObstaclesPanel(importedObstaclesPanelEl, geojsonFormat, map);
 
   const draw = new Draw({ source: interactionSource, type: 'Point' });
   map.addInteraction(draw);
@@ -529,9 +545,18 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     });
   }
 
+  // 경로 요청에 실제로 쓰이는 장애물 block만 골라낸다 -- 참고용 room-outline
+  // (kind: "room-outline")은 장애물이 아니므로 여기서 제외한다.
+  function importedBlockFeatures() {
+    return importedObstacleSource.getFeatures().filter((f) => f.get('kind') === 'block');
+  }
+
   async function requestPath(startCoord, endCoord, markerFeatures = []) {
     setStatus('경로 계산 중...');
-    const featureCollection = geojsonFormat.writeFeaturesObject(nodeLinkSource.getFeatures());
+    const featureCollection = geojsonFormat.writeFeaturesObject([
+      ...nodeLinkSource.getFeatures(),
+      ...importedBlockFeatures(),
+    ]);
     const start = { x: startCoord[0], y: startCoord[1] };
     const end = { x: endCoord[0], y: endCoord[1] };
     const algorithm = algorithmSelect.value;
@@ -612,6 +637,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
       const featureCollection = geojsonFormat.writeFeaturesObject([
         ...nodeLinkSource.getFeatures(),
+        ...importedBlockFeatures(),
         ...blockFeatures,
       ]);
       const start = { x: currentPos[0], y: currentPos[1] };

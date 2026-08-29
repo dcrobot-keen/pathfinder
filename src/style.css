@@ -229,6 +229,23 @@ body {
   color: #fff;
 }
 
+.imported-panel {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 5;
+  background: rgba(30, 30, 34, 0.9);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: 12px sans-serif;
+  color: #eee;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
 .edit-status {
   font-size: 11px;
   color: #aaa;
