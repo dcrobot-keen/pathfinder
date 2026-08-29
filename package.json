@@ -10,7 +10,8 @@
     "dev:pathfinder": "cd pathfinder && go run ./server",
     "build": "vite build",
     "preview": "vite preview",
-    "test:pathfinder": "cd pathfinder && go test ./..."
+    "test:pathfinder": "cd pathfinder && go test ./...",
+    "build:wasm": "node scripts/build-wasm.mjs"
   },
   "dependencies": {
     "express": "^5.2.1",

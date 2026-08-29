@@ -5,6 +5,7 @@
 package grid
 
 import (
+	"fmt"
 	"math"
 
 	"pathfinder/graph"
@@ -39,6 +40,20 @@ func NewGrid(originX, originY, cellSize float64, cols, rows int) *Grid {
 		Rows:     rows,
 		occupied: make([]bool, cols*rows),
 	}
+}
+
+// NewGridFromOccupancy builds a Grid directly from a pre-computed occupancy
+// bitmap (row-major, length cols*rows), for callers that already maintain
+// their own cell-level occupancy (e.g. a LIDAR-fed local costmap) and don't
+// need polygon rasterization -- see RasterizeBlocks for the GeoJSON-polygon
+// path this package otherwise expects its callers to use.
+func NewGridFromOccupancy(originX, originY, cellSize float64, cols, rows int, occupied []bool) (*Grid, error) {
+	if len(occupied) != cols*rows {
+		return nil, fmt.Errorf("occupied has length %d, want cols*rows = %d", len(occupied), cols*rows)
+	}
+	g := NewGrid(originX, originY, cellSize, cols, rows)
+	copy(g.occupied, occupied)
+	return g, nil
 }
 
 func (g *Grid) index(col, row int) int { return row*g.Cols + col }

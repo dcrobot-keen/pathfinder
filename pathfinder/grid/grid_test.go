@@ -18,6 +18,31 @@ func TestRasterizeBlocksMarksInteriorCells(t *testing.T) {
 	}
 }
 
+func TestNewGridFromOccupancyMatchesGivenBitmap(t *testing.T) {
+	// 3x2 grid (cols=3, rows=2), row-major: occupy (col=1,row=0) and (col=2,row=1).
+	occupied := []bool{false, true, false, false, false, true}
+	g, err := NewGridFromOccupancy(0, 0, 1, 3, 2, occupied)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !g.IsOccupiedCell(1, 0) {
+		t.Error("cell (1,0) should be occupied")
+	}
+	if !g.IsOccupiedCell(2, 1) {
+		t.Error("cell (2,1) should be occupied")
+	}
+	if g.IsOccupiedCell(0, 0) {
+		t.Error("cell (0,0) should be free")
+	}
+}
+
+func TestNewGridFromOccupancyRejectsMismatchedLength(t *testing.T) {
+	_, err := NewGridFromOccupancy(0, 0, 1, 3, 2, make([]bool, 5))
+	if err == nil {
+		t.Error("expected an error for a bitmap length that doesn't match cols*rows")
+	}
+}
+
 func TestIsOccupiedCellOutOfBoundsIsTreatedAsBlocked(t *testing.T) {
 	g := NewGrid(0, 0, 1, 5, 5)
 	if !g.IsOccupiedCell(-1, 0) {

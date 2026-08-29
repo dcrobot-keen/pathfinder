@@ -89,16 +89,20 @@ shared/
 server/
   index.mjs               Express + lowdb API 서버 (/api/nodelink)
   robots.mjs                로봇 등록 CRUD API (/api/robots) + 기본 4종 자동 시드
-pathfinder/               Go 모듈 — 경로탐색 알고리즘 + HTTP API
+pathfinder/               Go 모듈 — 경로탐색 알고리즘 + HTTP API + WASM
   graph/                   Dijkstra/A*, 그래프 스냅/가상노드 삽입
-  grid/                    occupancy grid, Grid A*, Hybrid A*
+  grid/                    occupancy grid, Grid A*, Hybrid A*. NewGridFromOccupancy로 폴리곤 대신
+                            원시 점유 비트맵(예: LIDAR 누적 costmap)을 직접 주입 가능
   server/                  net/http API 서버 (/api/path/nodelink, /api/path/obstacle) — 지역 검색 범위·장애물 필터링·격자 해상도 자동 조정으로 대형 부지에서도 빠른 응답
+  wasm/                    grid 패키지를 GOOS=js GOARCH=wasm으로 노출 (pathfinderFindPath) — 서버 없이
+                            브라우저에서 직접 호출. 첫 소비자: ros-chromium/robot-os-chromium의 PlannerNode
 scripts/
   pcd-lib.mjs             PCD 생성 스크립트 공용 유틸 (rgb 패킹, ascii 저장)
   generate-sample-pcd.mjs   고정 샘플 방 PCD 생성
   generate-random-pcd.mjs   랜덤 방 PCD 여러 개 생성 (업로드 테스트용)
   pcd-to-mesh.mjs           PCD → 메쉬(PLY) 변환 CLI
   import-scan-to-map-studio.mjs   scan-to-map-studio의 output.geojson -> data/imported/<room>.geojson 변환
+  build-wasm.mjs           pathfinder/wasm -> dist-wasm/pathfinder.wasm + wasm_exec.js 빌드
 public/samples/            샘플 PCD 파일들 (앱이 초기 로드에 사용). 100MB를 넘는 실측 스캔 파일은
                             GitHub 용량 제한 때문에 git에 커밋하지 않고 로컬에만 둠(.gitignore 참고).
 data/nodelink.geojson       노드/링크/블록 편집 결과 GeoJSON 파일 DB
@@ -117,6 +121,29 @@ POST /api/path/obstacle   { featureCollection, start: {x,y}, end: {x,y}, algorit
 
 # 응답: { path: [[x,y], ...], distance, algorithm }
 ```
+
+## WASM 빌드 (서버 없이 브라우저에서 직접 경로탐색)
+
+```bash
+npm run build:wasm   # dist-wasm/pathfinder.wasm + wasm_exec.js 생성 (git에는 커밋 안 함)
+```
+
+`pathfinder/wasm`가 `grid` 패키지(`GridAStar`/`HybridAStar`)를 `pathfinderFindPath(request)` 전역 함수 하나로 노출합니다. 재구현이 아니라 실제 `grid` 패키지를 그대로 컴파일한 것이라, 이 패키지의 Go 테스트가 통과하면 WASM 빌드도 같은 로직으로 동작한다고 볼 수 있습니다(2026-08-29 기준 Node/V8에서 5개 시나리오로 직접 검증 — 열린 공간/벽 우회/Hybrid A*/완전히 막힌 목적지, 200x200 격자에서 호출당 평균 1.7ms).
+
+```js
+// request 형태 (blocks 대신 occupied를 주면 폴리곤 래스터화를 건너뛰고 비트맵을 바로 씀 -- LIDAR로
+// 누적한 costmap처럼 이미 셀 단위 점유 정보가 있는 호출자에게 더 자연스러움)
+{
+  originX, originY, cellSize, cols, rows,
+  occupied?: (boolean[] | Uint8Array),  // row-major, length cols*rows
+  blocks?: [[[x, y], ...], ...],        // occupied가 없을 때만 사용, GeoJSON 폴리곤 링
+  start: { x, y }, goal: { x, y },
+  algorithm: "gridastar" | "hybridastar",
+}
+// 응답: { path: [[x,y], ...], distance } | { error }
+```
+
+첫 소비자는 [ros-chromium](../ros-chromium)/robot-os-chromium의 `packages/planner-wasm` + `PlannerNode`입니다 — roadmap.md Phase 7("PlannerNode — 격자 A*")을 새로 구현하는 대신 이 빌드를 그대로 가져다 씁니다. 자세한 배경은 [`../doc/architecture-improvements.md`](../doc/architecture-improvements.md) 참고.
 
 ## 로봇 등록 API
 
