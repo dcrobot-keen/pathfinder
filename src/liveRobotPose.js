@@ -10,7 +10,7 @@
 // nodeLinkSource/importedObstacleSource와 같은 공유 방식.
 import Feature from 'ol/Feature.js';
 import Point from 'ol/geom/Point.js';
-import { robotMarkerStyle } from './pathfinding/robotAnimation.js';
+import { robotMarkerStyle, REFERENCE_SIZE_M } from './pathfinding/robotAnimation.js';
 import { listRobots } from './robots/robotApi.js';
 
 const RECONNECT_DELAY_MS = 2000;
@@ -22,8 +22,19 @@ const UNKNOWN_ROBOT_COLOR = '#e91e63';
 const SIM_ROBOT_ID_RE = /(^|-)sim(-|$)/i;
 const SIM_ROBOT_COLOR = '#9b59b6';
 
+// sim-driver가 "<robotId>-truth"로 따로 올리는 ground-truth 디버그 마커(OdometryNode
+// + PoseFusionNode가 실제로 뭘 보고 조향하는지와, 시뮬레이터만 아는 "진짜" 위치를
+// 눈으로 비교하기 위한 것 -- 실기에는 ground truth 자체가 없다). 반투명 회색 유령
+// 점으로 그려 "이건 로봇이 아니라 디버그용 참고선"임을 명확히 한다.
+const TRUTH_ROBOT_ID_RE = /-truth$/i;
+const TRUTH_ROBOT_COLOR = 'rgba(136, 136, 136, 0.55)';
+
 function isSimRobotId(robotId) {
   return SIM_ROBOT_ID_RE.test(robotId);
+}
+
+function isTruthRobotId(robotId) {
+  return TRUTH_ROBOT_ID_RE.test(robotId);
 }
 
 /**
@@ -56,16 +67,23 @@ export function startLiveRobotPoseTracking(source) {
       feature.getGeometry().setCoordinates([pose.x, pose.y]);
     }
     const robot = robotsById.get(robotId);
-    const sim = isSimRobotId(robotId);
+    const truth = isTruthRobotId(robotId);
+    const sim = !truth && isSimRobotId(robotId);
+    const baseId = truth ? robotId.slice(0, -'-truth'.length) : robotId;
     feature.setStyle(
-      robotMarkerStyle(robot ? undefined : sim ? SIM_ROBOT_COLOR : UNKNOWN_ROBOT_COLOR, robot?.icon, {
-        sizeMeters: robot?.sizeMeters,
-        // OL Icon의 rotation은 화면 기준 시계방향(라디안), pathfinder 좌표계는
-        // 수학 표준(반시계 방향이 양의 각도)이라 부호를 뒤집는다.
-        rotation: -pose.headingRad,
-        label: sim ? `SIM · ${robot?.name ?? robotId}` : robot?.name ?? robotId,
-        dashed: sim,
-      })
+      robotMarkerStyle(
+        truth ? TRUTH_ROBOT_COLOR : robot ? undefined : sim ? SIM_ROBOT_COLOR : UNKNOWN_ROBOT_COLOR,
+        truth ? undefined : robot?.icon,
+        {
+          // 유령 마커는 로봇 자체보다 한 단계 작게 그려 "참고용"임을 크기로도 드러낸다.
+          sizeMeters: truth ? REFERENCE_SIZE_M * 0.6 : robot?.sizeMeters,
+          // OL Icon의 rotation은 화면 기준 시계방향(라디안), pathfinder 좌표계는
+          // 수학 표준(반시계 방향이 양의 각도)이라 부호를 뒤집는다.
+          rotation: -pose.headingRad,
+          label: truth ? `GT · ${baseId}` : sim ? `SIM · ${robot?.name ?? robotId}` : robot?.name ?? robotId,
+          dashed: sim || truth,
+        }
+      )
     );
   }
 
