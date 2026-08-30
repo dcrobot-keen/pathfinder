@@ -81,12 +81,27 @@
   // scan-to-map-studio의 registration_transform.json({rotation_deg, translation:[tx,ty]})은
   // "map(로봇 SLAM) 좌표 -> scan_basemap 좌표" 방향이다:
   //   scan_basemap_point = R(rotation_deg) @ map_point + translation
-  // vps-system의 /localize는 scan_basemap 프레임 pose를 주므로 map 프레임으로
-  // 옮기려면 역변환이 필요하다. src/livePoseTransform.js와 동일한 수학이며(그쪽은
+  // vps-system의 /localize가 주는 pose를 map 프레임으로 옮기려면 역변환이
+  // 필요하다. src/livePoseTransform.js와 동일한 수학이며(그쪽은
   // scripts/live-pose-smoke.mjs로 테스트됨), 이 페이지는 Vite 번들에 들어가지 않는
   // 독립 정적 페이지라 여기 그대로 다시 적었다 -- 수정 시 두 곳을 같이 바꿀 것.
-  function yawFromQuaternion([x, y, z, w]) {
-    return Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
+  //
+  // 버그 수정(2026-08-30): /localize의 translation/quaternion은 scan_basemap
+  // "평면" pose가 아니라 raw ARKit pose(Y-up)다. 예전엔 translation[0]/[1]을
+  // 그대로 평면 x/y로 썼는데, ARKit은 Y-up이라 translation[1]은 실제로 카메라
+  // "높이"였다(카메라를 비슷한 높이로 들고 다니면 방 안 어디서든 거의 같은 값만
+  // 나와 위치를 구분 못 함). arkitPoseToGroundPose가 vps-system/pipeline/
+  // dc_vps_pipeline/export_pointcloud.py에 문서화된 관례((x,y,z) -> (x,-z,y))로
+  // 먼저 평면 pose를 만든 뒤에야 scanBasemapToMap으로 map 프레임 변환을 한다.
+  function arkitPoseToGroundPose(translation, quaternion) {
+    const [qx, qy, qz, qw] = quaternion;
+    const x = translation[0];
+    const y = -translation[2];
+    // 카메라 로컬 -Z(전방)의 world 방향(쿼터니언 표준 회전행렬의 세 번째 열에 -1을 곱한 것).
+    const forwardX = -2 * (qx * qz + qy * qw);
+    const forwardZ = 2 * (qx * qx + qy * qy) - 1;
+    const headingRad = Math.atan2(-forwardZ, forwardX);
+    return { x, y, headingRad };
   }
   function scanBasemapToMap(pose, calibration) {
     const theta = (calibration.rotationDeg * Math.PI) / 180;
@@ -168,11 +183,7 @@
         rotationDeg: calibrationInput.rotation_deg,
         translation: calibrationInput.translation,
       };
-      const scanBasemapPose = {
-        x: result.translation[0],
-        y: result.translation[1],
-        headingRad: yawFromQuaternion(result.quaternion),
-      };
+      const scanBasemapPose = arkitPoseToGroundPose(result.translation, result.quaternion);
       const mapPose = scanBasemapToMap(scanBasemapPose, calibration);
 
       const robotId = document.getElementById('robotId').value;

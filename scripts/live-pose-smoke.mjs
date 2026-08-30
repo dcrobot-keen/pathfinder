@@ -14,7 +14,7 @@
 //   node scripts/live-pose-smoke.mjs
 import { spawn } from 'node:child_process';
 import { WebSocket } from 'ws';
-import { scanBasemapToMap, mapToScanBasemap, yawFromQuaternion } from '../src/livePoseTransform.js';
+import { scanBasemapToMap, mapToScanBasemap, yawFromQuaternion, arkitPoseToGroundPose } from '../src/livePoseTransform.js';
 
 let failures = 0;
 function check(name, cond, extra = '') {
@@ -56,6 +56,38 @@ function check(name, cond, extra = '') {
   const q90 = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
   const yaw = yawFromQuaternion(q90);
   check('yawFromQuaternion: 90도 회전 쿼터니언 -> π/2', Math.abs(yaw - Math.PI / 2) < 1e-9, `got ${yaw.toFixed(6)}`);
+}
+
+// --- arkitPoseToGroundPose: 2026-08-30 버그 수정 회귀 테스트.
+// ARKit translation[1]은 높이(Y)이지 지면 좌표가 아니므로 무시되고, y는
+// -translation[2]로 나와야 한다(export_pointcloud.py의 (x,y,z)->(x,-z,y) 관례).
+{
+  const pose = arkitPoseToGroundPose([1, 5, -3], [0, 0, 0, 1]);
+  check(
+    '높이(translation[1])는 무시되고 y = -translation[2]',
+    pose.x === 1 && pose.y === 3,
+    `got (${pose.x}, ${pose.y})`
+  );
+}
+
+// identity 쿼터니언(카메라가 world -Z를 바라봄) -> heading은 이 평면 관례에서 π/2.
+{
+  const pose = arkitPoseToGroundPose([0, 0, 0], [0, 0, 0, 1]);
+  check(
+    'identity 쿼터니언의 heading -> π/2',
+    Math.abs(pose.headingRad - Math.PI / 2) < 1e-9,
+    `got ${pose.headingRad.toFixed(6)}`
+  );
+}
+
+// Y축 180도 회전(카메라가 반대쪽을 바라봄) -> heading이 π만큼 뒤집혀야 함(π/2 -> -π/2).
+{
+  const pose = arkitPoseToGroundPose([0, 0, 0], [0, 1, 0, 0]);
+  check(
+    'Y축 180도 회전 -> heading이 π만큼 뒤집힘(-π/2)',
+    Math.abs(pose.headingRad - -Math.PI / 2) < 1e-9,
+    `got ${pose.headingRad.toFixed(6)}`
+  );
 }
 
 // --- 2. server/index.mjs를 자식 프로세스로 띄워 PUT + WebSocket fan-out 확인 ---
