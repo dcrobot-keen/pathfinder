@@ -1,0 +1,12 @@
+{
+  "projects": [
+    {
+      "id": "default",
+      "name": "기본 프로젝트",
+      "sizeX": 200,
+      "sizeY": 400,
+      "createdAt": "2026-08-30T00:19:51.650Z",
+      "updatedAt": "2026-08-30T00:19:51.650Z"
+    }
+  ]
+}

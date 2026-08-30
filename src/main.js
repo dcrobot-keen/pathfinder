@@ -17,11 +17,15 @@ import VectorLayer from 'ol/layer/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, importedObstacleSource, liveRobotPoseSource } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource } from './appShared.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
+import { createProjectSelector } from './projects/projectSelector.js';
+
+createProjectSelector(document.getElementById('project-selector'));
+document.title = `Pathfinder — ${activeProjectName}`;
 
 const SLICE_HEIGHT_M = 0.5;
 

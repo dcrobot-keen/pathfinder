@@ -1,5 +1,8 @@
 // 노드/링크/블록 편집 레이어를 위한 GeoJSON 파일 DB(서버) 클라이언트.
-const API_URL = '/api/nodelink';
+// 편집 데이터는 프로젝트별로 나뉜다 -- appShared.js의 activeProjectId 참고.
+import { activeProjectId } from './appShared.js';
+
+const API_URL = `/api/projects/${encodeURIComponent(activeProjectId)}/nodelink`;
 
 /** @returns {Promise<GeoJSON.FeatureCollection>} */
 export async function loadFeatureCollection() {
