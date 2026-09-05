@@ -1,0 +1,82 @@
+{
+  "models": [
+    {
+      "id": "turtlebot3-burger",
+      "name": "TurtleBot3 Burger",
+      "manufacturer": "ROBOTIS",
+      "type": "agv_amr",
+      "algorithm": "gridastar",
+      "sizeMeters": 0.2,
+      "speedMps": 0.22,
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2210%22%20y%3D%2234%22%20width%3D%2244%22%20height%3D%2214%22%20rx%3D%224%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2220%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2244%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2228%22%20y%3D%2218%22%20width%3D%228%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%225%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "description": "ROBOTIS TurtleBot3 Burger (DYNAMIXEL XM430, Raspberry Pi, 360° LiDAR, 138×178×192mm, 1kg 가반하중).",
+      "createdAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "former-2-0",
+      "name": "Former 2.0",
+      "manufacturer": "Yujin Robot",
+      "type": "agv_amr",
+      "algorithm": "hybridastar",
+      "sizeMeters": 0.4,
+      "speedMps": 1,
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2210%22%20y%3D%2234%22%20width%3D%2244%22%20height%3D%2214%22%20rx%3D%224%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2220%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2244%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2228%22%20y%3D%2218%22%20width%3D%228%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%225%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "description": "유진로봇 자율주행 모바일 로봇 플랫폼 Former 2.0 (3D ToF, 2D LiDAR, 100kg 가반하중, 슬램/내비게이션 지원).",
+      "createdAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "atlas",
+      "name": "Atlas",
+      "manufacturer": "Boston Dynamics",
+      "type": "humanoid",
+      "algorithm": "gridastar",
+      "sizeMeters": 0.55,
+      "speedMps": 1.5,
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2212%22%20r%3D%228%22%20fill%3D%22%234a90e2%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2224%22%20y%3D%2222%22%20width%3D%2216%22%20height%3D%2220%22%20rx%3D%224%22%20fill%3D%22%234a90e2%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2210%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%20transform%3D%22rotate(-15%2014%2024)%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2246%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%20transform%3D%22rotate(15%2050%2024)%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2224%22%20y%3D%2242%22%20width%3D%227%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2233%22%20y%3D%2242%22%20width%3D%227%22%20height%3D%2218%22%20rx%3D%223%22%20fill%3D%22%23357abd%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "description": "완전한 동역학 제어 기반의 이족보행 휴머노이드 로봇. 계단 오르기, 점프 등 고난도 지형 대응이 가능합니다.",
+      "createdAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "mobed",
+      "name": "MoBED",
+      "manufacturer": "Hyundai Motor Group",
+      "type": "wheeled_nonholonomic",
+      "algorithm": "hybridastar",
+      "sizeMeters": 0.6,
+      "speedMps": 0.8,
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2214%22%20y%3D%2218%22%20width%3D%2236%22%20height%3D%2228%22%20rx%3D%226%22%20fill%3D%22%237e57c2%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2218%22%20cy%3D%2218%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2246%22%20cy%3D%2218%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2218%22%20cy%3D%2246%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2246%22%20cy%3D%2246%22%20r%3D%226%22%20fill%3D%22%234b2e83%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "description": "4개의 편심 바퀴를 가진 특수 조향 모바일 베이스. 거친 지형에서도 수평을 유지하며 정밀 주행합니다.",
+      "createdAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "spot",
+      "name": "SPOT",
+      "manufacturer": "Boston Dynamics",
+      "type": "quadruped",
+      "algorithm": "gridastar",
+      "sizeMeters": 0.7,
+      "speedMps": 1.2,
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2214%22%20y%3D%2222%22%20width%3D%2236%22%20height%3D%2216%22%20rx%3D%226%22%20fill%3D%22%23f5a623%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2246%22%20y%3D%2218%22%20width%3D%2210%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2216%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2226%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2236%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2246%22%20y%3D%2236%22%20width%3D%226%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%23d4880f%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "description": "4족 보행 산업/필드 점검용 로봇. 계단과 불규칙한 비정형 지형을 안정적으로 이동할 수 있습니다.",
+      "createdAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "generic-agv-amr",
+      "name": "표준 물류 AGV/AMR",
+      "manufacturer": "Generic",
+      "type": "agv_amr",
+      "algorithm": "astar",
+      "sizeMeters": 0.9,
+      "speedMps": 1.2,
+      "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%20%20%3Crect%20x%3D%2210%22%20y%3D%2234%22%20width%3D%2244%22%20height%3D%2214%22%20rx%3D%224%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2220%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2244%22%20cy%3D%2250%22%20r%3D%225%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2228%22%20y%3D%2218%22%20width%3D%228%22%20height%3D%2216%22%20rx%3D%222%22%20fill%3D%22%231b6f66%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%225%22%20fill%3D%22%2326a69a%22%2F%3E%0A%20%20%3C%2Fsvg%3E",
+      "description": "창고 및 공장에서 자재/파렛트를 운반하는 표준형 자율주행 이동로봇(AGV/AMR) 규격입니다.",
+      "createdAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-05T00:00:00.000Z"
+    }
+  ]
+}

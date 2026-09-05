@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { readdir, readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
+import { createRobotModelsRouter } from './robotModels.mjs';
 import { createRobotsRouter } from './robots.mjs';
 import { createProjectsRouter } from './projects.mjs';
 import { createVda5050Bridge } from './vda5050.mjs';
@@ -20,7 +21,9 @@ const ROOM_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
-const robotsRouter = await createRobotsRouter();
+const robotModelsRouter = await createRobotModelsRouter();
+app.use('/api', robotModelsRouter);
+const robotsRouter = await createRobotsRouter(robotModelsRouter.models);
 app.use('/api', robotsRouter);
 app.use('/api', await createProjectsRouter());
 

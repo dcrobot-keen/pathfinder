@@ -1,5 +1,6 @@
-// 로봇 등록 CRUD API 클라이언트 (server/robots.mjs, :3001, Vite가 /api를 프록시).
-const BASE_URL = '/api/robots';
+// 로봇 기기(/api/robots) 및 로봇 모델 사양(/api/robot-models) CRUD API 클라이언트.
+const ROBOTS_URL = '/api/robots';
+const MODELS_URL = '/api/robot-models';
 
 async function handle(res) {
   if (res.status === 204) return null;
@@ -10,12 +11,17 @@ async function handle(res) {
   return data;
 }
 
+// --- 로봇 기기 (Fleet Devices) ---
 export function listRobots() {
-  return fetch(BASE_URL).then(handle);
+  return fetch(ROBOTS_URL).then(handle);
+}
+
+export function getRobot(id) {
+  return fetch(`${ROBOTS_URL}/${id}`).then(handle);
 }
 
 export function createRobot(robot) {
-  return fetch(BASE_URL, {
+  return fetch(ROBOTS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(robot),
@@ -23,7 +29,7 @@ export function createRobot(robot) {
 }
 
 export function updateRobot(id, robot) {
-  return fetch(`${BASE_URL}/${id}`, {
+  return fetch(`${ROBOTS_URL}/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(robot),
@@ -31,5 +37,34 @@ export function updateRobot(id, robot) {
 }
 
 export function deleteRobot(id) {
-  return fetch(`${BASE_URL}/${id}`, { method: 'DELETE' }).then(handle);
+  return fetch(`${ROBOTS_URL}/${id}`, { method: 'DELETE' }).then(handle);
+}
+
+// --- 로봇 모델 카탈로그 (Robot Models) ---
+export function listRobotModels() {
+  return fetch(MODELS_URL).then(handle);
+}
+
+export function getRobotModel(id) {
+  return fetch(`${MODELS_URL}/${id}`).then(handle);
+}
+
+export function createRobotModel(model) {
+  return fetch(MODELS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(model),
+  }).then(handle);
+}
+
+export function updateRobotModel(id, model) {
+  return fetch(`${MODELS_URL}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(model),
+  }).then(handle);
+}
+
+export function deleteRobotModel(id) {
+  return fetch(`${MODELS_URL}/${id}`, { method: 'DELETE' }).then(handle);
 }
