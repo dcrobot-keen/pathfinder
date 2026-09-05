@@ -219,7 +219,7 @@ def remove_ceiling(
     colors: np.ndarray | None = None,
     distance_threshold: float = 0.02,
     num_iterations: int = 1000,
-    max_planes: int = 4,
+    max_planes: int = 8,
     ceiling_margin: float = 0.05,
     floor_margin: float = 0.05,
     fallback_height_percentile: float = 98.0,

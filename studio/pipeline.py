@@ -191,9 +191,13 @@ def run_pipeline(
     progress("preprocess", "active", {})
     result = remove_ceiling(vertices, colors, seed=0)
     base_points, base_colors = result.points, result.colors
+    ceiling_desc = (
+        f"천장 높이 {result.ceiling_z:.2f}m" if result.ceiling_z is not None
+        else "천장 평면 미검출, percentile 폴백 컷오프 사용"
+    )
     scan_summary.append(
         f"<li>베이스맵: <span class=\"stat\">{len(base_points):,}</span>개 점 "
-        f"(천장 높이 {result.ceiling_z:.2f}m, 이상치 {result.outliers_removed:,}개 제거) → <code>base_map.ply</code></li>"
+        f"({ceiling_desc}, 이상치 {result.outliers_removed:,}개 제거) → <code>base_map.ply</code></li>"
     )
 
     isolated_clusters_removed = None
