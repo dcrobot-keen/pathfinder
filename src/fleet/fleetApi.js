@@ -45,6 +45,16 @@ export function sendFleetInstantAction(manufacturer, serialNumber, actionType) {
   });
 }
 
+/** 최근 이벤트 목록 { events } */
+export function getFleetEvents() {
+  return request('/api/vda5050/events');
+}
+
+/** 특정 로봇의 최근 주문 목록 { orders } */
+export function getRobotOrders(serialNumber) {
+  return request(`/api/vda5050/orders/${encodeURIComponent(serialNumber)}`);
+}
+
 /**
  * /api/vda5050/stream 구독. 첫 메시지는 { type: 'snapshot', status, robots },
  * 이후 { type: 'robot', robot } / { type: 'status', status } / { type: 'forget', key }.

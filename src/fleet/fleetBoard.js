@@ -3,7 +3,7 @@
 // 대상이 된다. 취소/일시정지/재개는 선택된 행에만 보인다. 데이터는 서버의
 // /api/vda5050/stream 하나만 구독한다(fleetApi.js). 표 형태의 전체 보기(위치·주문·
 // 오류 열)는 M2의 로봇 상세 화면으로 간다.
-import { forgetFleetRobot, sendFleetInstantAction, subscribeFleetStream } from './fleetApi.js';
+import { forgetFleetRobot, sendFleetInstantAction, subscribeFleetStream, getRobotOrders, getFleetEvents } from './fleetApi.js';
 import { listRobots } from '../robots/robotApi.js';
 
 function el(tag, className, text) {
@@ -72,6 +72,53 @@ function renderRobotDetail(r, reg, s) {
     detail.appendChild(errBox);
   }
 
+  // 주문 진행률 바
+  if (s?.orderId) {
+    const total = (r.lastOrder?.waypoints || (s.nodesLeft ? s.nodesLeft + 1 : 0));
+    const left = s.nodesLeft ?? 0;
+    const traversed = total > 0 ? Math.max(0, total - left) : 0;
+    const pct = total > 0 ? Math.min(100, Math.round((traversed / total) * 100)) : (s.driving ? 50 : 0);
+    const progBox = el('div', 'fleet-order-progress-box');
+    progBox.innerHTML = `
+      <div class="fleet-order-progress-labels">
+        <span>주문 진행률: <b>노드 ${s.lastNodeId ?? '시작'}</b> (잔여 ${left}개)</span>
+        <span>${pct}%</span>
+      </div>
+      <div class="fleet-order-progress-bar"><div class="fleet-order-progress-fill" style="width: ${pct}%"></div></div>
+    `;
+    detail.appendChild(progBox);
+  }
+
+  // 최근 주문 이력
+  const ordersBox = el('div', 'fleet-detail-orders');
+  ordersBox.appendChild(el('div', 'fleet-detail-orders-title', '최근 주문 이력'));
+  const ordersList = el('div', 'fleet-detail-orders-list', '주문 이력 조회 중...');
+  ordersBox.appendChild(ordersList);
+  detail.appendChild(ordersBox);
+
+  getRobotOrders(r.serialNumber)
+    .then(({ orders }) => {
+      ordersList.replaceChildren();
+      if (!orders || orders.length === 0) {
+        ordersList.textContent = '기록된 주문이 없습니다.';
+        return;
+      }
+      for (const o of orders.slice(0, 4)) {
+        const row = el('div', 'fleet-order-item');
+        const statusClass = (o.status || 'SENT').toLowerCase();
+        row.innerHTML = `
+          <div class="fleet-order-item-header">
+            <span class="fleet-order-id">${o.orderId.slice(0, 8)}...</span>
+            <span class="fleet-order-badge ${statusClass}">${o.status || 'SENT'}</span>
+            <span class="fleet-order-time">${fmtAge(Date.now() - o.sentAt)}</span>
+          </div>
+          <div class="fleet-order-item-sub">노드 ${o.nodeCount}개 · map: ${o.mapId} ${o.lastNodeId ? `· 위치: ${o.lastNodeId}` : ''}</div>
+        `;
+        ordersList.appendChild(row);
+      }
+    })
+    .catch(() => { ordersList.textContent = '주문 이력 조회 실패'; });
+
   return detail;
 }
 
@@ -96,7 +143,53 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
 
   const list = el('div', 'fleet-board-list');
   const empty = el('div', 'fleet-board-empty', '수신한 로봇이 없습니다. 설정에서 브로커를 연결하세요.');
-  containerEl.append(header, globalActions, list, empty);
+
+  const eventsWrap = el('div', 'fleet-board-events');
+  const eventsHeader = el('div', 'fleet-events-header');
+  eventsHeader.appendChild(el('span', 'fleet-events-title', '플릿 이벤트 로그'));
+  const eventsToggleBtn = el('button', 'fleet-events-toggle-btn', '접기');
+  eventsHeader.appendChild(eventsToggleBtn);
+  eventsWrap.appendChild(eventsHeader);
+
+  const eventsBox = el('div', 'fleet-events-box');
+  eventsWrap.appendChild(eventsBox);
+  containerEl.append(header, globalActions, list, empty, eventsWrap);
+
+  const fleetEvents = [];
+  function renderEvents() {
+    eventsBox.replaceChildren();
+    if (fleetEvents.length === 0) {
+      eventsBox.appendChild(el('div', 'fleet-event-empty', '기록된 이벤트가 없습니다.'));
+      return;
+    }
+    for (const ev of fleetEvents.slice(0, 15)) {
+      const item = el('div', `fleet-event-item ${(ev.level || 'info').toLowerCase()}`);
+      const timeStr = new Date(ev.timestamp).toLocaleTimeString();
+      item.innerHTML = `
+        <span class="fleet-event-time">${timeStr}</span>
+        <span class="fleet-event-badge ${(ev.level || 'info').toLowerCase()}">${ev.type || 'INFO'}</span>
+        <span class="fleet-event-bot">${ev.serialNumber}</span>
+        <span class="fleet-event-msg">${ev.message}</span>
+      `;
+      eventsBox.appendChild(item);
+    }
+  }
+
+  let eventsCollapsed = false;
+  eventsToggleBtn.addEventListener('click', () => {
+    eventsCollapsed = !eventsCollapsed;
+    eventsBox.style.display = eventsCollapsed ? 'none' : 'flex';
+    eventsToggleBtn.textContent = eventsCollapsed ? '펼치기' : '접기';
+  });
+
+  getFleetEvents()
+    .then(({ events }) => {
+      if (events && events.length) {
+        fleetEvents.splice(0, fleetEvents.length, ...events);
+        renderEvents();
+      }
+    })
+    .catch(() => {});
 
   const robots = new Map(); // key -> record
   let registryBySerial = new Map();
@@ -279,12 +372,20 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       staleAfterMs = msg.staleAfterMs ?? staleAfterMs;
       robots.clear();
       for (const r of msg.robots) robots.set(r.key, r);
+      if (msg.events && msg.events.length) {
+        fleetEvents.splice(0, fleetEvents.length, ...msg.events);
+        renderEvents();
+      }
       loadRegistry().then(render);
     } else if (msg.type === 'robot') {
       const isNew = !robots.has(msg.robot.key);
       robots.set(msg.robot.key, msg.robot);
       if (isNew) setTimeout(() => loadRegistry().then(render), 800); // 서버 자동 등록 뒤
       if (msg.robot.serialNumber === selectedSerial) onSelect(decorate(msg.robot));
+    } else if (msg.type === 'event' && msg.event) {
+      fleetEvents.unshift(msg.event);
+      if (fleetEvents.length > 50) fleetEvents.pop();
+      renderEvents();
     } else if (msg.type === 'status') {
       brokerStatus = msg.status;
     } else if (msg.type === 'forget') {

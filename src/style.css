@@ -1158,3 +1158,341 @@ body {
   color: #888;
 }
 
+/* --- M2: 정합 스튜디오 임베드 --- */
+#view-studio {
+  background: #1e1e1e;
+  overflow: hidden;
+}
+
+.studio-embed-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-embed-bar {
+  height: 42px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  color: #eee;
+  box-sizing: border-box;
+}
+
+.studio-embed-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-right: 8px;
+}
+
+.studio-embed-desc {
+  font-size: 12px;
+  color: #888;
+}
+
+.studio-embed-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#studio-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+/* --- M2: 시뮬레이션 3D 뷰어 임베드 --- */
+#simulation-viewer-wrap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 440px;
+  height: 330px;
+  background: #1e1e24;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border: 1px solid #3a3a44;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 8;
+  transition: height 0.2s ease, width 0.2s ease;
+}
+
+#simulation-viewer-wrap.collapsed {
+  height: 38px;
+  width: 320px;
+}
+
+#simulation-viewer-wrap.collapsed #sim-frame {
+  display: none;
+}
+
+.viewer-embed-bar {
+  height: 38px;
+  background: #282830;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: #eee;
+  font-size: 12px;
+  border-bottom: 1px solid #383842;
+}
+
+.viewer-embed-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: #ddd;
+}
+
+.viewer-bot-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.sim-bot-btn {
+  border: none;
+  background: #3a3a44;
+  color: #bbb;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.sim-bot-btn.active {
+  background: #4a90e2;
+  color: #fff;
+}
+
+.sim-viewer-toggle-btn {
+  border: 1px solid #4a4a58;
+  background: #2a2a34;
+  color: #ccc;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.sim-viewer-toggle-btn:hover {
+  background: #3a3a48;
+}
+
+#sim-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #000;
+}
+
+/* --- M2: 주문 진행률 바 --- */
+.fleet-order-progress-box {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.fleet-order-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: #bbb;
+  margin-bottom: 4px;
+}
+
+.fleet-order-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fleet-order-progress-fill {
+  height: 100%;
+  background: #2ecc71;
+  transition: width 0.3s ease;
+}
+
+/* --- M2: 최근 주문 이력 --- */
+.fleet-detail-orders {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+
+.fleet-detail-orders-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+
+.fleet-detail-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #888;
+}
+
+.fleet-order-item {
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  border-left: 2px solid #4a90e2;
+}
+
+.fleet-order-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.fleet-order-id {
+  font-family: monospace;
+  color: #eee;
+}
+
+.fleet-order-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.fleet-order-badge.sent {
+  background: #2c3e50;
+  color: #bdc3c7;
+}
+
+.fleet-order-badge.driving {
+  background: #27ae60;
+  color: #fff;
+}
+
+.fleet-order-badge.finished {
+  background: #2980b9;
+  color: #fff;
+}
+
+.fleet-order-badge.cancelled {
+  background: #c0392b;
+  color: #fff;
+}
+
+.fleet-order-time {
+  font-size: 10.5px;
+  color: #777;
+}
+
+.fleet-order-item-sub {
+  font-size: 10.5px;
+  color: #aaa;
+}
+
+/* --- M2: 플릿 이벤트 로그 --- */
+.fleet-board-events {
+  margin-top: 10px;
+  border-top: 1px solid #333;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fleet-events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #bbb;
+  font-weight: 600;
+}
+
+.fleet-events-toggle-btn {
+  border: none;
+  background: #333;
+  color: #aaa;
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.fleet-events-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.fleet-event-item {
+  padding: 4px 6px;
+  background: #242426;
+  border-radius: 3px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fleet-event-item.warn,
+.fleet-event-item.fatal {
+  border-left: 2px solid #e74c3c;
+  background: #2a1e1e;
+}
+
+.fleet-event-time {
+  color: #777;
+  font-size: 10px;
+}
+
+.fleet-event-badge {
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-weight: 600;
+  background: #3a3a40;
+  color: #ccc;
+}
+
+.fleet-event-badge.warn,
+.fleet-event-badge.fatal {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.fleet-event-bot {
+  font-weight: 600;
+  color: #4a90e2;
+}
+
+.fleet-event-msg {
+  color: #ddd;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleet-event-empty {
+  font-size: 11px;
+  color: #777;
+  text-align: center;
+  padding: 8px 0;
+}
+

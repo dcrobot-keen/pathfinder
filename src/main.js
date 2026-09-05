@@ -183,6 +183,21 @@ function activateMapsSub(sub) {
     map.updateSize();
     return;
   }
+  if (sub === 'studio') {
+    const frame = document.getElementById('studio-frame');
+    const link = document.getElementById('link-studio-external');
+    let studioUrl = 'http://localhost:8000/groups';
+    try {
+      const saved = localStorage.getItem('pathfinder_services_endpoints');
+      if (saved) {
+        const { studio } = JSON.parse(saved);
+        if (studio) studioUrl = studio;
+      }
+    } catch {}
+    if (frame && (!frame.src || !frame.src.includes('8000'))) frame.src = studioUrl;
+    if (link) link.href = studioUrl;
+    return;
+  }
   if (!view3d) {
     view3d = createView3D(view3dEl);
     if (currentPoints.length) {
@@ -191,6 +206,36 @@ function activateMapsSub(sub) {
   }
   view3d.resize();
 }
+
+// 스튜디오 프로젝트 새로고침 버튼
+const studioRefreshBtn = document.getElementById('btn-studio-refresh');
+if (studioRefreshBtn) {
+  studioRefreshBtn.addEventListener('click', () => {
+    window.location.reload();
+  });
+}
+
+// 시뮬레이션 3D 뷰어 제어 (접기/펼치기, 로봇 전환)
+const simViewerWrap = document.getElementById('simulation-viewer-wrap');
+const viewerToggleBtn = document.getElementById('btn-viewer-toggle');
+if (viewerToggleBtn && simViewerWrap) {
+  viewerToggleBtn.addEventListener('click', () => {
+    const isCollapsed = simViewerWrap.classList.toggle('collapsed');
+    viewerToggleBtn.textContent = isCollapsed ? '3D 펼치기' : '3D 접기';
+  });
+}
+const simBotBtns = document.querySelectorAll('.sim-bot-btn');
+const simFrame = document.getElementById('sim-frame');
+const simExtLink = document.getElementById('link-sim-external');
+simBotBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    simBotBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const url = btn.dataset.url;
+    if (simFrame && url) simFrame.src = url;
+    if (simExtLink && url) simExtLink.href = url;
+  });
+});
 
 function activateTab(tabKey) {
   tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));

@@ -51,6 +51,8 @@ export async function createVda5050Bridge({
   db.data.config = normalizeConfig(db.data.config).config ?? { ...DEFAULT_CONFIG };
 
   const robots = new Map(); // key -> record
+  const events = []; // recent system/robot events (max 100)
+  const orderHistory = new Map(); // serialNumber -> recent orders (max 20)
   const status = { connected: false, brokerUrl: null, error: null, since: null };
   const headerIds = new Map(); // topic -> next headerId
   let client = null;
@@ -64,6 +66,34 @@ export async function createVda5050Bridge({
   function setStatus(patch) {
     Object.assign(status, patch);
     broadcast({ type: 'status', status: { ...status } });
+  }
+
+  function pushEvent(type, level, serialNumber, message) {
+    const ev = { id: randomUUID(), timestamp: Date.now(), type, level, serialNumber, message };
+    events.unshift(ev);
+    if (events.length > 100) events.pop();
+    broadcast({ type: 'event', event: ev });
+  }
+
+  function recordOrder(serialNumber, orderInfo) {
+    let list = orderHistory.get(serialNumber);
+    if (!list) {
+      list = [];
+      orderHistory.set(serialNumber, list);
+    }
+    list.unshift(orderInfo);
+    if (list.length > 20) list.pop();
+    broadcast({ type: 'order', serialNumber, order: orderInfo });
+  }
+
+  function updateOrderStatus(serialNumber, orderId, patch) {
+    const list = orderHistory.get(serialNumber);
+    if (!list) return;
+    const found = list.find((o) => o.orderId === orderId);
+    if (found) {
+      Object.assign(found, patch);
+      broadcast({ type: 'order_update', serialNumber, order: found });
+    }
   }
 
   function record(manufacturer, serialNumber) {
@@ -104,9 +134,16 @@ export async function createVda5050Bridge({
     const now = Date.now();
     r.lastSeen = now;
     if (t.name === 'connection') {
-      r.connectionState = typeof msg.connectionState === 'string' ? msg.connectionState : 'UNKNOWN';
+      const next = typeof msg.connectionState === 'string' ? msg.connectionState : 'UNKNOWN';
+      if (r.connectionState !== next) {
+        pushEvent('CONNECTION', next === 'ONLINE' ? 'INFO' : 'WARN', t.serialNumber, `연결 상태 변화: ${r.connectionState} → ${next}`);
+      }
+      r.connectionState = next;
     } else {
-      if (r.connectionState === 'UNKNOWN') r.connectionState = 'ONLINE'; // retained connection이 없던 로봇
+      if (r.connectionState === 'UNKNOWN') {
+        r.connectionState = 'ONLINE';
+        pushEvent('CONNECTION', 'INFO', t.serialNumber, '로봇 신호 감지: ONLINE');
+      }
       if (msg.agvPosition) {
         const pose = poseFromAgvPosition(msg.agvPosition, now);
         if (pose) {
@@ -116,8 +153,26 @@ export async function createVda5050Bridge({
       }
       if (msg.velocity) r.velocity = { vx: msg.velocity.vx ?? 0, vy: msg.velocity.vy ?? 0, omega: msg.velocity.omega ?? 0 };
       if (t.name === 'state') {
+        const prevErrors = r.state?.errors ?? [];
         r.state = summarizeState(msg);
         r.lastStateAt = now;
+        if (r.state.errors && r.state.errors.length > 0) {
+          for (const err of r.state.errors) {
+            const isNew = !prevErrors.some((p) => p.errorType === err.errorType && p.errorDescription === err.errorDescription);
+            if (isNew) {
+              pushEvent('ERROR', err.errorLevel ?? 'WARN', t.serialNumber, `[${err.errorType}] ${err.errorDescription ?? '-'}`);
+            }
+          }
+        }
+        if (msg.orderId) {
+          updateOrderStatus(t.serialNumber, msg.orderId, {
+            lastNodeId: msg.lastNodeId,
+            nodesLeft: msg.nodeStates?.length ?? 0,
+            driving: msg.driving,
+            paused: msg.paused,
+            status: msg.nodeStates?.length === 0 ? 'FINISHED' : (msg.driving ? 'DRIVING' : (msg.paused ? 'PAUSED' : 'ACTIVE')),
+          });
+        }
       }
     }
     broadcast({ type: 'robot', robot: r });
@@ -210,6 +265,19 @@ export async function createVda5050Bridge({
     const order = pathToOrder(path, { orderId, orderUpdateId, mapId: mapId ?? r.position?.mapId ?? undefined, header: header(topic) });
     publish(topic, order);
     r.lastOrder = { orderId, orderUpdateId, sentAt: Date.now(), waypoints: path.length };
+    recordOrder(serialNumber, {
+      orderId,
+      orderUpdateId,
+      serialNumber,
+      manufacturer,
+      mapId: mapId ?? r.position?.mapId ?? 'default',
+      nodeCount: order.nodes.length,
+      sentAt: Date.now(),
+      status: 'SENT',
+      lastNodeId: null,
+      nodesLeft: order.nodes.length,
+    });
+    pushEvent('COMMAND', 'INFO', serialNumber, `주문 발행: ${orderId.slice(0, 8)} (${order.nodes.length}개 노드)`);
     broadcast({ type: 'robot', robot: r });
     return { orderId, orderUpdateId, topic, nodes: order.nodes.length };
   }
@@ -218,6 +286,14 @@ export async function createVda5050Bridge({
     const topic = vda5050Topic({ ...db.data.config, manufacturer, serialNumber }, 'instantActions');
     const actionId = randomUUID();
     publish(topic, instantActionsMessage(actionType, { actionId, header: header(topic) }));
+    pushEvent('COMMAND', 'INFO', serialNumber, `즉시 제어 명령 전송: ${actionType}`);
+    if (actionType === 'cancelOrder') {
+      const list = orderHistory.get(serialNumber);
+      if (list && list[0] && list[0].status !== 'FINISHED') {
+        list[0].status = 'CANCELLED';
+        broadcast({ type: 'order_update', serialNumber, order: list[0] });
+      }
+    }
     return { actionId, topic };
   }
 
@@ -242,6 +318,15 @@ export async function createVda5050Bridge({
 
   router.get('/vda5050/robots', (req, res) => {
     res.json({ robots: Array.from(robots.values()), status: { ...status }, staleAfterMs: db.data.config.staleAfterMs });
+  });
+
+  router.get('/vda5050/events', (req, res) => {
+    res.json({ events });
+  });
+
+  router.get('/vda5050/orders/:serialNumber', (req, res) => {
+    const orders = orderHistory.get(req.params.serialNumber) ?? [];
+    res.json({ orders });
   });
 
   router.delete('/vda5050/robots/:manufacturer/:serialNumber', (req, res) => {
@@ -276,7 +361,13 @@ export async function createVda5050Bridge({
 
   // --- WebSocket: 새 구독자는 스냅샷을 먼저 받는다 ------------------------
   wss.on('connection', (ws) => {
-    ws.send(JSON.stringify({ type: 'snapshot', status: { ...status }, robots: Array.from(robots.values()), staleAfterMs: db.data.config.staleAfterMs }));
+    ws.send(JSON.stringify({
+      type: 'snapshot',
+      status: { ...status },
+      robots: Array.from(robots.values()),
+      events: events.slice(0, 30),
+      staleAfterMs: db.data.config.staleAfterMs,
+    }));
   });
 
   await applyConfig();
