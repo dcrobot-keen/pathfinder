@@ -97,7 +97,8 @@ export function createProjectSelector(container) {
   const newBtn = document.createElement('button');
   newBtn.type = 'button';
   newBtn.className = 'project-new-button';
-  newBtn.textContent = '+ 새 프로젝트';
+  newBtn.textContent = '+ 새 현장';
+  newBtn.title = '새로운 빈 현장 프로젝트를 생성합니다.';
   newBtn.addEventListener('click', () => openCreateForm(container));
 
   // 스캔 지도(slicemap-v1 .json -- 정합 워크스페이스가 시뮬레이터 worlds/ 에 publish한
@@ -111,7 +112,7 @@ export function createProjectSelector(container) {
   const scanBtn = document.createElement('button');
   scanBtn.type = 'button';
   scanBtn.className = 'project-new-button project-scan-button';
-  scanBtn.textContent = '스캔 지도로 만들기';
+  scanBtn.textContent = '+ 스캔 지도';
   scanBtn.title = 'slicemap-v1 파일(예: project_20260905.slicemap.json)로 프로젝트 + 장애물 생성. 같은 이름의 .floor.png/.floor.json 을 함께 고르면 바닥 이미지도 배경으로 깐다';
   scanBtn.addEventListener('click', () => scanInput.click());
   const scanStatus = document.createElement('span');

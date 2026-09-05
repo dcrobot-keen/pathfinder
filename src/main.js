@@ -25,6 +25,7 @@ import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
 import { createBrokerSettings } from './fleet/brokerSettings.js';
 import { createProjectSelector } from './projects/projectSelector.js';
+import { subscribeFleetStream, getFleetConfig } from './fleet/fleetApi.js';
 
 createProjectSelector(document.getElementById('project-selector'));
 document.title = `Pathfinder — ${activeProjectName}`;
@@ -153,12 +154,21 @@ renderSlicePanel(document.getElementById('slice-panel'), [], [], [
   { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
 ]);
 
-// 탭 전환 (2D 지도 / 3D 뷰 / 길찾기 두 모드). 3D 뷰와 길찾기 탭은 처음 열릴 때 지연 초기화한다.
-const tabButtons = document.querySelectorAll('.tab-button');
+// 탭 전환: GNB 5대 워크스페이스(지도·로봇·운영·시뮬레이션·설정) + Level 2 서브바 연동
+const gnbTabButtons = document.querySelectorAll('.gnb-tab');
 const viewEls = document.querySelectorAll('.view');
 const view3dEl = document.getElementById('view3d');
-const subTabBar = document.getElementById('maps-subtabs');
-const subTabButtons = subTabBar.querySelectorAll('.subtab');
+
+// 워크스페이스 맥락별 Level 2 서브바
+const subnavPanes = {
+  maps: document.getElementById('subnav-maps'),
+  robots: document.getElementById('subnav-robots'),
+  operate: document.getElementById('subnav-operate'),
+  simulation: document.getElementById('subnav-simulation'),
+  settings: document.getElementById('subnav-settings'),
+};
+
+const mapSubnavTabs = document.querySelectorAll('#subnav-maps .subnav-tab');
 
 let view3d = null;
 let currentPoints = [];
@@ -170,14 +180,13 @@ let settingsTab = null;
 let mapsSub = '2d';
 
 // 탭 = 정보 구조(플릿 스튜디오 기획서 §5): 지도(2D/3D) · 로봇 · 운영 · 시뮬레이션 · 설정.
-// "운영"과 "시뮬레이션"은 같은 길찾기 모듈의 두 변형이고, 각 화면은 처음 열 때 한 번 만든다.
 function showView(key) {
   viewEls.forEach((el) => el.classList.toggle('active', el.dataset.view === key));
 }
 
 function activateMapsSub(sub) {
   mapsSub = sub;
-  subTabButtons.forEach((b) => b.classList.toggle('active', b.dataset.sub === sub));
+  mapSubnavTabs.forEach((b) => b.classList.toggle('active', b.dataset.sub === sub));
   showView(sub);
   if (sub === '2d') {
     map.updateSize();
@@ -238,8 +247,12 @@ simBotBtns.forEach((btn) => {
 });
 
 function activateTab(tabKey) {
-  tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
-  subTabBar.hidden = tabKey !== 'maps';
+  gnbTabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
+
+  // 해당 워크스페이스의 Level 2 서브바만 활성화
+  Object.entries(subnavPanes).forEach(([key, pane]) => {
+    if (pane) pane.style.display = key === tabKey ? 'flex' : 'none';
+  });
 
   if (tabKey === 'maps') {
     activateMapsSub(mapsSub);
@@ -265,17 +278,76 @@ function activateTab(tabKey) {
     return;
   }
 
-  if (tabKey === 'robots' && !robotsTab) {
-    robotsTab = createRobotRegistryTab(document.getElementById('robots'));
+  if (tabKey === 'robots') {
+    if (!robotsTab) {
+      robotsTab = createRobotRegistryTab(document.getElementById('robots'));
+    } else {
+      robotsTab.refresh?.();
+    }
+    return;
   }
 
-  if (tabKey === 'settings' && !settingsTab) {
-    settingsTab = createBrokerSettings(document.getElementById('settings'));
+  if (tabKey === 'settings') {
+    if (!settingsTab) {
+      settingsTab = createBrokerSettings(document.getElementById('settings'));
+    }
   }
 }
 
-tabButtons.forEach((btn) => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
-subTabButtons.forEach((btn) => btn.addEventListener('click', () => activateMapsSub(btn.dataset.sub)));
+gnbTabButtons.forEach((btn) => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+mapSubnavTabs.forEach((btn) => btn.addEventListener('click', () => activateMapsSub(btn.dataset.sub)));
+
+// 로봇 탭 서브내비게이션 연동
+const robotDevBtn = document.getElementById('subnav-robot-dev-btn');
+const robotModelBtn = document.getElementById('subnav-robot-model-btn');
+if (robotDevBtn && robotModelBtn) {
+  robotDevBtn.addEventListener('click', () => {
+    robotDevBtn.classList.add('active');
+    robotModelBtn.classList.remove('active');
+    if (!robotsTab) robotsTab = createRobotRegistryTab(document.getElementById('robots'));
+    robotsTab.setSubTab?.('devices');
+  });
+  robotModelBtn.addEventListener('click', () => {
+    robotModelBtn.classList.add('active');
+    robotDevBtn.classList.remove('active');
+    if (!robotsTab) robotsTab = createRobotRegistryTab(document.getElementById('robots'));
+    robotsTab.setSubTab?.('models');
+  });
+}
+
+// 실시간 GNB 텔레메트리 (MQTT 브로커 상태 & 온라인 로봇 대수)
+const gnbMqttBadge = document.getElementById('gnb-mqtt-badge');
+const gnbFleetCount = document.getElementById('gnb-fleet-count');
+
+function updateMqttStatus(connected) {
+  if (!gnbMqttBadge) return;
+  gnbMqttBadge.className = `gnb-status-pill ${connected ? 'online' : 'offline'}`;
+  const textEl = gnbMqttBadge.querySelector('.status-text');
+  if (textEl) textEl.textContent = connected ? 'MQTT 온라인 (1883)' : 'MQTT 미연결';
+}
+
+function updateFleetOnlineCount(count) {
+  if (!gnbFleetCount) return;
+  gnbFleetCount.textContent = `${count}대 온라인`;
+}
+
+getFleetConfig()
+  .then((data) => {
+    if (data?.status) updateMqttStatus(data.status.connected);
+  })
+  .catch(() => updateMqttStatus(false));
+
+subscribeFleetStream((msg) => {
+  if (msg.type === 'status' && msg.status) {
+    updateMqttStatus(msg.status.connected);
+  } else if (msg.type === 'snapshot') {
+    if (msg.status) updateMqttStatus(msg.status.connected);
+    const count = (msg.robots || []).filter((r) => r.connection === 'ONLINE').length;
+    updateFleetOnlineCount(count);
+  } else if (msg.type === 'robot') {
+    // 로봇 상태 갱신
+  }
+});
 
 /**
  * 새로 로드된 PCD 포인트를 2D 지도(높이 슬라이스 포함)와 3D 뷰 양쪽에 동시에 반영한다.

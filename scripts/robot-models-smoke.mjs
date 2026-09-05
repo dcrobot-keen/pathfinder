@@ -105,3 +105,4 @@ await rm(dataDir, { recursive: true, force: true });
 
 console.log(failures === 0 ? '\nall robot-models smoke checks passed' : `\n${failures} check(s) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
+

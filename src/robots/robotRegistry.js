@@ -95,6 +95,10 @@ export function createRobotRegistryTab(containerEl) {
     activeSubTab = tabKey;
     btnDevices.classList.toggle('active', tabKey === 'devices');
     btnModels.classList.toggle('active', tabKey === 'models');
+    const subnavDev = document.getElementById('subnav-robot-dev-btn');
+    const subnavModel = document.getElementById('subnav-robot-model-btn');
+    if (subnavDev) subnavDev.classList.toggle('active', tabKey === 'devices');
+    if (subnavModel) subnavModel.classList.toggle('active', tabKey === 'models');
     devicesView.style.display = tabKey === 'devices' ? 'flex' : 'none';
     modelsView.style.display = tabKey === 'models' ? 'flex' : 'none';
   }
@@ -316,6 +320,8 @@ export function createRobotRegistryTab(containerEl) {
       devListStatus.textContent = `${cachedRobots.length}개 기기 배속 운용 중`;
       const badge = document.getElementById('badge-devices-cnt');
       if (badge) badge.textContent = String(cachedRobots.length);
+      const subnavDevBadge = document.getElementById('subnav-robot-dev-badge');
+      if (subnavDevBadge) subnavDevBadge.textContent = String(cachedRobots.length);
     } catch (err) {
       console.error(err);
       devListStatus.textContent = `불러오기 실패: ${err.message}`;
@@ -557,6 +563,8 @@ export function createRobotRegistryTab(containerEl) {
       modelListStatus.textContent = `${cachedModels.length}개 모델 등록됨`;
       const badge = document.getElementById('badge-models-cnt');
       if (badge) badge.textContent = String(cachedModels.length);
+      const subnavModelBadge = document.getElementById('subnav-robot-model-badge');
+      if (subnavModelBadge) subnavModelBadge.textContent = String(cachedModels.length);
     } catch (err) {
       console.error(err);
       modelListStatus.textContent = `불러오기 실패: ${err.message}`;
@@ -578,5 +586,6 @@ export function createRobotRegistryTab(containerEl) {
       await refreshModelsList();
       await refreshRobotsList();
     },
+    setSubTab,
   };
 }

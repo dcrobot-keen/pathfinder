@@ -6,115 +6,183 @@ body {
   width: 100%;
 }
 
-#app-title {
+/* ---- 최상위 2단 헤더: GNB (46px) + Subnav (38px) ---- */
+#app-header {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 30px;
-  z-index: 10;
+  height: 84px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+  user-select: none;
+}
+
+/* Tier 1: GNB Bar */
+.gnb-bar {
+  height: 46px;
+  background: #0f172a; /* Slate 900 */
+  color: #f8fafc;
   display: flex;
   align-items: center;
-  padding: 0 10px;
-  background: #181818;
-  color: #fff;
-  font: 600 14px sans-serif;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid #1e293b;
+  gap: 16px;
   box-sizing: border-box;
-  white-space: nowrap;
 }
 
-#app-title-version {
-  margin-left: 6px;
-  font: 400 11px sans-serif;
-  color: #999;
-}
-
-#tabs {
-  position: absolute;
-  top: 30px;
-  left: 0;
-  right: 0;
-  height: 40px;
-  z-index: 10;
+.gnb-left {
   display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  background: #222;
-  box-sizing: border-box;
-  overflow-x: auto;
-  white-space: nowrap;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
-.tab-button {
-  border: none;
-  border-radius: 4px;
-  padding: 6px 14px;
-  font: 13px sans-serif;
-  color: #ccc;
-  background: #3a3a3a;
-  cursor: pointer;
+.brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.tab-button.active {
-  background: #4a90e2;
+.brand-icon {
+  font-size: 18px;
+  color: #38bdf8;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.5));
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   color: #fff;
+}
+
+.brand-sub {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.brand-ver {
+  font-size: 10px;
+  background: #1e293b;
+  color: #38bdf8;
+  border: 1px solid #334155;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.gnb-divider {
+  width: 1px;
+  height: 22px;
+  background: #334155;
+}
+
+/* Site / Project Selector in GNB */
+.site-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.site-label {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .project-selector {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-right: 8px;
   position: relative;
 }
 
 .project-select {
-  padding: 6px 8px;
-  border-radius: 4px;
-  border: none;
-  background: #3a3a3a;
-  color: #ccc;
-  font: 13px sans-serif;
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.project-select:hover {
+  border-color: #64748b;
+  background: #243147;
 }
 
 .project-new-button {
-  border: none;
-  border-radius: 4px;
-  padding: 6px 10px;
-  font: 12px sans-serif;
-  color: #ccc;
-  background: #3a3a3a;
+  border: 1px solid #334155;
+  border-radius: 5px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: #1e293b;
   cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
 .project-new-button:hover {
-  background: #4a4a4a;
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.project-scan-button {
+  background: #064e3b;
+  border-color: #047857;
+  color: #a7f3d0;
+}
+
+.project-scan-button:hover {
+  background: #059669;
+  border-color: #10b981;
+  color: #fff;
 }
 
 .project-create-form {
   position: absolute;
   top: 100%;
   left: 0;
-  margin-top: 4px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px;
-  border-radius: 4px;
-  background: #2c2c2c;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 20;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 120;
 }
 
 .project-create-input {
-  padding: 5px 6px;
-  border-radius: 3px;
-  border: 1px solid #555;
-  background: #1e1e1e;
-  color: #eee;
-  font: 12px sans-serif;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 12px;
 }
 
 .project-name-input {
@@ -128,64 +196,233 @@ body {
 .project-create-confirm,
 .project-create-cancel {
   border: none;
-  border-radius: 3px;
-  padding: 5px 8px;
-  font: 12px sans-serif;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .project-create-confirm {
-  background: #4a90e2;
+  background: #2563eb;
   color: #fff;
 }
 
 .project-create-cancel {
-  background: #3a3a3a;
-  color: #ccc;
+  background: #334155;
+  color: #cbd5e1;
 }
 
 .project-create-status {
-  font: 11px sans-serif;
-  color: #e88;
+  font-size: 11px;
+  color: #f87171;
   max-width: 140px;
 }
 
-.pcd-upload {
+/* GNB Navigation Tabs */
+.gnb-nav {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-right: 8px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  background: #3a3a3a;
-  color: #ccc;
-  font: 13px sans-serif;
-  cursor: pointer;
 }
 
-.pcd-upload input {
-  color: #ccc;
-  font: 12px sans-serif;
-  max-width: 220px;
+.gnb-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gnb-tab:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gnb-tab.active {
+  color: #fff;
+  background: #2563eb; /* Primary accent */
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
+}
+
+.gnb-tab-icon {
+  font-size: 14px;
+}
+
+/* GNB Right Telemetry Indicators */
+.gnb-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.gnb-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+}
+
+.gnb-status-pill.online {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.gnb-status-pill.online .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.gnb-status-pill.offline .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.gnb-status-pill.fleet {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+/* Tier 2: Subnav Bar */
+.subnav-bar {
+  height: 38px;
+  background: #1e293b; /* Slate 800 */
+  border-bottom: 1px solid #334155;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.subnav-pane {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.subnav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subnav-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.subnav-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.subnav-tab.active {
+  background: #334155;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.subnav-badge {
+  background: #475569;
+  color: #f8fafc;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.subnav-tab.active .subnav-badge {
+  background: #0284c7;
+  color: #fff;
+}
+
+.subnav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subnav-desc-tip {
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-style: normal;
+}
+
+.subnav-action-btn,
+.pcd-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #475569;
+  background: #334155;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pcd-upload-btn:hover {
+  background: #475569;
+  color: #fff;
+  border-color: #64748b;
+}
+
+.pcd-upload-btn input {
+  display: none;
 }
 
 .pcd-status {
-  align-self: center;
-  margin-left: 8px;
-  font: 12px sans-serif;
-  color: #8fd18f;
+  font-size: 11.5px;
+  color: #34d399;
   white-space: nowrap;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* View Container: starts right below 84px header */
 .view {
   position: absolute;
-  top: 70px;
+  top: 84px;
   left: 0;
   right: 0;
   bottom: 0;
-  background: #f5f5f3;
+  background: #f8fafc;
   display: none;
 }
 
@@ -694,6 +931,10 @@ body {
 }
 
 /* ---- 로봇 서브 네비게이션 (기기 목록 vs 모델 카탈로그) ---- */
+.robot-registry .robot-nav-bar {
+  display: none; /* 최상단 레벨 2 서브내비게이션으로 승격되어 본문에서는 숨김 */
+}
+
 .robot-nav-bar {
   display: flex;
   gap: 10px;

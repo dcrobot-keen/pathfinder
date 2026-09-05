@@ -3,35 +3,162 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pathfinder</title>
+    <title>Fleet Studio - AMR 관제 및 플릿 관리</title>
   </head>
   <body>
-    <div id="app-title">
-      Pathfinder <span id="app-title-version">v0.7</span>
-    </div>
-    <div id="tabs">
-      <div id="project-selector"></div>
-      <label class="pcd-upload">
-        PCD 업로드
-        <input id="pcd-file-input" type="file" accept=".pcd" />
-      </label>
-      <div id="pcd-status" class="pcd-status"></div>
-      <button id="tab-maps" class="tab-button active" data-tab="maps">지도</button>
-      <button id="tab-robots" class="tab-button" data-tab="robots">로봇</button>
-      <button id="tab-operate" class="tab-button" data-tab="operate">운영</button>
-      <button id="tab-simulation" class="tab-button" data-tab="simulation">시뮬레이션</button>
-      <button id="tab-settings" class="tab-button" data-tab="settings">설정</button>
-      <div id="maps-subtabs" class="subtab-bar">
-        <button class="subtab active" data-sub="2d">2D</button>
-        <button class="subtab" data-sub="3d">3D</button>
-        <button class="subtab" data-sub="studio">정합(스튜디오)</button>
+    <header id="app-header">
+      <!-- GNB: Level 0 (Site Scope) + Level 1 (5 Workspaces) + Telemetry -->
+      <div class="gnb-bar">
+        <div class="gnb-left">
+          <div class="brand-badge">
+            <span class="brand-icon">⚡</span>
+            <div class="brand-text">
+              <span class="brand-name">FLEET STUDIO</span>
+              <span class="brand-sub">ROBOT RCS</span>
+            </div>
+            <span class="brand-ver">v0.8</span>
+          </div>
+
+          <div class="gnb-divider"></div>
+
+          <!-- Level 0: Site (현장 / 지도 프로젝트) Selector -->
+          <div class="site-selector-container">
+            <span class="site-label">📍 현장:</span>
+            <div id="project-selector"></div>
+          </div>
+        </div>
+
+        <!-- Level 1: 5 Core Workspaces according to IA -->
+        <nav class="gnb-nav" aria-label="메인 워크스페이스 내비게이션">
+          <button id="tab-maps" class="gnb-tab active" data-tab="maps" title="지도 작성, 2D/3D 시각화, 슬라이스맵 정합">
+            <span class="gnb-tab-icon">🗺️</span>
+            <span class="gnb-tab-label">지도</span>
+          </button>
+          <button id="tab-robots" class="gnb-tab" data-tab="robots" title="로봇 기기 목록 및 하드웨어 모델 사양 카탈로그">
+            <span class="gnb-tab-icon">🤖</span>
+            <span class="gnb-tab-label">로봇</span>
+          </button>
+          <button id="tab-operate" class="gnb-tab" data-tab="operate" title="실시간 플릿 관제, 목적지 명령, VDA5050 주문 관리">
+            <span class="gnb-tab-icon">🧭</span>
+            <span class="gnb-tab-label">운영</span>
+          </button>
+          <button id="tab-simulation" class="gnb-tab" data-tab="simulation" title="알고리즘 동적 회피 시뮬레이션 및 3D 뷰어">
+            <span class="gnb-tab-icon">🧪</span>
+            <span class="gnb-tab-label">시뮬레이션</span>
+          </button>
+          <button id="tab-settings" class="gnb-tab" data-tab="settings" title="VDA5050 브로커, 외부 서비스 연동 및 좌표 규약 설정">
+            <span class="gnb-tab-icon">⚙️</span>
+            <span class="gnb-tab-label">설정</span>
+          </button>
+        </nav>
+
+        <!-- Right: Telemetry Health Indicators -->
+        <div class="gnb-right">
+          <div id="gnb-mqtt-badge" class="gnb-status-pill offline" title="VDA5050 MQTT 브로커 연결 상태">
+            <span class="status-dot"></span>
+            <span class="status-text">MQTT 미연결</span>
+          </div>
+          <div id="gnb-fleet-badge" class="gnb-status-pill fleet" title="현재 온라인 배속 로봇">
+            <span class="fleet-icon">🤖</span>
+            <span id="gnb-fleet-count" class="fleet-count">0대 온라인</span>
+          </div>
+        </div>
       </div>
-    </div>
+
+      <!-- Level 2: Contextual Workspace Subnav -->
+      <div id="workspace-subnav" class="subnav-bar">
+        <!-- 1. 지도 탭 서브바 -->
+        <div id="subnav-maps" class="subnav-pane active">
+          <div class="subnav-tabs">
+            <button class="subnav-tab active" data-sub="2d">
+              <span class="subnav-tab-icon">📐</span>
+              <span>2D 평면 격자 / 레이어</span>
+            </button>
+            <button class="subnav-tab" data-sub="3d">
+              <span class="subnav-tab-icon">🧊</span>
+              <span>3D 포인트 클라우드</span>
+            </button>
+            <button class="subnav-tab" data-sub="studio">
+              <span class="subnav-tab-icon">🔄</span>
+              <span>정합 스튜디오 (:8000)</span>
+            </button>
+          </div>
+          <div class="subnav-actions">
+            <label class="subnav-action-btn pcd-upload-btn" title="3D LiDAR PCD 파일 가져오기">
+              <span>📥 PCD 업로드</span>
+              <input id="pcd-file-input" type="file" accept=".pcd" />
+            </label>
+            <div id="pcd-status" class="pcd-status"></div>
+          </div>
+        </div>
+
+        <!-- 2. 로봇 탭 서브바 -->
+        <div id="subnav-robots" class="subnav-pane" style="display: none;">
+          <div class="subnav-tabs">
+            <button id="subnav-robot-dev-btn" class="subnav-tab active" data-robot-sub="devices">
+              <span class="subnav-tab-icon">🤖</span>
+              <span>등록된 로봇 기기 (Fleet)</span>
+              <span id="subnav-robot-dev-badge" class="subnav-badge">0</span>
+            </button>
+            <button id="subnav-robot-model-btn" class="subnav-tab" data-robot-sub="models">
+              <span class="subnav-tab-icon">📐</span>
+              <span>로봇 모델 사양 (Catalog)</span>
+              <span id="subnav-robot-model-badge" class="subnav-badge">0</span>
+            </button>
+          </div>
+          <div class="subnav-actions">
+            <span class="subnav-desc-tip">VDA5050 기기 배속 현황 및 하드웨어 사양 템플릿 관리</span>
+          </div>
+        </div>
+
+        <!-- 3. 운영 탭 서브바 -->
+        <div id="subnav-operate" class="subnav-pane" style="display: none;">
+          <div class="subnav-tabs">
+            <button class="subnav-tab active">
+              <span class="subnav-tab-icon">🧭</span>
+              <span>플릿 보드 실시간 관제 & 지도 목적지 지시</span>
+            </button>
+          </div>
+          <div class="subnav-actions">
+            <span class="subnav-desc-tip">실시간 포즈 추종 · 클릭 이동 명령 · 주문 진행률 모니터링</span>
+          </div>
+        </div>
+
+        <!-- 4. 시뮬레이션 탭 서브바 -->
+        <div id="subnav-simulation" class="subnav-pane" style="display: none;">
+          <div class="subnav-tabs">
+            <button class="subnav-tab active">
+              <span class="subnav-tab-icon">🧪</span>
+              <span>다중 로봇 동적 회피 시뮬레이션</span>
+            </button>
+          </div>
+          <div class="subnav-actions">
+            <span class="subnav-desc-tip">Grid/Hybrid A* 충돌 회피 알고리즘 및 ros-chromium 연동</span>
+          </div>
+        </div>
+
+        <!-- 5. 설정 탭 서브바 -->
+        <div id="subnav-settings" class="subnav-pane" style="display: none;">
+          <div class="subnav-tabs">
+            <button class="subnav-tab active">
+              <span class="subnav-tab-icon">⚙️</span>
+              <span>VDA5050 브로커 및 시스템 서비스 연동</span>
+            </button>
+          </div>
+          <div class="subnav-actions">
+            <span class="subnav-desc-tip">Mosquitto MQTT 브로커, 스캔 스튜디오, VPS 주소 설정</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Workspace Views -->
     <div id="map" class="view active" data-view="2d">
       <div id="slice-panel"></div>
       <div id="edit-panel"></div>
       <div id="imported-obstacles-panel"></div>
     </div>
+
     <div id="view3d" class="view" data-view="3d">
       <div id="mesh-panel">
         <div class="mesh-buttons">
@@ -41,6 +168,7 @@
         <div id="mesh-status" class="mesh-status"></div>
       </div>
     </div>
+
     <div id="view-studio" class="view" data-view="studio">
       <div class="studio-embed-container">
         <div class="studio-embed-bar">
@@ -56,9 +184,11 @@
         <iframe id="studio-frame" src="http://localhost:8000/groups" title="Scan to Map Studio"></iframe>
       </div>
     </div>
+
     <div id="operate" class="view" data-view="operate">
       <div id="operate-panel"></div>
     </div>
+
     <div id="simulation" class="view" data-view="simulation">
       <div id="simulation-panel"></div>
       <div id="simulation-viewer-wrap">
@@ -74,8 +204,10 @@
         <iframe id="sim-frame" src="http://localhost:8767" title="Robot Simulator 3D View"></iframe>
       </div>
     </div>
+
     <div id="robots" class="view" data-view="robots"></div>
     <div id="settings" class="view" data-view="settings"></div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
