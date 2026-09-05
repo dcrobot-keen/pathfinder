@@ -5,6 +5,7 @@ export default defineConfig({
   // `vite build`가 실패했었다. 개발 서버에는 영향이 없었고, 최신 Chromium만 대상이라 esnext로 둔다.
   build: { target: 'esnext' },
   server: {
+    port: 3000,
     proxy: {
       // more specific path first: Vite checks proxy entries in declaration
       // order, so /api/path must be matched before the general /api rule.

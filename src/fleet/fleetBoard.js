@@ -134,6 +134,8 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     } finally {
       button.disabled = false;
     }
+  }
+
   stopAllBtn.addEventListener('click', async () => {
     stopAllBtn.disabled = true;
     try {
