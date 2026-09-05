@@ -102,6 +102,41 @@ async def api_upload_group(file: UploadFile = File(...), name: str | None = Form
         raise HTTPException(status_code=400, detail=f"Bad zip file: {exc}") from exc
 
 
+@router.get("/api/groups/{name}/workspace")
+def api_workspace(name: str) -> dict:
+    """Slices + alignment + metrics + floor images as JSON (Fleet Studio native workspace)."""
+    try:
+        return groups.workspace_data(name)
+    except FileNotFoundError as exc:
+        raise _404(exc)
+
+
+@router.post("/api/groups/{name}/metrics")
+def api_metrics(name: str, body: dict = Body(...)) -> dict:
+    try:
+        return groups.metrics_for(name, body["scan"], body["alignment"], body.get("others"))
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise _404(exc)
+
+
+@router.get("/api/groups/{name}/merged.slicemap.json")
+def api_merged_slicemap(name: str) -> FileResponse:
+    p = groups.groups_root() / name / f"{groups.MERGED_STEM}.slicemap.json"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="not merged yet -- save an alignment first")
+    return FileResponse(str(p), media_type="application/json")
+
+
+@router.get("/api/groups/{name}/merged.floor.json")
+def api_merged_floor_json(name: str) -> FileResponse:
+    p = groups.groups_root() / name / f"{groups.MERGED_STEM}.floor.json"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="no composited floor image for this group")
+    return FileResponse(str(p), media_type="application/json")
+
+
 @router.get("/api/groups/{name}/alignment")
 def api_get_alignment(name: str) -> dict:
     f = groups.groups_root() / name / groups.ALIGNMENT_FILE

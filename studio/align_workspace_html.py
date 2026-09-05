@@ -41,21 +41,18 @@ def _slice_payload(scan_id: str, s: Slice) -> dict:
     }
 
 
-def build_alignment_workspace_html(
+def workspace_payload(
     slices: dict[str, Slice],
     ga: GroupAlignment,
     title: str = "스캔 정합 워크스페이스",
     order: Iterable[str] | None = None,
     api: dict | None = None,
     floors: dict | None = None,
-) -> str:
-    """`api` (from studio/groups.py when served): {"save": PUT url, "icp": POST
-    url, "merged": png url, "status": url}. With it the page saves to the
-    server (which rebuilds + publishes the merged slicemap) and the ICP
-    button works; without it the page is the offline file (download save).
-    `floors` (scan id -> studio.floorplan.FloorPlan): the app's floor images,
-    drawn under each slice with the same alignment so the operator lines up
-    real floor texture, not just wall cells."""
+) -> dict:
+    """Everything the alignment UI needs: per-scan slice cells (b64), current alignment,
+    metrics, the app floor image (data URL), gates and API urls. Embedded into the
+    standalone page (build_alignment_workspace_html) and served as JSON to Fleet Studio's
+    native workspace (GET /api/groups/{name}/workspace)."""
     ids = list(order) if order is not None else [ga.reference] + [k for k in slices if k != ga.reference]
     if ga.reference not in slices:
         raise ValueError(f"reference {ga.reference!r} has no slicemap")
@@ -73,7 +70,7 @@ def build_alignment_workspace_html(
             "floor": fp.payload() if fp is not None else None,
         })
 
-    payload = {
+    return {
         "title": title,
         "group": ga.group,
         "reference": ga.reference,
@@ -82,6 +79,24 @@ def build_alignment_workspace_html(
                   "conflictMargin": CONFLICT_MARGIN_CELLS},
         "api": api,
     }
+
+
+def build_alignment_workspace_html(
+    slices: dict[str, Slice],
+    ga: GroupAlignment,
+    title: str = "스캔 정합 워크스페이스",
+    order: Iterable[str] | None = None,
+    api: dict | None = None,
+    floors: dict | None = None,
+) -> str:
+    """`api` (from studio/groups.py when served): {"save": PUT url, "icp": POST
+    url, "merged": png url, "status": url}. With it the page saves to the
+    server (which rebuilds + publishes the merged slicemap) and the ICP
+    button works; without it the page is the offline file (download save).
+    `floors` (scan id -> studio.floorplan.FloorPlan): the app's floor images,
+    drawn under each slice with the same alignment so the operator lines up
+    real floor texture, not just wall cells."""
+    payload = workspace_payload(slices, ga, title=title, order=order, api=api, floors=floors)
     data_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     return _TEMPLATE.replace("__TITLE__", title).replace("__DATA__", data_json)
 

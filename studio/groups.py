@@ -247,6 +247,59 @@ def workspace_html(name: str, api_base: str | None, root: Path | None = None, pr
     return build_alignment_workspace_html(slices, ga, title=f"정합: {name}", order=ids, api=api, floors=floors or None)
 
 
+def _workspace_parts(name: str, root: Path | None, projects_root: Path):
+    root = root or groups_root()
+    group_dir = root / name
+    st = group_status(name, root, projects_root)
+    ids = [s.id for s in st.scans]
+    if not ids:
+        raise FileNotFoundError(f"group {name!r} has no scans")
+    slices = _load_slices(group_dir, ids)
+    missing = [s for s in ids if s not in slices]
+    if missing:
+        raise FileNotFoundError(f"group {name!r}: scans not prepared yet: {missing}")
+    return group_dir, ids, slices, _alignment_or_identity(group_dir, ids)
+
+
+def workspace_data(name: str, root: Path | None = None, projects_root: Path = PROJECTS_ROOT) -> dict:
+    """JSON twin of workspace_html(): what Fleet Studio's native alignment canvas loads
+    (GET /api/groups/{name}/workspace). Same payload the standalone page embeds."""
+    from studio.align_workspace_html import workspace_payload
+
+    group_dir, ids, slices, ga = _workspace_parts(name, root, projects_root)
+    api_base = f"/api/groups/{name}"
+    api = {"save": f"{api_base}/alignment", "icp": f"{api_base}/icp", "metrics": f"{api_base}/metrics",
+           "merged": f"{api_base}/merged.png", "status": api_base}
+    floors = _load_floors(group_dir, ids)
+    return workspace_payload(slices, ga, title=f"정합: {name}", order=ids, api=api, floors=floors or None)
+
+
+def metrics_for(name: str, scan: str, alignment: dict, others: dict[str, dict] | None = None,
+                root: Path | None = None) -> dict:
+    """evaluate() for one scan at a candidate pose against the group's other scans (at the
+    page's current poses if given) -- the native workspace asks the server instead of
+    re-implementing overlap/inlier/conflict in JS."""
+    root = root or groups_root()
+    group_dir = root / name
+    ga = _load_alignment(group_dir)
+    ids = _scan_ids(group_dir, ga)
+    slices = _load_slices(group_dir, ids)
+    if scan not in slices:
+        raise FileNotFoundError(f"{scan}: no slicemap")
+    cur = ScanAlignment(float(alignment["offsetX"]), float(alignment["offsetZ"]), float(alignment["yawRadians"]))
+
+    def pose_of(sid: str) -> ScanAlignment:
+        if others and sid in others:
+            o = others[sid]
+            return ScanAlignment(float(o["offsetX"]), float(o["offsetZ"]), float(o["yawRadians"]))
+        return ga.get(sid) if ga else ScanAlignment()
+
+    targets = [(slices[o], pose_of(o)) for o in ids if o != scan and o in slices]
+    if not targets:
+        raise ValueError("no other scan to compare against")
+    return evaluate(slices[scan], cur, targets).to_json()
+
+
 # --------------------------------------------------------------------------
 # save: alignment -> merged slicemap (+ publish)
 # --------------------------------------------------------------------------
