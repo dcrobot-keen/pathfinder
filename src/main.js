@@ -17,8 +17,9 @@ import VectorLayer from 'ol/layer/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom } from './appShared.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
+import { loadImportedObstacles } from './importedObstaclesApi.js';
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
@@ -124,6 +125,19 @@ createImportedObstaclesPanel(
   importedGeojsonFormat,
   map
 );
+
+// 스캔 지도로 만든 프로젝트(from-slicemap)는 자기 장애물 방을 열자마자 불러오고
+// 그 범위로 뷰를 맞춘다 -- 사용자가 패널에서 다시 고르지 않아도 되도록.
+if (activeProjectImportedRoom) {
+  loadImportedObstacles(activeProjectImportedRoom)
+    .then((fc) => {
+      importedObstacleSource.clear();
+      importedObstacleSource.addFeatures(importedGeojsonFormat.readFeatures(fc));
+      const extent = importedObstacleSource.getExtent();
+      if (extent.every(Number.isFinite)) map.getView().fit(extent, { padding: [40, 40, 40, 40], maxZoom: 7 });
+    })
+    .catch((err) => console.error('프로젝트 스캔 장애물 자동 로드 실패', err));
+}
 
 // PCD를 아직 업로드하지 않은 초기 상태에도 레이어 토글 패널이 보이도록 먼저 한 번 그린다
 // (배경 도면 / 노드·링크·블록만 — 높이 슬라이스·원본 PCD는 업로드 후에 채워짐).

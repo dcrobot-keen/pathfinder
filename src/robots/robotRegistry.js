@@ -71,6 +71,10 @@ export function createRobotRegistryTab(containerEl) {
   const algorithmField = selectField('길찾기 알고리즘', ROBOT_ALGORITHMS);
   const statusField = selectField('상태', ROBOT_STATUSES);
   const companyField = textField('회사');
+  // VDA5050(MQTT) 로봇과 연결 -- 플릿 브리지가 자동 등록할 때 채우고, 실기를 손으로
+  // 등록할 때는 sim-driver/host의 ROBOT_ID(serialNumber)를 적는다.
+  const vdaSerialField = textField('VDA5050 serialNumber (선택)');
+  const vdaManufacturerField = textField('VDA5050 manufacturer (선택)');
   const descriptionField = textField('설명', { multiline: true });
   descriptionField.input.rows = 3;
   const sizeField = numberField('크기 (m, 로봇 폭/지름)', { min: 0.1, step: 0.05 });
@@ -126,6 +130,8 @@ export function createRobotRegistryTab(containerEl) {
     sizeField.wrap,
     speedField.wrap,
     companyField.wrap,
+    vdaSerialField.wrap,
+    vdaManufacturerField.wrap,
     descriptionField.wrap,
     iconWrap,
     buttonRow,
@@ -141,6 +147,8 @@ export function createRobotRegistryTab(containerEl) {
     sizeField.input.value = DEFAULT_SIZE_M;
     speedField.input.value = DEFAULT_SPEED_MPS;
     companyField.input.value = '';
+    vdaSerialField.input.value = '';
+    vdaManufacturerField.input.value = '';
     descriptionField.input.value = '';
     delete iconInput.dataset.customized;
     iconInput.value = '';
@@ -160,6 +168,8 @@ export function createRobotRegistryTab(containerEl) {
     sizeField.input.value = robot.sizeMeters ?? DEFAULT_SIZE_M;
     speedField.input.value = robot.speedMps ?? DEFAULT_SPEED_MPS;
     companyField.input.value = robot.company || '';
+    vdaSerialField.input.value = robot.vda5050Serial || '';
+    vdaManufacturerField.input.value = robot.vda5050Manufacturer || '';
     descriptionField.input.value = robot.description || '';
     iconDataUrl = robot.icon;
     iconPreview.src = robot.icon;
@@ -181,6 +191,8 @@ export function createRobotRegistryTab(containerEl) {
       sizeMeters: parseFloat(sizeField.input.value) || DEFAULT_SIZE_M,
       speedMps: parseFloat(speedField.input.value) || DEFAULT_SPEED_MPS,
       company: companyField.input.value.trim(),
+      vda5050Serial: vdaSerialField.input.value.trim(),
+      vda5050Manufacturer: vdaManufacturerField.input.value.trim(),
       description: descriptionField.input.value.trim(),
       icon: iconDataUrl,
     };
@@ -236,6 +248,9 @@ export function createRobotRegistryTab(containerEl) {
       el('div', null, `크기: ${robot.sizeMeters ?? DEFAULT_SIZE_M}m / 속도: ${robot.speedMps ?? DEFAULT_SPEED_MPS}m/s`)
     );
     if (robot.company) meta.appendChild(el('div', null, `회사: ${robot.company}`));
+    if (robot.vda5050Serial) {
+      meta.appendChild(el('div', 'robot-card-vda', `VDA5050: ${robot.vda5050Manufacturer || '?'}/${robot.vda5050Serial}`));
+    }
     if (robot.description) meta.appendChild(el('div', 'robot-card-description', robot.description));
     card.appendChild(meta);
 

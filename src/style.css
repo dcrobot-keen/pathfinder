@@ -811,3 +811,41 @@ body {
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
+
+/* ---- 길찾기 탭: 실제 로봇 이동 명령 (VDA5050) ---- */
+.pathfinding-command {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px dashed #ff9800;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pathfinding-command-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ff9800;
+}
+
+.pathfinding-command-button.active {
+  background: #ff9800;
+  color: #fff;
+}
+
+.pathfinding-command-status {
+  font-size: 11px;
+  color: #ccc;
+  min-height: 14px;
+}
+
+.robot-card-vda {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: #666;
+}
+
+.project-scan-button {
+  margin-left: 4px;
+}

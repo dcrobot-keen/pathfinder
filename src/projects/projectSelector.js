@@ -3,7 +3,7 @@
 // 지도/뷰 인스턴스를 그 자리에서 다시 만드는 게 아니라 새로고침으로 전환하는
 // 이유는 appShared.js 헤더 주석 참고.
 import { allProjects, activeProjectId } from '../appShared.js';
-import { createProject } from './projectApi.js';
+import { createProject, createProjectFromSlicemap } from './projectApi.js';
 
 function navigateToProject(id) {
   const url = new URL(location.href);
@@ -99,5 +99,37 @@ export function createProjectSelector(container) {
   newBtn.textContent = '+ 새 프로젝트';
   newBtn.addEventListener('click', () => openCreateForm(container));
 
-  container.append(select, newBtn);
+  // 스캔 지도(slicemap-v1 .json -- 정합 워크스페이스가 시뮬레이터 worlds/ 에 publish한
+  // 파일)로 프로젝트를 만든다. 평면 크기와 장애물이 그 격자에서 나오고, 같은 파일을
+  // 시뮬레이터가 월드로 쓰므로 로봇 좌표가 그대로 맞는다(doc/vda5050-rcs.md).
+  const scanInput = document.createElement('input');
+  scanInput.type = 'file';
+  scanInput.accept = '.json,application/json';
+  scanInput.hidden = true;
+  const scanBtn = document.createElement('button');
+  scanBtn.type = 'button';
+  scanBtn.className = 'project-new-button project-scan-button';
+  scanBtn.textContent = '스캔 지도로 만들기';
+  scanBtn.title = 'slicemap-v1 파일(예: project_20260905.slicemap.json)로 프로젝트 + 장애물 생성';
+  scanBtn.addEventListener('click', () => scanInput.click());
+  const scanStatus = document.createElement('span');
+  scanStatus.className = 'project-create-status';
+  scanInput.addEventListener('change', async () => {
+    const file = scanInput.files?.[0];
+    if (!file) return;
+    scanBtn.disabled = true;
+    scanStatus.textContent = '만드는 중...';
+    try {
+      const slicemap = JSON.parse(await file.text());
+      const name = file.name.replace(/\.slicemap\.json$|\.json$/i, '');
+      const project = await createProjectFromSlicemap({ name, slicemap });
+      navigateToProject(project.id);
+    } catch (err) {
+      scanStatus.textContent = `실패: ${err.message}`;
+      scanBtn.disabled = false;
+      scanInput.value = '';
+    }
+  });
+
+  container.append(select, newBtn, scanBtn, scanInput, scanStatus);
 }

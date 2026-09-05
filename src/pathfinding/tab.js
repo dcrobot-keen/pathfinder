@@ -17,7 +17,8 @@ import Stroke from 'ol/style/Stroke.js';
 import Text from 'ol/style/Text.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource } from '../appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource, activeProjectName } from '../appShared.js';
+import { sendFleetOrder, subscribeFleetStream } from '../fleet/fleetApi.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
@@ -526,6 +527,14 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
   draw.on('drawend', (evt) => {
     const coord = evt.feature.getGeometry().getCoordinates();
+    if (commandMode) {
+      // Draw는 drawend 뒤에 피처를 소스에 넣으므로 다음 틱에 지운다 -- 목적지 핀은
+      // sendMoveCommand 가 따로 그린다.
+      setTimeout(() => interactionSource.removeFeature(evt.feature), 0);
+      setCommandMode(false);
+      sendMoveCommand(coord);
+      return;
+    }
     evt.feature.set('role', pendingRole);
     evt.feature.setStyle(markerStyle(pendingRole));
 
@@ -837,6 +846,140 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   }
   loadRobots();
 
+  // --- 실제 로봇 이동 명령 (VDA5050) --------------------------------------
+  // 레지스트리에 vda5050Serial 이 있는 로봇(플릿 브리지가 자동 등록한 시뮬레이터 로봇
+  // 포함)을 고르고 "목적지 클릭"을 누른 뒤 지도를 클릭하면, 로봇의 현재 위치(플릿
+  // 스트림)에서 그 지점까지 경로를 찾아 order 로 보낸다. 경로는 주황 점선으로 남고
+  // 로봇 마커(실시간 위치 레이어)가 실제로 따라가는 것을 본다. doc/vda5050-rcs.md.
+  const commandBox = document.createElement('div');
+  commandBox.className = 'pathfinding-command';
+  const commandTitle = document.createElement('div');
+  commandTitle.className = 'pathfinding-command-title';
+  commandTitle.textContent = '실제 로봇 이동 명령 (VDA5050)';
+  const commandSelect = document.createElement('select');
+  commandSelect.className = 'pathfinding-select';
+  const commandBtn = document.createElement('button');
+  commandBtn.className = 'pathfinding-button pathfinding-command-button';
+  commandBtn.textContent = '목적지 클릭';
+  const commandStatus = document.createElement('div');
+  commandStatus.className = 'pathfinding-command-status';
+  commandBox.append(commandTitle, commandSelect, commandBtn, commandStatus);
+  panelEl.appendChild(commandBox);
+
+  let commandMode = false;
+  const fleetBySerial = new Map(); // serialNumber -> 플릿 레코드(position, connectionState, state)
+  const commandRobotsById = new Map(); // 레지스트리 id -> robot (vda5050Serial 있는 것만)
+  const commandFeatures = new Map(); // serialNumber -> [경로 LineString, 목적지 핀]
+  let brokerConnected = false;
+
+  function setCommandMode(on) {
+    commandMode = on;
+    commandBtn.classList.toggle('active', on);
+    commandBtn.textContent = on ? '지도를 클릭하세요 (취소)' : '목적지 클릭';
+    if (on) commandStatus.textContent = '목적지를 지도에서 클릭하세요.';
+  }
+  commandBtn.addEventListener('click', () => setCommandMode(!commandMode));
+
+  function refreshCommandOptions() {
+    const prev = commandSelect.value;
+    commandSelect.replaceChildren();
+    if (commandRobotsById.size === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'VDA5050 로봇 없음 (플릿 탭에서 브로커 연결)';
+      commandSelect.appendChild(opt);
+      commandBtn.disabled = true;
+      return;
+    }
+    for (const robot of commandRobotsById.values()) {
+      const fleet = fleetBySerial.get(robot.vda5050Serial);
+      const online = brokerConnected && fleet?.connectionState === 'ONLINE';
+      const opt = document.createElement('option');
+      opt.value = robot.id;
+      opt.textContent = `${robot.name} · ${robot.vda5050Serial} (${online ? '온라인' : '오프라인'})`;
+      commandSelect.appendChild(opt);
+    }
+    if (prev && commandRobotsById.has(prev)) commandSelect.value = prev;
+    commandBtn.disabled = false;
+  }
+
+  async function loadCommandRobots() {
+    try {
+      const robots = await listRobots();
+      commandRobotsById.clear();
+      for (const r of robots) if (r.vda5050Serial) commandRobotsById.set(r.id, r);
+      refreshCommandOptions();
+    } catch (err) {
+      console.error('이동 명령 로봇 목록 조회 실패', err);
+    }
+  }
+
+  const fleetStream = subscribeFleetStream((msg) => {
+    if (msg.type === 'snapshot') {
+      brokerConnected = msg.status?.connected === true;
+      fleetBySerial.clear();
+      for (const r of msg.robots) fleetBySerial.set(r.serialNumber, r);
+      loadCommandRobots();
+    } else if (msg.type === 'robot') {
+      const isNew = !fleetBySerial.has(msg.robot.serialNumber);
+      fleetBySerial.set(msg.robot.serialNumber, msg.robot);
+      if (isNew) setTimeout(loadCommandRobots, 800); // 서버 자동 등록 뒤 다시 읽기
+      else refreshCommandOptions();
+      // 주문을 다 끝냈으면(남은 노드 0, 주행 아님) 그려둔 계획 경로를 지운다.
+      const st = msg.robot.state;
+      if (st && st.nodesLeft === 0 && !st.driving && commandFeatures.has(msg.robot.serialNumber)) {
+        clearCommandFeatures(msg.robot.serialNumber);
+        commandStatus.textContent = `${msg.robot.serialNumber}: 도착 (${st.lastNodeId || '-'})`;
+      }
+    } else if (msg.type === 'status') {
+      brokerConnected = msg.status?.connected === true;
+      refreshCommandOptions();
+    }
+  });
+
+  function clearCommandFeatures(serial) {
+    for (const f of commandFeatures.get(serial) ?? []) interactionSource.removeFeature(f);
+    commandFeatures.delete(serial);
+  }
+
+  const COMMAND_PATH_STYLE = new Style({ stroke: new Stroke({ color: '#ff9800', width: 3, lineDash: [8, 6] }) });
+
+  async function sendMoveCommand(goalCoord) {
+    const robot = commandRobotsById.get(commandSelect.value);
+    if (!robot) {
+      commandStatus.textContent = '이동시킬 로봇을 고르세요.';
+      return;
+    }
+    const fleet = fleetBySerial.get(robot.vda5050Serial);
+    if (!fleet?.position) {
+      commandStatus.textContent = `${robot.name}: 현재 위치를 아직 받지 못했습니다 (브로커/로봇 연결 확인).`;
+      return;
+    }
+    commandStatus.textContent = `${robot.name}: 경로 계산 중...`;
+    const featureCollection = geojsonFormat.writeFeaturesObject([...nodeLinkSource.getFeatures(), ...importedBlockFeatures()]);
+    const start = { x: fleet.position.x, y: fleet.position.y };
+    const end = { x: goalCoord[0], y: goalCoord[1] };
+    const algorithm = validAlgorithms.has(robot.algorithm) ? robot.algorithm : algorithmSelect.value;
+    try {
+      const result =
+        mode === 'nodelink'
+          ? await findNodeLinkPath({ featureCollection, start, end, algorithm })
+          : await findObstaclePath({ featureCollection, start, end, algorithm, cellSize: 0.2 });
+      clearCommandFeatures(robot.vda5050Serial);
+      const line = new Feature(new LineString(result.path));
+      line.setStyle(COMMAND_PATH_STYLE);
+      const pin = new Feature(new PointGeom(goalCoord));
+      pin.setStyle(markerStyle('end'));
+      interactionSource.addFeatures([line, pin]);
+      commandFeatures.set(robot.vda5050Serial, [line, pin]);
+      const sent = await sendFleetOrder(fleet.manufacturer, fleet.serialNumber, result.path, { mapId: activeProjectName });
+      commandStatus.textContent = `${robot.name}: order ${String(sent.orderId).slice(0, 8)}… 전송 (${result.distance.toFixed(2)} m, 노드 ${result.path.length}개, ${result.algorithm})`;
+    } catch (err) {
+      console.error('이동 명령 실패', err);
+      commandStatus.textContent = `${robot.name}: 실패 — ${err.message}`;
+    }
+  }
+
   const conflictModeRow = document.createElement('div');
   conflictModeRow.className = 'pathfinding-conflict-mode';
   const conflictModeLabel = document.createElement('span');
@@ -919,7 +1062,9 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       const simBtn = document.createElement('button');
       simBtn.className = 'pathfinding-list-sim-button';
       simBtn.textContent = '시뮬레이터로 실행';
-      simBtn.title = `이 경로를 ${SIM_ROBOT_ID} 시뮬레이터로 전송 (ros-chromium/simulator)`;
+      // 등록 로봇에 VDA5050 serial 이 있으면 그 로봇으로(order), 아니면 예전 기본 시뮬레이터 id로.
+      const targetRobotId = anim.selectedRobot?.vda5050Serial || SIM_ROBOT_ID;
+      simBtn.title = `이 경로를 ${targetRobotId} 로 전송 (VDA5050 order 또는 drive-request 릴레이)`;
       // 드래그앤드롭 정렬용 row.draggable=true 아래 버튼이라, 클릭이 드래그로
       // 오인되지 않도록 mousedown 전파를 막는다.
       simBtn.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -927,10 +1072,10 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
         if (!anim.pathCoords) return;
         simBtn.disabled = true;
         try {
-          const sent = await sendDriveRequest(SIM_ROBOT_ID, anim.pathCoords);
+          const sent = await sendDriveRequest(targetRobotId, anim.pathCoords);
           // 서버가 로봇이 VDA5050(MQTT)로 온라인이면 order로, 아니면 예전 WebSocket 릴레이로 보낸다.
           const via = sent.transport === 'vda5050' ? `VDA5050 order ${String(sent.orderId).slice(0, 8)}…` : 'drive-request 릴레이';
-          setStatus(`로봇#${anim.id} 경로를 시뮬레이터(${SIM_ROBOT_ID})로 전송했습니다 (${via}).`);
+          setStatus(`로봇#${anim.id} 경로를 ${targetRobotId} 로 전송했습니다 (${via}).`);
         } catch (err) {
           console.error('시뮬레이터 전송 실패', err);
           setStatus(`시뮬레이터 전송 실패: ${err.message}`);

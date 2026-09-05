@@ -26,3 +26,21 @@ export async function createProject({ name, sizeX, sizeY }) {
   }
   return data;
 }
+
+/**
+ * slicemap-v1(scan-to-map-studio 정합 결과) 하나로 프로젝트 + 장애물을 만든다
+ * (server/projects.mjs POST /api/projects/from-slicemap). 평면 크기는 격자 크기,
+ * 좌표는 시뮬레이터 월드와 동일(격자 왼쪽-아래 = 0,0).
+ */
+export async function createProjectFromSlicemap({ name, slicemap, room }) {
+  const res = await fetch(`${API_URL}/from-slicemap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, slicemap, room }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `프로젝트 생성 실패 (${res.status})`);
+  }
+  return data;
+}

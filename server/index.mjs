@@ -20,7 +20,8 @@ const ROOM_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
-app.use('/api', await createRobotsRouter());
+const robotsRouter = await createRobotsRouter();
+app.use('/api', robotsRouter);
 app.use('/api', await createProjectsRouter());
 
 // scripts/import-scan-to-map-studio.mjs가 data/imported/<room>.geojson에 미리
@@ -138,6 +139,12 @@ const vda5050 = await createVda5050Bridge({
   onPose: (robotId, pose) => {
     latestPoseByRobot.set(robotId, pose);
     broadcastPose(robotId, pose);
+  },
+  // 처음 보는 VDA5050 로봇은 레지스트리에 자동 등록 -> 지도 마커에 아이콘/이름이 붙고
+  // 길찾기 탭에서 이동 명령 대상으로 고를 수 있다(robots.mjs ensureVda5050Robot).
+  onRobotDiscovered: async (manufacturer, serialNumber) => {
+    const { created } = await robotsRouter.robots.ensureVda5050Robot(manufacturer, serialNumber);
+    if (created) console.log(`[vda5050] 레지스트리에 자동 등록: ${manufacturer}/${serialNumber}`);
   },
 });
 app.use('/api', vda5050.router);

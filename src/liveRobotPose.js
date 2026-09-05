@@ -45,16 +45,35 @@ function isTruthRobotId(robotId) {
 export function startLiveRobotPoseTracking(source) {
   const featuresByRobotId = new Map();
   let robotsById = new Map();
+  // VDA5050 로봇은 robotId == serialNumber 로 들어온다. 레지스트리(robots.json)의
+  // vda5050Serial 로 이어서 아이콘·이름·크기를 붙인다(서버가 처음 보는 로봇을 자동
+  // 등록하므로 잠깐 뒤에 다시 조회하면 항상 찾아진다).
+  let robotsBySerial = new Map();
+  let lastRefreshAt = 0;
   let closed = false;
   let ws = null;
 
   async function refreshRobots() {
+    lastRefreshAt = Date.now();
     try {
       const robots = await listRobots();
       robotsById = new Map(robots.map((r) => [r.id, r]));
+      robotsBySerial = new Map(robots.filter((r) => r.vda5050Serial).map((r) => [r.vda5050Serial, r]));
     } catch (err) {
       console.error('실시간 로봇 위치: 로봇 목록 조회 실패', err);
     }
+  }
+
+  function lookupRobot(robotId) {
+    const robot = robotsBySerial.get(robotId) ?? robotsById.get(robotId);
+    if (!robot && !isTruthRobotId(robotId) && Date.now() - lastRefreshAt > 3000) refreshRobots().then(() => restyle(robotId));
+    return robot;
+  }
+
+  const lastPoseByRobotId = new Map();
+  function restyle(robotId) {
+    const pose = lastPoseByRobotId.get(robotId);
+    if (pose && featuresByRobotId.has(robotId)) applyPose(robotId, pose);
   }
 
   function applyPose(robotId, pose) {
@@ -66,7 +85,8 @@ export function startLiveRobotPoseTracking(source) {
     } else {
       feature.getGeometry().setCoordinates([pose.x, pose.y]);
     }
-    const robot = robotsById.get(robotId);
+    lastPoseByRobotId.set(robotId, pose);
+    const robot = lookupRobot(robotId);
     const truth = isTruthRobotId(robotId);
     const sim = !truth && isSimRobotId(robotId);
     const baseId = truth ? robotId.slice(0, -'-truth'.length) : robotId;

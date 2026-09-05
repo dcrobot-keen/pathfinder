@@ -236,6 +236,23 @@ pathfinder의 첫 JS 자동 테스트)로 검증되고, 실제 Chrome에서 서�
 캡처·실제 vps-system 서버 호출 구간은 실제 카메라/서버가 없어 검증하지 못했습니다 — "알려진 제한"
 참고.
 
+## 스캔 지도로 프로젝트 만들기 (slicemap-v1)
+
+정합 워크스페이스(scan-to-map-studio)가 시뮬레이터 `worlds/`에 publish한 `<group>.slicemap.json`
+하나로 프로젝트를 만듭니다. 메뉴의 **"스캔 지도로 만들기"** 버튼(파일 선택) 또는:
+
+```bash
+node scripts/create-project-from-slicemap.mjs ../ros-chromium/simulator/worlds/project_20260905.slicemap.json
+```
+
+- 평면 크기 = 격자 크기(`cols*r × rows*r`), 좌표 = 격자 왼쪽-아래를 (0,0)으로 -- 시뮬레이터가 같은
+  파일을 `SIM_WORLD`로 쓸 때의 월드 좌표와 동일합니다(`server/slicemap.mjs` 헤더). 그래서 sim-driver의
+  VDA5050 `agvPosition`이 변환 없이 이 프로젝트 위에 놓입니다.
+- 점유 셀(벽 3 / 가구 2)은 직사각형 block으로 합쳐져 `data/imported/<room>.geojson`에 저장되고, 프로젝트가
+  `importedRoom`으로 기억해 열 때 자동으로 불러옵니다.
+- VDA5050 `mapId`: sim-driver는 `MAP_ID`가 비어 있으면 시뮬레이터 월드 이름(= slicemap 파일 이름 = 이 프로젝트
+  이름)을 씁니다.
+
 ## 플릿 (RCS) — VDA5050 브리지
 
 pathfinder를 관제(RCS) 쪽으로 세우는 탭입니다. 설계와 우리가 고정한 규약(토픽 접두사
@@ -251,6 +268,12 @@ pathfinder를 관제(RCS) 쪽으로 세우는 탭입니다. 설계와 우리가 
   `order`로 발행하고(`transport: "vda5050"`), 아니면 예전 `drive-request` WebSocket 릴레이를 씁니다.
 - 로봇 쪽 상대는 ros-chromium `robot-os-chromium/packages/nodes`의 `Vda5050Node`(sim-driver가
   `MQTT_URL`로 켬)이고, 브로커는 ros-chromium compose의 `mosquitto`(127.0.0.1:1883)입니다.
+- **자동 등록**: 처음 보는 VDA5050 로봇은 서버가 로봇 등록(`robots.json`)에 자동으로 넣습니다
+  (`vda5050Serial`/`vda5050Manufacturer` 필드, 시뮬레이터 serial은 TB3 치수 0.2 m / 0.22 m/s, AGV 아이콘).
+  지도 마커는 serial로 이 항목을 찾아 아이콘·이름을 붙입니다. 로봇 등록 탭에서 수정할 수 있습니다.
+- **이동 명령**: 길찾기(장애물) 탭의 "실제 로봇 이동 명령 (VDA5050)"에서 로봇을 고르고 "목적지 클릭" 뒤
+  지도를 클릭하면, 로봇의 현재 위치에서 그 지점까지 경로를 찾아(로봇의 알고리즘) order로 보냅니다.
+  계획 경로는 주황 점선으로 남고, 도착(`nodeStates` 0)하면 지워집니다.
 
 ```bash
 GET    /api/vda5050/config                                    # { config, status, supportedInstantActions }

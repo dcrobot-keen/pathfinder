@@ -41,7 +41,8 @@ export function robotMarkerStyle(
     // ol/style/Icon의 size 옵션은 "스프라이트 시트에서 잘라올 영역" 지정용이라
     // 단일 아이콘에는 쓰면 안 된다 — shared/robotIcons.mjs가 SVG에 width/height=64를
     // 명시해두므로 자연 크기를 그대로 읽어 scale만으로 최종 크기를 정한다.
-    const scale = Math.min(1.2, Math.max(0.15, BASE_ICON_SCALE * sizeRatio));
+    // 하한 0.35(≈22px): TB3 크기(0.2m)의 시뮬레이터 로봇도 아이콘이 점이 아니라 아이콘으로 보이게.
+    const scale = Math.min(1.2, Math.max(0.35, BASE_ICON_SCALE * sizeRatio));
     return new Style({
       image: new Icon({ src: iconSrc, scale, opacity: paused ? 0.35 : 1, rotation }),
       text,

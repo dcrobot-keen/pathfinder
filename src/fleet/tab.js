@@ -139,7 +139,8 @@ export function createFleetTab(containerEl) {
   let brokerStatus = { connected: false, brokerUrl: null, error: null };
   let staleAfterMs = 5000;
   const robots = new Map(); // key -> record
-  let registryById = new Map();
+  let registryById = new Map(); // id -> robot (예전 규칙: robotId == 레지스트리 id)
+  let registryBySerial = new Map(); // vda5050Serial -> robot
   let stream = null;
   let ageTimer = null;
 
@@ -205,7 +206,7 @@ export function createFleetTab(containerEl) {
     tbody.replaceChildren();
     for (const r of list) {
       const tr = el('tr');
-      const registered = registryById.get(r.serialNumber);
+      const registered = registryBySerial.get(r.serialNumber) ?? registryById.get(r.serialNumber);
       const age = r.lastSeen ? now - r.lastSeen : null;
       const stale = age != null && age > staleAfterMs;
 
@@ -218,7 +219,7 @@ export function createFleetTab(containerEl) {
       }
       const nameBox = el('div');
       nameBox.appendChild(el('div', 'fleet-serial', registered ? `${registered.name}` : r.serialNumber));
-      nameBox.appendChild(el('div', 'fleet-sub', `${r.manufacturer}/${r.serialNumber}${registered ? '' : ' · 미등록'}`));
+      nameBox.appendChild(el('div', 'fleet-sub', `${r.manufacturer}/${r.serialNumber}${registered ? ' · 등록됨' : ' · 미등록'}`));
       nameTd.appendChild(nameBox);
       tr.appendChild(nameTd);
 
@@ -298,6 +299,8 @@ export function createFleetTab(containerEl) {
       robots.clear();
       for (const r of msg.robots) robots.set(r.key, r);
     } else if (msg.type === 'robot') {
+      // 서버가 처음 보는 로봇을 레지스트리에 자동 등록하므로 잠깐 뒤 다시 읽는다.
+      if (!robots.has(msg.robot.key)) setTimeout(() => loadRegistry().then(renderRobots), 800);
       robots.set(msg.robot.key, msg.robot);
     } else if (msg.type === 'status') {
       brokerStatus = msg.status;
@@ -323,7 +326,9 @@ export function createFleetTab(containerEl) {
 
   async function loadRegistry() {
     try {
-      registryById = new Map((await listRobots()).map((r) => [r.id, r]));
+      const list = await listRobots();
+      registryById = new Map(list.map((r) => [r.id, r]));
+      registryBySerial = new Map(list.filter((r) => r.vda5050Serial).map((r) => [r.vda5050Serial, r]));
     } catch {
       /* 레지스트리 없이도 표는 뜬다 */
     }

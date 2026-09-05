@@ -2,13 +2,17 @@
 // 4개의 샘플 로봇(Atlas/MoBED/SPOT/AGV-AMR)을 자동으로 시드한다.
 import express from 'express';
 import { JSONFilePreset } from 'lowdb/node';
+import { mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { ROBOT_ICON_DATA_URI } from '../shared/robotIcons.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = resolve(__dirname, '../data/robots.json');
+// projects.mjs/vda5050.mjs와 같은 규칙: PATHFINDER_DATA_DIR로 데이터 루트를 바꿀 수
+// 있다(스모크 테스트가 실제 data/robots.json을 건드리지 않도록).
+const DATA_DIR = process.env.PATHFINDER_DATA_DIR ? resolve(process.env.PATHFINDER_DATA_DIR) : resolve(__dirname, '../data');
+const DB_PATH = resolve(DATA_DIR, 'robots.json');
 
 export const ROBOT_TYPES = ['humanoid', 'agv_amr', 'quadruped', 'wheeled_nonholonomic', 'unknown'];
 export const ROBOT_ALGORITHMS = ['dijkstra', 'astar', 'gridastar', 'hybridastar'];
@@ -67,6 +71,22 @@ const SEED_ROBOTS = [
   },
 ];
 
+// VDA5050 로봇(serialNumber/manufacturer)과 레지스트리 항목을 잇는 선택 필드.
+// 플릿 브리지(server/vda5050.mjs)가 처음 보는 로봇을 여기로 자동 등록하고,
+// 지도 마커/길찾기 탭은 serial 로 아이콘·이름·알고리즘을 찾는다.
+function pickVda5050(body, existing = {}) {
+  const has = (k) => body[k] !== undefined;
+  return {
+    vda5050Serial: has('vda5050Serial') ? (typeof body.vda5050Serial === 'string' ? body.vda5050Serial.trim() : '') : existing.vda5050Serial ?? '',
+    vda5050Manufacturer: has('vda5050Manufacturer')
+      ? (typeof body.vda5050Manufacturer === 'string' ? body.vda5050Manufacturer.trim() : '')
+      : existing.vda5050Manufacturer ?? '',
+  };
+}
+
+// 시뮬레이터 로봇(ros-chromium sim-driver, "tb3-sim-01" 규칙)은 TB3 Burger 치수로.
+const SIM_SERIAL_RE = /(^|-)sim(-|$)/i;
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -86,6 +106,7 @@ function pickPositiveNumber(value, fallback) {
 }
 
 export async function createRobotsRouter() {
+  await mkdir(DATA_DIR, { recursive: true }); // PATHFINDER_DATA_DIR 가 새 디렉터리일 수 있다(스모크)
   const db = await JSONFilePreset(DB_PATH, { robots: [] });
   if (db.data.robots.length === 0) {
     db.data.robots = SEED_ROBOTS.map(seedRobot);
@@ -117,6 +138,7 @@ export async function createRobotsRouter() {
       icon: body.icon || ROBOT_ICON_DATA_URI[type],
       sizeMeters: pickPositiveNumber(body.sizeMeters, DEFAULT_SIZE_M),
       speedMps: pickPositiveNumber(body.speedMps, DEFAULT_SPEED_MPS),
+      ...pickVda5050(body),
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -124,6 +146,36 @@ export async function createRobotsRouter() {
     await db.write();
     res.status(201).json(robot);
   });
+
+  /** VDA5050 로 처음 보인 로봇을 레지스트리에 자동 등록한다(이미 있으면 그대로 반환). */
+  async function ensureVda5050Robot(manufacturer, serialNumber) {
+    const existing = db.data.robots.find((r) => r.vda5050Serial === serialNumber && (!r.vda5050Manufacturer || r.vda5050Manufacturer === manufacturer));
+    if (existing) return { robot: existing, created: false };
+    const sim = SIM_SERIAL_RE.test(serialNumber);
+    const timestamp = nowIso();
+    const robot = {
+      id: randomUUID(),
+      name: serialNumber,
+      type: 'agv_amr',
+      algorithm: 'gridastar',
+      status: 'standby',
+      company: sim ? 'ros-chromium simulator' : manufacturer,
+      description: sim
+        ? 'VDA5050(MQTT)으로 자동 등록된 시뮬레이터 로봇 (TurtleBot3 Burger 치수). ros-chromium sim-driver가 운전한다.'
+        : `VDA5050(MQTT)으로 자동 등록된 로봇 (${manufacturer}/${serialNumber}).`,
+      icon: ROBOT_ICON_DATA_URI.agv_amr,
+      sizeMeters: sim ? 0.2 : DEFAULT_SIZE_M,
+      speedMps: sim ? 0.22 : DEFAULT_SPEED_MPS,
+      vda5050Serial: serialNumber,
+      vda5050Manufacturer: manufacturer,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    db.data.robots.push(robot);
+    await db.write();
+    return { robot, created: true };
+  }
+  router.robots = { ensureVda5050Robot, list: () => db.data.robots };
 
   router.put('/robots/:id', async (req, res) => {
     const idx = db.data.robots.findIndex((r) => r.id === req.params.id);
@@ -152,6 +204,7 @@ export async function createRobotsRouter() {
           : existing.sizeMeters,
       speedMps:
         body.speedMps !== undefined ? pickPositiveNumber(body.speedMps, existing.speedMps) : existing.speedMps,
+      ...pickVda5050(body, existing),
       updatedAt: nowIso(),
     };
     db.data.robots[idx] = updated;

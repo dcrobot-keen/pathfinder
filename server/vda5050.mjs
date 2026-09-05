@@ -38,7 +38,13 @@ async function defaultConnect(brokerUrl, options) {
   return mqtt.connect(brokerUrl, options);
 }
 
-export async function createVda5050Bridge({ dataDir, onPose = () => {}, connect = defaultConnect, log = (m) => console.log(`[vda5050] ${m}`) }) {
+export async function createVda5050Bridge({
+  dataDir,
+  onPose = () => {},
+  onRobotDiscovered = null, // (manufacturer, serialNumber) => void|Promise -- 처음 메시지를 보낸 로봇마다 1회
+  connect = defaultConnect,
+  log = (m) => console.log(`[vda5050] ${m}`),
+}) {
   await mkdir(dataDir, { recursive: true });
   const db = await JSONFilePreset(resolve(dataDir, 'vda5050.json'), { config: { ...DEFAULT_CONFIG } });
   // 파일에 옛 필드만 있어도 기본값으로 채운다.
@@ -90,7 +96,11 @@ export async function createVda5050Bridge({ dataDir, onPose = () => {}, connect 
     } catch {
       return; // 남의 브로커에 섞인 비-JSON은 조용히 무시
     }
+    const known = robots.has(robotKey(t.manufacturer, t.serialNumber));
     const r = record(t.manufacturer, t.serialNumber);
+    if (!known && onRobotDiscovered) {
+      Promise.resolve(onRobotDiscovered(t.manufacturer, t.serialNumber)).catch((err) => log(`onRobotDiscovered failed: ${err.message || err}`));
+    }
     const now = Date.now();
     r.lastSeen = now;
     if (t.name === 'connection') {

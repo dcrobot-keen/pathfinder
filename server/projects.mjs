@@ -15,6 +15,8 @@ import { mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { parseSlicemap, slicemapSize, slicemapToObstacles, roomIdFromName } from './slicemap.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // PATHFINDER_DATA_DIR로 데이터 루트를 바꿀 수 있다 -- 스모크 테스트가 실제
@@ -25,6 +27,9 @@ const DATA_DIR = process.env.PATHFINDER_DATA_DIR
   : resolve(__dirname, '../data');
 const PROJECTS_DB_PATH = resolve(DATA_DIR, 'projects.json');
 const PROJECTS_DATA_DIR = resolve(DATA_DIR, 'projects');
+// index.mjs의 IMPORTED_DIR와 같은 위치 -- from-slicemap이 만든 장애물은 기존
+// "스캔 장애물" 패널이 그대로 읽는다.
+const IMPORTED_DIR = resolve(DATA_DIR, 'imported');
 // 기존에 이미 있던 유일한 nodelink.geojson. "기본" 프로젝트는 이 파일을 그대로
 // 쓰게 해서(옮기지 않음), 이번 변경으로 기존 편집 데이터가 조금이라도 움직이거나
 // 유실될 위험을 없앤다.
@@ -106,6 +111,44 @@ export async function createProjectsRouter() {
     db.data.projects.push(project);
     await db.write();
     res.status(201).json(project);
+  });
+
+  // 스캔 지도(slicemap-v1) 하나로 프로젝트를 만든다: 평면 크기 = 격자 크기,
+  // 점유 셀 = data/imported/<room>.geojson 장애물 블록, importedRoom 으로 연결.
+  // 같은 파일을 시뮬레이터 SIM_WORLD 로 쓰면 두 좌표계가 그대로 일치한다
+  // (server/slicemap.mjs 헤더 참고). doc/vda5050-rcs.md 의 "프로젝트 = mapId".
+  router.post('/projects/from-slicemap', async (req, res) => {
+    const body = req.body || {};
+    if (!body.name || typeof body.name !== 'string') {
+      res.status(400).json({ error: 'name은 필수입니다.' });
+      return;
+    }
+    let slice;
+    try {
+      slice = parseSlicemap(body.slicemap);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    const room = roomIdFromName(body.room ?? body.name);
+    const { sizeX, sizeY } = slicemapSize(slice);
+    const timestamp = nowIso();
+    const { featureCollection, counts } = slicemapToObstacles(slice, { room, importedAt: timestamp });
+    await mkdir(IMPORTED_DIR, { recursive: true });
+    await writeFile(resolve(IMPORTED_DIR, `${room}.geojson`), JSON.stringify(featureCollection), 'utf-8');
+    const project = {
+      id: randomUUID(),
+      name: body.name,
+      sizeX: Math.round(sizeX * 1000) / 1000,
+      sizeY: Math.round(sizeY * 1000) / 1000,
+      importedRoom: room,
+      slicemap: { resolution: slice.resolution, cols: slice.cols, rows: slice.rows, origin: slice.origin, z: slice.z, sources: slice.sources },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    db.data.projects.push(project);
+    await db.write();
+    res.status(201).json({ ...project, obstacleCounts: counts, featureCount: featureCollection.features.length });
   });
 
   router.get('/projects/:id', (req, res) => {
