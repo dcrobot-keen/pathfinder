@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // src/appShared.js가 활성 프로젝트를 top-level await로 고른다 -- 기본 타깃(es2020)은 이를 거절해
+  // `vite build`가 실패했었다. 개발 서버에는 영향이 없었고, 최신 Chromium만 대상이라 esnext로 둔다.
+  build: { target: 'esnext' },
   server: {
     proxy: {
       // more specific path first: Vite checks proxy entries in declaration
