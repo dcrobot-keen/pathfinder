@@ -10,22 +10,27 @@
     "dev:pathfinder": "cd pathfinder && go run ./server",
     "dev:scan-engine": "node scripts/dev-scan-engine.mjs",
     "test:scan-engine": "node scripts/dev-scan-engine.mjs --test",
+    "gen:scan-engine-api": "node scripts/gen-scan-engine-api.mjs",
+    "check:api": "tsc -p tsconfig.scan-engine.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/live-pose-smoke.mjs && node scripts/projects-smoke.mjs && node scripts/scan-alignment-smoke.mjs && node scripts/vda5050-smoke.mjs && node scripts/scan-project-smoke.mjs && node scripts/robot-models-smoke.mjs",
+    "test": "npm run check:api && node scripts/live-pose-smoke.mjs && node scripts/projects-smoke.mjs && node scripts/scan-alignment-smoke.mjs && node scripts/vda5050-smoke.mjs && node scripts/scan-project-smoke.mjs && node scripts/robot-models-smoke.mjs",
     "test:pathfinder": "cd pathfinder && go test ./...",
     "build:wasm": "node scripts/build-wasm.mjs"
   },
   "dependencies": {
     "express": "^5.2.1",
     "lowdb": "^7.0.1",
+    "mqtt": "^5.15.2",
     "ol": "^10.3.1",
+    "openapi-fetch": "^0.17.0",
     "three": "^0.185.1",
-    "ws": "^8.21.3",
-    "mqtt": "^5.15.2"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "concurrently": "^10.0.4",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.9.3",
     "vite": "^6.0.0"
   }
 }

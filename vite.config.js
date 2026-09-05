@@ -10,6 +10,11 @@ export default defineConfig({
       // more specific path first: Vite checks proxy entries in declaration
       // order, so /api/path and /api/scan-studio must be matched before the general /api rule.
       '/api/path': 'http://localhost:3002',
+      // scan-engine(FastAPI) 전체를 경로 그대로: /scan-engine/api/groups -> :8000/api/groups (openapi-fetch 클라이언트가 씀)
+      '/scan-engine': {
+        target: 'http://localhost:8000',
+        rewrite: (path) => path.replace(/^\/scan-engine/, ''),
+      },
       '/api/scan-studio': {
         target: 'http://localhost:8000',
         rewrite: (path) => path.replace(/^\/api\/scan-studio/, '/api'),

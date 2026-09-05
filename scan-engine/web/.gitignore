@@ -1,7 +1,0 @@
-node_modules/
-dist/
-ds-bundle/
-.ds-sync/
-.design-sync/.cache/
-.design-sync/learnings/
-.design-sync/node_modules

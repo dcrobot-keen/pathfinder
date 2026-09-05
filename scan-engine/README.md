@@ -1,6 +1,7 @@
 > 이 폴더는 2026-09-06 에 `dcrobot-keen/scan-to-map-studio` 저장소를 `pathfinder`(Fleet Studio) 모노레포로 합친 것이다(`git subtree`, 히스토리 보존).
 > 실행은 저장소 루트의 `npm run dev`(scan-engine 프로세스) 또는 아래 수동 방법. 화면(스캔 위저드·다중 스캔 정합)은 Fleet Studio 가 제공하고,
-> 이 폴더의 `web/`·생성 HTML 페이지는 디버그/오프라인용으로만 남아 있다.
+> 예전 React SPA(`web/`)는 제거했고, 파이썬이 생성하는 자체완결형 HTML 페이지(`/groups/{name}` 정합 페이지, 뷰어)만 디버그/오프라인용으로 남아 있다.
+> 라우트를 바꾸면 저장소 루트에서 `npm run gen:scan-engine-api` 로 클라이언트 타입을 다시 만든다(`scan-engine/openapi.json`, `src/scanStudio/scanEngine.gen.d.ts`).
 
 # scan-to-map-studio
 
