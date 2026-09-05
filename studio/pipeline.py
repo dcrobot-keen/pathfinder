@@ -365,10 +365,19 @@ def run_pipeline(
     (project_dir / "viewer.html").write_text(viewer_html, encoding="utf-8")
 
     layer_color = base_colors if base_colors is not None else (255, 0, 0, 255)
+    # 앱이 scan.usdz 옆에 구워 둔 textured.glb(RGB 키프레임을 메시에 베이킹한 것)가 있으면 그것을
+    # scan_mesh 로 넣는다 -- usdz 자체에는 텍스처가 없어 뷰어(시뮬레이터 3D)에서 회색으로만 보였다.
+    textured_glb = Path(usdz_path).with_name("textured.glb") if usdz_path is not None else None
+    if textured_glb is not None and not textured_glb.exists():
+        textured_glb = None
     save_overlay_glb(
         overlay_mesh,
         [PointCloudLayer(name="base_map", points=base_points, color=layer_color)],
         str(project_dir / "overlay.glb"),
+        textured_glb=textured_glb,
+    )
+    scan_summary.append(
+        f"<li>3D 오버레이: <code>overlay.glb</code> (원본 메시: {'textured.glb, 텍스처 포함' if textured_glb else 'usdz, 텍스처 없음' if overlay_mesh is not None else '없음'})</li>"
     )
 
     from datetime import datetime, timezone

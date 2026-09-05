@@ -9,11 +9,27 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import trimesh
 
 from studio.usdz_import import UsdzMesh
+
+# glTF is Y-up; our frame is Z-up with (x, y, z) = (x_arkit, -z_arkit, y_arkit) -- the same
+# conversion usdz_import applies to the usdz points, so both meshes land in one frame.
+_YUP_TO_ZUP = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=np.float64)
+
+
+def load_textured_scan_mesh(glb_path: str | Path) -> trimesh.Trimesh:
+    """The iOS app (vps-system/ios-capture TextureBaker) bakes the RGB keyframes onto the
+    LiDAR mesh and writes `textured.glb` next to `scan.usdz` -- the usdz itself carries no
+    texture. Load it as one textured Trimesh in our Z-up meters frame."""
+    loaded = trimesh.load(str(glb_path), force="mesh")
+    if not isinstance(loaded, trimesh.Trimesh):
+        raise ValueError(f"{glb_path}: expected a single mesh, got {type(loaded).__name__}")
+    loaded.apply_transform(_YUP_TO_ZUP)
+    return loaded
 
 
 @dataclass
@@ -26,10 +42,17 @@ class PointCloudLayer:
     color: tuple[int, int, int, int] | np.ndarray = (255, 0, 0, 255)
 
 
-def build_overlay_scene(mesh: UsdzMesh | None, point_clouds: list[PointCloudLayer]) -> trimesh.Scene:
+def build_overlay_scene(
+    mesh: UsdzMesh | None,
+    point_clouds: list[PointCloudLayer],
+    textured_glb: str | Path | None = None,
+) -> trimesh.Scene:
     scene = trimesh.Scene()
 
-    if mesh is not None:
+    if textured_glb is not None:
+        # prefer the app's baked textured mesh over the bare usdz geometry
+        scene.add_geometry(load_textured_scan_mesh(textured_glb), node_name="scan_mesh")
+    elif mesh is not None:
         visual = None
         if mesh.texture is not None and mesh.uv is not None:
             from PIL import Image
@@ -54,6 +77,11 @@ def build_overlay_scene(mesh: UsdzMesh | None, point_clouds: list[PointCloudLaye
     return scene
 
 
-def save_overlay_glb(mesh: UsdzMesh | None, point_clouds: list[PointCloudLayer], output_path: str) -> None:
-    scene = build_overlay_scene(mesh, point_clouds)
+def save_overlay_glb(
+    mesh: UsdzMesh | None,
+    point_clouds: list[PointCloudLayer],
+    output_path: str,
+    textured_glb: str | Path | None = None,
+) -> None:
+    scene = build_overlay_scene(mesh, point_clouds, textured_glb=textured_glb)
     scene.export(output_path)
