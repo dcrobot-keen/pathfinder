@@ -1,0 +1,9 @@
+numpy
+scipy
+plyfile
+matplotlib
+usd-core  # only needed for studio/usdz_import.py (reading .usdz/.usd scans)
+trimesh   # only needed for studio/gltf_export.py (building overlay .glb files)
+pygltflib # transitive glTF write support for trimesh's glb exporter
+Pillow    # texture image handling in studio/gltf_export.py
+opencv-python-headless  # only needed for studio/vectorize.py (Hough line detection)

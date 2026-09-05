@@ -1,0 +1,37 @@
+.s2m-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  line-height: 1.2;
+  transition: filter 0.12s ease;
+}
+.s2m-btn:hover {
+  filter: brightness(1.12);
+}
+.s2m-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.s2m-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #03191a;
+}
+
+.s2m-btn--ghost {
+  background: transparent;
+}
+
+.s2m-btn--danger {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.35);
+  background: transparent;
+}

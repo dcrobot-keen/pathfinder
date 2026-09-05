@@ -1,0 +1,81 @@
+"""A pair of OVERLAPPING slicemaps with a known relative pose -- test fixture
+for the alignment workspace, the quality metrics and (later) ICP, usable
+before any real overlapping scans exist.
+
+One synthetic room is sliced once; scan A keeps the left part, scan B the
+right part (they share the middle band), and B is re-gridded into its own
+local frame so that the TRUE alignment B -> A is exactly the given
+ScanAlignment. scripts/synthetic_overlap_pair.py writes such a pair to disk.
+"""
+from __future__ import annotations
+
+import math
+
+import numpy as np
+
+from studio.merge_slicemaps import CODE_FREE, CODE_OCC_FURNITURE, CODE_UNKNOWN, GroupAlignment, ScanAlignment, Slice, merge_slices
+from studio.preprocess import remove_ceiling
+from studio.slice_map import rasterize_slice, slice_to_codes
+from studio.synthetic_room import generate_room
+
+
+def inverse_alignment(a: ScanAlignment) -> ScanAlignment:
+    """The ScanAlignment that undoes `a` (same convention, slice-plane math)."""
+    c, s = math.cos(-a.yawRadians), math.sin(-a.yawRadians)
+    tx, ty = a.offsetX, -a.offsetZ                    # slice-frame translation of `a`
+    ix, iy = -(c * tx - s * ty), -(s * tx + c * ty)   # slice-frame translation of the inverse
+    return ScanAlignment(offsetX=ix, offsetZ=-iy, yawRadians=-a.yawRadians, method="inverse")
+
+
+def make_pair(
+    truth: ScanAlignment,
+    width: float = 8.0,
+    depth: float = 5.0,
+    split_lo: float = 2.5,
+    split_hi: float = 5.0,
+    resolution: float = 0.05,
+    seed: int = 0,
+    obstacles: tuple[tuple[float, float, float, float], ...] = ((3.6, 1.4, 0.4, 0.4),),
+) -> tuple[Slice, Slice]:
+    """Returns (scan_A in the reference frame, scan_B in its own local frame),
+    such that applying `truth` to B lands it on A. Overlap = x in [split_lo, split_hi].
+    `obstacles` = (x, y, w, h) blocks stamped into the grid (default: one in the
+    overlap band, see below)."""
+    pts = generate_room(width=width, depth=depth, points_per_surface=6000, seed=seed)
+    floor = remove_ceiling(pts, seed=seed).points
+    sg = rasterize_slice(floor, z=0.18, band=0.05, resolution=resolution)
+    codes = slice_to_codes(sg)
+    origin = (float(sg.occ.origin[0]), float(sg.occ.origin[1]))
+
+    # The synthetic floor is sparse (a few thousand points over the room), so
+    # rasterize_slice leaves most interior cells UNKNOWN. A real iPhone scan has
+    # a dense floor and the whole interior comes out FREE -- and the conflict
+    # metric relies on that (it only fires deep inside FREE). Fill the room's
+    # interior so the fixture behaves like real data.
+    cx = origin[0] + (np.arange(codes.shape[1]) + 0.5) * resolution
+    cy = origin[1] + (np.arange(codes.shape[0]) + 0.5) * resolution
+    inside = (cx[None, :] > 0.05) & (cx[None, :] < width - 0.05) & (cy[:, None] > 0.05) & (cy[:, None] < depth - 0.05)
+    codes[(codes == CODE_UNKNOWN) & inside] = CODE_FREE
+
+    # A bare rectangle is degenerate for ICP: sliding along the two long walls
+    # costs nothing (both stay collinear) and B's far wall lies where A never
+    # looked. Real rooms always have something in the shared zone -- a door
+    # frame, a cabinet, a pillar. Put one block in the overlap band so the
+    # fixture has the same anchor a real doorway gives.
+    for (bx, by, bw, bh) in obstacles:
+        block = (cx[None, :] >= bx) & (cx[None, :] <= bx + bw) & (cy[:, None] >= by) & (cy[:, None] <= by + bh)
+        codes[block] = CODE_OCC_FURNITURE
+
+    xs = origin[0] + (np.arange(codes.shape[1]) + 0.5) * resolution
+    a_codes = codes.copy(); a_codes[:, xs > split_hi] = CODE_UNKNOWN
+    b_codes = codes.copy(); b_codes[:, xs < split_lo] = CODE_UNKNOWN
+    scan_a = Slice(codes=a_codes, resolution=resolution, origin=origin, z=0.18, band=0.05)
+    b_ref = Slice(codes=b_codes, resolution=resolution, origin=origin, z=0.18, band=0.05)
+
+    # re-grid B into a local frame: local = truth^-1(ref). merge_slices needs a
+    # reference slice; a 1x1 unknown stub at the origin plays that role.
+    stub = Slice(codes=np.zeros((1, 1), dtype=np.uint8), resolution=resolution, origin=(0.0, 0.0), z=0.18, band=0.05)
+    ga = GroupAlignment(reference="stub", alignments={"b": inverse_alignment(truth)})
+    b_local = merge_slices({"stub": stub, "b": b_ref}, ga, padding_m=0.0)
+    b_local.sources = []
+    return scan_a, b_local

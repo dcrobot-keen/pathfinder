@@ -1,0 +1,7 @@
+# Only needed to run the local web UI's API server (server/app.py).
+# NOT needed for the CLI/pipeline (requirements.txt) -- kept separate so the
+# offline/air-gapped robot-network install path (PLAN.md section 7-1) never
+# needs a web framework.
+fastapi
+uvicorn[standard]
+python-multipart

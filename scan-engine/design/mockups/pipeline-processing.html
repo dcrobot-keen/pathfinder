@@ -1,0 +1,180 @@
+<!-- @dsCard group="Pipeline" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>scan-to-map-studio — 파이프라인 처리</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#121722; --panel-2:#1a212c; --panel-3:#0d1119; --border:#232b38;
+    --text:#e7ecf3; --text-dim:#8b96a8; --text-faint:#525c6c;
+    --accent:#4fd1c5; --accent-2:#22d3ee; --warn:#f5a623; --danger:#ef4444; --success:#34d399;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+    --font-mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-ui);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:13px}
+  .crumb .dim{color:var(--text-faint)}
+  .crumb .proj{font-weight:600}
+  .pill{font-size:11px;padding:4px 10px;border-radius:999px;background:rgba(79,209,197,.12);color:var(--accent);font-weight:600;font-family:var(--font-mono)}
+  .actions{display:flex;gap:8px}
+  .btn{border:1px solid var(--border);background:var(--panel-2);color:var(--text);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:transparent}
+  .btn.danger{color:var(--danger);border-color:rgba(239,68,68,.35)}
+
+  /* ribbon — inspired by FJD Trion Model's Start / Edit / Display tabs (PLAN.md §7) */
+  .ribbon{display:flex;gap:2px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--border)}
+  .rtab{padding:9px 16px;font-size:12.5px;color:var(--text-faint);border-bottom:2px solid transparent;cursor:pointer;font-weight:600}
+  .rtab.active{color:var(--accent);border-color:var(--accent)}
+  .ribbon-tools{display:flex;gap:6px;padding:8px 20px;background:var(--panel-3);border-bottom:1px solid var(--border);overflow-x:auto}
+  .rtool{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;font-size:10.5px;color:var(--text-dim);min-width:56px;cursor:pointer}
+  .rtool:hover{background:var(--panel-2)}
+  .rtool .ic{width:26px;height:26px;border-radius:6px;background:var(--panel-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px}
+  .rtool.disabled{opacity:.35;cursor:not-allowed}
+
+  .main{flex:1;display:flex;min-height:0}
+
+  .rail{width:230px;border-right:1px solid var(--border);background:var(--panel);padding:14px 10px;overflow-y:auto}
+  .rail-item{display:flex;gap:10px;padding:10px 8px;border-radius:8px;cursor:pointer;position:relative}
+  .rail-item.active{background:rgba(79,209,197,.08)}
+  .rail-item:not(:last-child)::after{content:"";position:absolute;left:22px;top:34px;width:1px;height:20px;background:var(--border)}
+  .dot{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);border:1.5px solid var(--border);color:var(--text-faint)}
+  .dot.done{background:var(--success);border-color:var(--success);color:#04241a}
+  .dot.active{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px rgba(79,209,197,.15)}
+  .dot.skip{border-style:dashed;color:var(--text-faint)}
+  .dot.error{border-color:var(--danger);color:var(--danger)}
+  .rail-label .t{font-size:12.5px;font-weight:600}
+  .rail-label .s{font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono);margin-top:1px}
+  .rail-item.active .rail-label .t{color:var(--accent)}
+
+  .center{flex:1;display:flex;flex-direction:column;min-width:0}
+  .stage-head{padding:16px 22px 12px;border-bottom:1px solid var(--border)}
+  .stage-head h1{font-size:15px;font-weight:600}
+  .stage-head p{font-size:12px;color:var(--text-faint);margin-top:3px;font-family:var(--font-mono)}
+  .preview{flex:1;display:flex;align-items:center;justify-content:center;background:
+    radial-gradient(circle at 50% 40%,#0f1621,#0a0d13);position:relative}
+  .preview svg{width:70%;max-width:520px}
+  .progress-ring{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--border);padding:10px 18px;border-radius:999px}
+  .bar{width:220px;height:6px;background:var(--panel-2);border-radius:999px;overflow:hidden}
+  .bar i{display:block;height:100%;width:62%;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+
+  .log{height:150px;border-top:1px solid var(--border);background:var(--panel-3);font-family:var(--font-mono);font-size:11.5px;padding:10px 16px;overflow-y:auto;color:var(--text-dim)}
+  .log .l1{color:var(--text-faint)}
+  .log .ok{color:var(--success)}
+  .log .warn{color:var(--warn)}
+
+  .side{width:260px;border-left:1px solid var(--border);background:var(--panel);padding:16px;overflow-y:auto}
+  .side h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:12px}
+  .param{margin-bottom:16px}
+  .param label{font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between;margin-bottom:6px}
+  .param .val{color:var(--accent-2);font-family:var(--font-mono)}
+  .slider{height:4px;background:var(--panel-2);border-radius:999px;position:relative}
+  .slider i{position:absolute;left:0;top:0;bottom:0;width:45%;background:var(--accent);border-radius:999px}
+  .slider .knob{position:absolute;left:45%;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:#fff}
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="crumb">
+      <span class="dim">프로젝트</span><span class="dim">/</span><span class="proj">officescan</span>
+      <span class="pill">처리중 3 / 6</span>
+    </div>
+    <div class="actions">
+      <button class="btn ghost">⏸ 일시정지</button>
+      <button class="btn danger">취소</button>
+    </div>
+  </div>
+
+  <!-- ribbon tabs, adapted from FJD Trion Model 벤치마킹 (PLAN.md §7): Start/Edit/Display → 처리/편집/디스플레이 -->
+  <div class="ribbon">
+    <div class="rtab active">처리 (Process)</div>
+    <div class="rtab">편집 (분류·벡터화)</div>
+    <div class="rtab">디스플레이</div>
+  </div>
+  <div class="ribbon-tools">
+    <div class="rtool"><div class="ic">▦</div>래스터화</div>
+    <div class="rtool"><div class="ic">⌗</div>정합</div>
+    <div class="rtool disabled"><div class="ic">◧</div>분류</div>
+    <div class="rtool disabled"><div class="ic">▱</div>벡터화</div>
+    <div class="rtool"><div class="ic">▤</div>단면(예정)</div>
+    <div class="rtool disabled"><div class="ic">✕</div>이동물체 제거</div>
+  </div>
+
+  <div class="main">
+    <div class="rail">
+      <div class="rail-item">
+        <div class="dot done">✓</div>
+        <div class="rail-label"><div class="t">1. 가져오기</div><div class="s">usdz_to_ply · 1.27M pts</div></div>
+      </div>
+      <div class="rail-item">
+        <div class="dot done">✓</div>
+        <div class="rail-label"><div class="t">2. 전처리</div><div class="s">천장/바닥 제거 · 955K pts</div></div>
+      </div>
+      <div class="rail-item active">
+        <div class="dot active">3</div>
+        <div class="rail-label"><div class="t">3. 래스터화</div><div class="s">2D occupancy grid 생성 중</div></div>
+      </div>
+      <div class="rail-item">
+        <div class="dot">4</div>
+        <div class="rail-label"><div class="t">4. 정합</div><div class="s">robot_map.pgm 대상</div></div>
+      </div>
+      <div class="rail-item">
+        <div class="dot">5</div>
+        <div class="rail-label"><div class="t">5. 분류</div><div class="s">바닥·벽·가구</div></div>
+      </div>
+      <div class="rail-item">
+        <div class="dot">6</div>
+        <div class="rail-label"><div class="t">6. 벡터화</div><div class="s">GeoJSON 내보내기</div></div>
+      </div>
+    </div>
+
+    <div class="center">
+      <div class="stage-head">
+        <h1>3. 래스터화 — 2D occupancy grid</h1>
+        <p>rasterize_base_map.py · resolution 5cm · obstacle_min_height 0.08m</p>
+      </div>
+      <div class="preview">
+        <svg viewBox="0 0 200 120">
+          <polygon points="20,15 150,15 150,60 100,60 100,100 20,100" fill="none" stroke="#e7ecf3" stroke-width="2" stroke-dasharray="2 2" opacity=".5"/>
+          <rect x="20" y="15" width="80" height="45" fill="#1a2734"/>
+          <rect x="100" y="15" width="0" height="0"/>
+        </svg>
+        <div class="progress-ring">
+          <span style="font-size:11px;font-family:'ui-monospace',monospace;color:var(--text-dim)">62%</span>
+          <div class="bar"><i></i></div>
+          <span style="font-size:11px;color:var(--text-faint)">약 8초 남음</span>
+        </div>
+      </div>
+      <div class="log">
+        <div class="l1">[12:04:31] rasterize_base_map.py base_map.ply projects/officescan/map --png</div>
+        <div>[12:04:31] grid 400×360 cells @ 0.05m</div>
+        <div class="ok">[12:04:33] free 118,204 · occupied 41,882 · unknown 79,514</div>
+        <div class="warn">[12:04:33] obstacle_min_height=0.08 vs 0.20 비교 결과 거의 동일 — 기본값 사용</div>
+        <div>[12:04:34] color top-down 렌더링 중…</div>
+      </div>
+    </div>
+
+    <div class="side">
+      <h3>파라미터</h3>
+      <div class="param">
+        <label>격자 해상도 <span class="val">5.0 cm</span></label>
+        <div class="slider"><i></i><div class="knob"></div></div>
+      </div>
+      <div class="param">
+        <label>장애물 최소 높이 <span class="val">0.08 m</span></label>
+        <div class="slider"><i style="width:20%"></i><div class="knob" style="left:20%"></div></div>
+      </div>
+      <h3 style="margin-top:22px">단계 통계</h3>
+      <div style="font-size:12px;color:var(--text-dim);line-height:2;font-family:var(--font-mono)">
+        free 118,204<br>
+        occupied 41,882<br>
+        unknown 79,514
+      </div>
+    </div>
+  </div>
+</body>
+</html>

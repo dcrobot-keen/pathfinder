@@ -1,0 +1,12 @@
+{
+  "pkg": "s2m-ui",
+  "globalName": "S2MUI",
+  "projectId": "5aac68bd-4b83-4df5-939e-ed8929140ab6",
+  "shape": "package",
+  "cssEntry": "./dist/index.css",
+  "overrides": {
+    "AppShell": { "cardMode": "column" },
+    "Modal": { "cardMode": "single", "viewport": "700x560" }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
