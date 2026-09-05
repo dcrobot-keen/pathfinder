@@ -21,6 +21,7 @@ import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
 import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource, activeProjectName, activeProjectFloorImage } from '../appShared.js';
 import { sendFleetOrder, subscribeFleetStream } from '../fleet/fleetApi.js';
+import { createFleetBoard } from '../fleet/fleetBoard.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
@@ -91,8 +92,17 @@ function pointInRing(x, y, ring) {
  * @param {HTMLElement} panelEl
  * @param {'nodelink' | 'obstacle'} mode
  */
-export function createPathfindingTab(mapEl, panelEl, mode) {
+/**
+ * variant 'demo' (기본): 시뮬레이션 화면 -- 시작/도착점을 찍어 애니메이션 로봇을 굴리고
+ *   충돌 회피(정지/재탐색)를 본다. 실제 로봇 이동 명령 박스도 함께 있다.
+ * variant 'operate': 운영 화면 -- 왼쪽에 플릿 보드(로봇 목록·상태·취소/일시정지)와 이동
+ *   명령만 두고, 데모용 컨트롤과 시작/도착점 클릭은 숨긴다. 지도 클릭은 "목적지 클릭"
+ *   모드에서만 살아 있다. (M1: 화면 재배치, doc/vda5050-rcs.md · 플릿 스튜디오 기획서)
+ */
+export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } = {}) {
   const config = MODE_CONFIG[mode];
+  const isOperate = variant === 'operate';
+  let fleetBoard = null;
 
   const floorLayer = new WebGLVectorLayer({
     source: pcdSource,
@@ -181,6 +191,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
   const draw = new Draw({ source: interactionSource, type: 'Point' });
   map.addInteraction(draw);
+  if (isOperate) draw.setActive(false); // 운영 화면은 "목적지 클릭" 모드에서만 지도 클릭을 받는다
   if (config.snapping) {
     map.addInteraction(new Snap({ source: nodeLinkSource }));
   }
@@ -809,7 +820,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
   const title = document.createElement('div');
   title.className = 'pathfinding-panel-title';
-  title.textContent = config.title;
+  title.textContent = isOperate ? '운영 · 로봇 이동' : config.title;
   panelEl.appendChild(title);
 
   const robotSelect = document.createElement('select');
@@ -818,7 +829,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   customOption.value = '';
   customOption.textContent = '로봇: 사용자 지정 (알고리즘 직접 선택)';
   robotSelect.appendChild(customOption);
-  panelEl.appendChild(robotSelect);
+  if (!isOperate) panelEl.appendChild(robotSelect);
 
   const algorithmSelect = document.createElement('select');
   algorithmSelect.className = 'pathfinding-select';
@@ -828,7 +839,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     opt.textContent = label;
     algorithmSelect.appendChild(opt);
   });
-  panelEl.appendChild(algorithmSelect);
+  if (!isOperate) panelEl.appendChild(algorithmSelect);
 
   robotSelect.addEventListener('change', () => {
     const robot = robotsById.get(robotSelect.value);
@@ -877,6 +888,18 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   commandStatus.className = 'pathfinding-command-status';
   commandBox.append(commandTitle, commandSelect, commandBtn, commandStatus);
   panelEl.appendChild(commandBox);
+  if (isOperate) {
+    // 플릿 보드가 명령 박스 위에 온다: 행을 누르면 그 로봇이 명령 대상이 된다.
+    const boardEl = document.createElement('div');
+    panelEl.insertBefore(boardEl, commandBox);
+    fleetBoard = createFleetBoard(boardEl, {
+      onSelect: (r) => {
+        if (r?.registry && commandRobotsById.has(r.registry.id)) commandSelect.value = r.registry.id;
+        commandStatus.textContent = r ? `${r.registry?.name ?? r.serialNumber} 선택됨` : '';
+      },
+      onStatus: (text) => { commandStatus.textContent = text; },
+    });
+  }
 
   let commandMode = false;
   const fleetBySerial = new Map(); // serialNumber -> 플릿 레코드(position, connectionState, state)
@@ -886,6 +909,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
 
   function setCommandMode(on) {
     commandMode = on;
+    if (isOperate) draw.setActive(on);
     commandBtn.classList.toggle('active', on);
     commandBtn.textContent = on ? '지도를 클릭하세요 (취소)' : '목적지 클릭';
     if (on) commandStatus.textContent = '목적지를 지도에서 클릭하세요.';
@@ -1017,11 +1041,11 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     conflictModeSelect.appendChild(opt);
   });
   conflictModeRow.append(conflictModeLabel, conflictModeSelect);
-  panelEl.appendChild(conflictModeRow);
+  if (!isOperate) panelEl.appendChild(conflictModeRow);
 
   const activeListEl = document.createElement('div');
   activeListEl.className = 'pathfinding-active-list';
-  panelEl.appendChild(activeListEl);
+  if (!isOperate) panelEl.appendChild(activeListEl);
 
   // 드래그 중인 항목의 id — dragover/drop 핸들러끼리 공유하는 상태.
   let draggedAnimId = null;
@@ -1139,7 +1163,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   resetBtn.textContent = '초기화';
   resetBtn.addEventListener('click', reset);
   buttonRow.append(randomBtn, resetBtn);
-  panelEl.appendChild(buttonRow);
+  if (!isOperate) panelEl.appendChild(buttonRow);
 
   const statusEl = document.createElement('div');
   statusEl.className = 'pathfinding-status';
@@ -1148,7 +1172,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   function setStatus(text) {
     statusEl.textContent = text;
   }
-  setStatus(config.hint);
+  setStatus(isOperate ? '왼쪽 목록에서 로봇을 고르고 "목적지 클릭" 뒤 지도를 클릭하세요.' : config.hint);
 
   function resize() {
     map.updateSize();

@@ -13,6 +13,9 @@
 //
 //   node scripts/live-pose-smoke.mjs
 import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { scanBasemapToMap, mapToScanBasemap, yawFromQuaternion, arkitPoseToGroundPose } from '../src/livePoseTransform.js';
 
@@ -93,9 +96,10 @@ function check(name, cond, extra = '') {
 // --- 2. server/index.mjs를 자식 프로세스로 띄워 PUT + WebSocket fan-out 확인 ---
 const PORT = 4791;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const dataDir = await mkdtemp(join(tmpdir(), 'pathfinder-live-pose-smoke-'));
 
 const server = spawn(process.execPath, ['server/index.mjs'], {
-  env: { ...process.env, PORT: String(PORT) },
+  env: { ...process.env, PORT: String(PORT), PATHFINDER_DATA_DIR: dataDir },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let serverLog = '';
@@ -154,7 +158,7 @@ try {
   driveSub.on('message', (data) => driveMessages.push(JSON.parse(data.toString())));
   await new Promise((resolve) => driveSub.on('open', resolve));
 
-  const drivePutRes = await fetch(`http://localhost:${PORT}/api/drive-request/tb3-sim-01`, {
+  const drivePutRes = await fetch(`http://localhost:${PORT}/api/drive-request/relay-bot-01`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: [[0, 0], [1, 0], [1, 1]] }),
@@ -163,10 +167,10 @@ try {
   await wait(150);
   check(
     '구독자가 drive-request를 실시간으로 받는다',
-    driveMessages.some((m) => m.robotId === 'tb3-sim-01' && m.path.length === 3)
+    driveMessages.some((m) => m.robotId === 'relay-bot-01' && m.path.length === 3)
   );
 
-  const emptyPathRes = await fetch(`http://localhost:${PORT}/api/drive-request/tb3-sim-01`, {
+  const emptyPathRes = await fetch(`http://localhost:${PORT}/api/drive-request/relay-bot-01`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: [] }),
@@ -179,8 +183,10 @@ try {
 } catch (err) {
   console.log(`FAIL  unexpected error: ${err.stack || err}`);
   failures++;
+} finally {
+  server.kill();
+  await rm(dataDir, { recursive: true, force: true }).catch(() => {});
 }
 
-server.kill();
 console.log(failures === 0 ? '\nall live-pose smoke checks passed' : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -23,7 +23,7 @@ import { loadImportedObstacles } from './importedObstaclesApi.js';
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
-import { createFleetTab } from './fleet/tab.js';
+import { createBrokerSettings } from './fleet/brokerSettings.js';
 import { createProjectSelector } from './projects/projectSelector.js';
 
 createProjectSelector(document.getElementById('project-selector'));
@@ -157,44 +157,66 @@ renderSlicePanel(document.getElementById('slice-panel'), [], [], [
 const tabButtons = document.querySelectorAll('.tab-button');
 const viewEls = document.querySelectorAll('.view');
 const view3dEl = document.getElementById('view3d');
+const subTabBar = document.getElementById('maps-subtabs');
+const subTabButtons = subTabBar.querySelectorAll('.subtab');
 
 let view3d = null;
 let currentPoints = [];
 let sliceLayers = [];
-let pfObstacleTab = null;
+let operateTab = null;
+let simulationTab = null;
 let robotsTab = null;
-let fleetTab = null;
+let settingsTab = null;
+let mapsSub = '2d';
 
-function activateTab(tabKey) {
-  tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
-  viewEls.forEach((el) => el.classList.toggle('active', el.dataset.view === tabKey));
+// 탭 = 정보 구조(플릿 스튜디오 기획서 §5): 지도(2D/3D) · 로봇 · 운영 · 시뮬레이션 · 설정.
+// "운영"과 "시뮬레이션"은 같은 길찾기 모듈의 두 변형이고, 각 화면은 처음 열 때 한 번 만든다.
+function showView(key) {
+  viewEls.forEach((el) => el.classList.toggle('active', el.dataset.view === key));
+}
 
-  if (tabKey === '2d') {
+function activateMapsSub(sub) {
+  mapsSub = sub;
+  subTabButtons.forEach((b) => b.classList.toggle('active', b.dataset.sub === sub));
+  showView(sub);
+  if (sub === '2d') {
     map.updateSize();
     return;
   }
-
-  if (tabKey === '3d') {
-    if (!view3d) {
-      view3d = createView3D(view3dEl);
-      if (currentPoints.length) {
-        view3d.setPoints(currentPoints);
-      }
+  if (!view3d) {
+    view3d = createView3D(view3dEl);
+    if (currentPoints.length) {
+      view3d.setPoints(currentPoints);
     }
-    view3d.resize();
+  }
+  view3d.resize();
+}
+
+function activateTab(tabKey) {
+  tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
+  subTabBar.hidden = tabKey !== 'maps';
+
+  if (tabKey === 'maps') {
+    activateMapsSub(mapsSub);
+    return;
+  }
+  showView(tabKey);
+
+  if (tabKey === 'operate') {
+    if (!operateTab) {
+      operateTab = createPathfindingTab(document.getElementById('operate'), document.getElementById('operate-panel'), 'obstacle', { variant: 'operate' });
+      operateTab.fitToData();
+    }
+    operateTab.resize();
     return;
   }
 
-  if (tabKey === 'pf-obstacle') {
-    if (!pfObstacleTab) {
-      pfObstacleTab = createPathfindingTab(
-        document.getElementById('pf-obstacle'),
-        document.getElementById('pf-obstacle-panel'),
-        'obstacle'
-      );
-      pfObstacleTab.fitToData();
+  if (tabKey === 'simulation') {
+    if (!simulationTab) {
+      simulationTab = createPathfindingTab(document.getElementById('simulation'), document.getElementById('simulation-panel'), 'obstacle', { variant: 'demo' });
+      simulationTab.fitToData();
     }
-    pfObstacleTab.resize();
+    simulationTab.resize();
     return;
   }
 
@@ -202,14 +224,13 @@ function activateTab(tabKey) {
     robotsTab = createRobotRegistryTab(document.getElementById('robots'));
   }
 
-  // VDA5050 관제(doc/vda5050-rcs.md): 브로커 설정 + 구독 로봇 표. 마커는 2D/길찾기
-  // 탭의 liveRobotPose.js가 그대로 그린다.
-  if (tabKey === 'fleet' && !fleetTab) {
-    fleetTab = createFleetTab(document.getElementById('fleet'));
+  if (tabKey === 'settings' && !settingsTab) {
+    settingsTab = createBrokerSettings(document.getElementById('settings'));
   }
 }
 
 tabButtons.forEach((btn) => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+subTabButtons.forEach((btn) => btn.addEventListener('click', () => activateMapsSub(btn.dataset.sub)));
 
 /**
  * 새로 로드된 PCD 포인트를 2D 지도(높이 슬라이스 포함)와 3D 뷰 양쪽에 동시에 반영한다.

@@ -16,11 +16,15 @@
         <input id="pcd-file-input" type="file" accept=".pcd" />
       </label>
       <div id="pcd-status" class="pcd-status"></div>
-      <button id="tab-3d" class="tab-button" data-tab="3d">3D 뷰</button>
-      <button id="tab-2d" class="tab-button active" data-tab="2d">2D 뷰</button>
-      <button id="tab-robots" class="tab-button" data-tab="robots">로봇 등록</button>
-      <button id="tab-pf-obstacle" class="tab-button" data-tab="pf-obstacle">길찾기 (장애물)</button>
-      <button id="tab-fleet" class="tab-button" data-tab="fleet">플릿 (RCS)</button>
+      <button id="tab-maps" class="tab-button active" data-tab="maps">지도</button>
+      <button id="tab-robots" class="tab-button" data-tab="robots">로봇</button>
+      <button id="tab-operate" class="tab-button" data-tab="operate">운영</button>
+      <button id="tab-simulation" class="tab-button" data-tab="simulation">시뮬레이션</button>
+      <button id="tab-settings" class="tab-button" data-tab="settings">설정</button>
+      <div id="maps-subtabs" class="subtab-bar">
+        <button class="subtab active" data-sub="2d">2D</button>
+        <button class="subtab" data-sub="3d">3D</button>
+      </div>
     </div>
     <div id="map" class="view active" data-view="2d">
       <div id="slice-panel"></div>
@@ -36,11 +40,14 @@
         <div id="mesh-status" class="mesh-status"></div>
       </div>
     </div>
-    <div id="pf-obstacle" class="view" data-view="pf-obstacle">
-      <div id="pf-obstacle-panel"></div>
+    <div id="operate" class="view" data-view="operate">
+      <div id="operate-panel"></div>
+    </div>
+    <div id="simulation" class="view" data-view="simulation">
+      <div id="simulation-panel"></div>
     </div>
     <div id="robots" class="view" data-view="robots"></div>
-    <div id="fleet" class="view" data-view="fleet"></div>
+    <div id="settings" class="view" data-view="settings"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -849,3 +849,201 @@ body {
 .project-scan-button {
   margin-left: 4px;
 }
+
+/* ---- M1: 정보 구조 탭 (지도 하위 2D/3D 전환) ---- */
+.subtab-bar {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.subtab-bar[hidden] {
+  display: none;
+}
+
+.subtab {
+  border: none;
+  background: transparent;
+  color: #bbb;
+  font: 12px sans-serif;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.subtab.active {
+  background: #4a90e2;
+  color: #fff;
+}
+
+/* ---- 운영 › 플릿 보드 ---- */
+.fleet-board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.fleet-board-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.fleet-board-title {
+  font-weight: bold;
+  color: #fff;
+}
+
+.fleet-board-broker {
+  font-size: 11px;
+  color: #e57373;
+}
+
+.fleet-board-broker.on {
+  color: #81c784;
+}
+
+.fleet-board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.fleet-board-empty {
+  font-size: 12px;
+  color: #999;
+}
+
+.fleet-board-empty[hidden] {
+  display: none;
+}
+
+.fleet-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  color: #eee;
+}
+
+.fleet-row:hover,
+.fleet-row:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+.fleet-row.selected {
+  background: rgba(255, 152, 0, 0.18);
+  box-shadow: inset 0 0 0 1px #ff9800;
+}
+
+.fleet-row.offline {
+  color: #aaa;
+}
+
+.fleet-row-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.fleet-row-icon[hidden] {
+  visibility: hidden;
+}
+
+.fleet-row-name {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.fleet-row-sub {
+  font-size: 11px;
+  color: #bbb;
+}
+
+.fleet-row-error {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: #ef9a9a;
+}
+
+.fleet-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.fleet-pill {
+  font-size: 12px;
+}
+
+.fleet-pill.driving {
+  color: #81c784;
+}
+
+.fleet-pill.paused {
+  color: #ffb74d;
+}
+
+.fleet-pill.idle {
+  color: #90caf9;
+}
+
+.fleet-pill.off {
+  color: #777;
+}
+
+.fleet-row-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 4px;
+}
+
+.fleet-row-actions .robot-button {
+  flex: none;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+/* ---- 설정 ---- */
+.settings-panel {
+  position: static;
+  flex: 1 1 320px;
+  max-width: 420px;
+}
+
+.settings-services {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #555;
+}
+
+.settings-services b {
+  display: block;
+  color: #222;
+  margin-bottom: 2px;
+}
+
+.settings-services code {
+  font-size: 11.5px;
+  background: #f3f3f3;
+  padding: 0 3px;
+  border-radius: 3px;
+}
