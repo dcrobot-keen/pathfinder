@@ -42,6 +42,7 @@ export async function createScanProject(name) {
 }
 
 export async function processScanProject(name, {
+  scanFile,
   usdzFile,
   robotMapPgm = null,
   robotMapYaml = null,
@@ -49,8 +50,12 @@ export async function processScanProject(name, {
   removeIsolatedClusters = false,
   classify = false,
 }) {
+  const file = scanFile || usdzFile;
   const form = new FormData();
-  form.set('usdz', usdzFile);
+  if (file) {
+    form.set('scan_file', file);
+    form.set('usdz', file);
+  }
   if (robotMapPgm) form.set('robot_map_pgm', robotMapPgm);
   if (robotMapYaml) form.set('robot_map_yaml', robotMapYaml);
   if (trajectory) form.set('trajectory', trajectory);
@@ -63,6 +68,17 @@ export async function processScanProject(name, {
   });
 }
 
+export async function uploadGroupZip(file, name = '') {
+  const form = new FormData();
+  form.set('file', file);
+  if (name) form.set('name', name);
+  return request('/groups/upload', {
+    method: 'POST',
+    body: form,
+  });
+}
+
 export async function getScanProjectStatus(name) {
   return request(`/projects/${encodeURIComponent(name)}/status`);
 }
+

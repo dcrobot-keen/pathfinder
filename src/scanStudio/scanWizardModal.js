@@ -5,9 +5,10 @@
  */
 
 import { createScanProject, processScanProject, getScanProjectStatus } from './scanStudioApi.js';
+import { createProject, createProjectFromSlicemap } from '../projects/projectApi.js';
 
 const STEP_LABELS = [
-  ['import', '1. 가져오기 (USDZ 파싱)'],
+  ['import', '1. 가져오기 (스캔 모델 파싱)'],
   ['preprocess', '2. 전처리 (천장 자동 제거)'],
   ['rasterize', '3. 래스터화 (점유 격자 생성)'],
   ['registration', '4. 정합 (로봇 지도 ICP 정합)'],
@@ -54,7 +55,7 @@ export function initScanWizardModal() {
           <span class="wizard-header-icon">⚡</span>
           <div>
             <h3 id="wizard-title">스캔 데이터 파이프라인 마법사</h3>
-            <p class="wizard-header-sub">iPhone LiDAR 스캔 (.usdz) → 2D 베이스맵 & 장애물 자동 추출</p>
+            <p class="wizard-header-sub">iPhone 스캔 패키지 (.zip) 또는 LiDAR 메시 (.usdz) → 2D 베이스맵 & 장애물 자동 추출</p>
           </div>
         </div>
         <button id="wizard-btn-close" class="wizard-close-btn" title="닫기">&times;</button>
@@ -83,22 +84,22 @@ export function initScanWizardModal() {
       </div>
 
       <div class="wizard-body">
-        <!-- STEP 1: 프로젝트 이름 & USDZ 업로드 -->
+        <!-- STEP 1: 프로젝트 이름 & USDZ/ZIP 업로드 -->
         <div class="wizard-pane" id="wizard-pane-1">
           <label class="wizard-label" for="wizard-input-name">프로젝트 이름</label>
           <input type="text" id="wizard-input-name" class="wizard-input" placeholder="예: scan_office" />
           <p class="wizard-hint">저장소 및 정합 워크스페이스에서 구분할 프로젝트 식별자입니다.</p>
 
-          <label class="wizard-label" style="margin-top: 16px;">iPhone LiDAR 스캔 파일 (.usdz / .ply)</label>
+          <label class="wizard-label" style="margin-top: 16px;">스캔 데이터 파일 (.zip / .usdz / .ply)</label>
           <div class="wizard-dropzone" id="dropzone-usdz">
-            <input type="file" id="file-usdz" accept=".usdz,.ply" style="display:none" />
-            <div class="dropzone-icon">📥</div>
-            <div class="dropzone-title"><b>scan.usdz</b> 파일을 드래그하거나 클릭하여 선택</div>
-            <div class="dropzone-sub">iPhone 스캔 앱이 생성한 3D LiDAR 스캔 파일</div>
+            <input type="file" id="file-usdz" accept=".zip,.usdz,.ply" style="display:none" />
+            <div class="dropzone-icon">📦</div>
+            <div class="dropzone-title"><b>스캔 파일 (.zip 또는 .usdz)</b> 드래그하거나 클릭하여 선택</div>
+            <div class="dropzone-sub">💡 iPhone 앱 내보내기 <b>.zip</b> (바닥 도면 & 다중 스캔 포함, 권장) 또는 단일 <b>.usdz</b></div>
           </div>
           <div id="file-pill-usdz" class="file-pill" style="display: none;">
-            <span class="file-pill-icon">◧</span>
-            <span class="file-pill-name" id="pill-usdz-name">scan.usdz</span>
+            <span class="file-pill-icon">📦</span>
+            <span class="file-pill-name" id="pill-usdz-name">scan_package.zip</span>
             <span class="file-pill-size" id="pill-usdz-size">0 MB</span>
             <button type="button" class="file-pill-remove" id="btn-remove-usdz" title="제거">&times;</button>
           </div>
@@ -193,11 +194,14 @@ export function initScanWizardModal() {
             <div class="completion-title">🎉 스캔 파이프라인 처리가 완료되었습니다!</div>
             <div class="completion-desc" id="pipeline-completion-desc">베이스맵 생성 및 GeoJSON 장애물 추출이 성공적으로 완료되었습니다.</div>
             <div class="completion-actions">
-              <button type="button" id="btn-complete-to-studio" class="wizard-btn wizard-btn-primary">
-                🔄 정합 스튜디오(:8000)로 이동하여 확인
+              <button type="button" id="btn-complete-create-project" class="wizard-btn wizard-btn-primary">
+                📐 새 현장으로 생성 (스캔 지도 적용)
+              </button>
+              <button type="button" id="btn-complete-to-studio" class="wizard-btn wizard-btn-secondary">
+                🔄 정합 스튜디오(:8000)에서 확인
               </button>
               <button type="button" id="btn-complete-close" class="wizard-btn wizard-btn-secondary">
-                완료 및 닫기
+                닫기
               </button>
             </div>
           </div>
@@ -289,10 +293,15 @@ function bindEvents() {
   });
 
   // Completion actions
+  overlay.querySelector('#btn-complete-create-project').addEventListener('click', () => {
+    createPathfinderProjectFromScan(state.activeProjectName);
+  });
   overlay.querySelector('#btn-complete-to-studio').addEventListener('click', () => {
     closeScanWizardModal();
-    const studioBtn = document.getElementById('subnav-scan-studio');
+    const studioBtn = document.querySelector('#subnav-maps button[data-sub="studio"]');
     if (studioBtn) studioBtn.click();
+    const mapsTabBtn = document.querySelector('.gnb-tab[data-tab="maps"]');
+    if (mapsTabBtn) mapsTabBtn.click();
   });
   overlay.querySelector('#btn-complete-close').addEventListener('click', closeScanWizardModal);
 }
@@ -302,7 +311,10 @@ function setUsdzFile(file) {
   const pill = modalEl.querySelector('#file-pill-usdz');
   const dropzone = modalEl.querySelector('#dropzone-usdz');
   if (file) {
-    modalEl.querySelector('#pill-usdz-name').textContent = file.name;
+    const isZip = file.name.toLowerCase().endsWith('.zip');
+    const iconEl = modalEl.querySelector('#file-pill-usdz .file-pill-icon');
+    if (iconEl) iconEl.textContent = isZip ? '📦' : '◧';
+    modalEl.querySelector('#pill-usdz-name').textContent = `${file.name} ${isZip ? '[스캔 ZIP 패키지]' : '[3D LiDAR 메시]'}`;
     modalEl.querySelector('#pill-usdz-size').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB`;
     pill.style.display = 'flex';
     dropzone.style.display = 'none';
@@ -413,7 +425,8 @@ async function startPipelineExecution() {
     await createScanProject(state.name);
 
     // 2. Submit process job
-    await processScanProject(state.name, {
+    const res = await processScanProject(state.name, {
+      scanFile: state.usdzFile,
       usdzFile: state.usdzFile,
       robotMapPgm: state.robotMapPgm,
       robotMapYaml: state.robotMapYaml,
@@ -426,7 +439,12 @@ async function startPipelineExecution() {
 
     // Transition to step 4
     goToStep(4);
-    startStatusPolling();
+
+    if (res && res.type === 'group') {
+      handleGroupRegistrationSuccess(res);
+    } else {
+      startStatusPolling(res);
+    }
   } catch (err) {
     state.submitting = false;
     updateButtonStates();
@@ -435,7 +453,7 @@ async function startPipelineExecution() {
   }
 }
 
-function startStatusPolling() {
+function startStatusPolling(processRes = null) {
   if (pollTimer) clearInterval(pollTimer);
 
   const consoleEl = modalEl.querySelector('#wizard-log-console');
@@ -505,8 +523,9 @@ function startStatusPolling() {
         badgeEl.textContent = '처리 완료 (100%)';
         badgeEl.className = 'pipeline-phase-pill done';
         completionBox.style.display = 'block';
+        const hasFloor = processRes?.has_floorplan ? ' 바닥 도면(floorplan)이 포함되어 2D 지도 배경에 표시됩니다.' : '';
         modalEl.querySelector('#pipeline-completion-desc').textContent =
-          `프로젝트 [${state.activeProjectName}]의 천장 제거, 베이스맵 및 장애물 추출이 완료되었습니다.`;
+          `프로젝트 [${state.activeProjectName}]의 천장 제거, 베이스맵 및 장애물 추출이 완료되었습니다.${hasFloor}`;
       } else if (s.phase === 'error') {
         clearInterval(pollTimer);
         pollTimer = null;
@@ -519,6 +538,89 @@ function startStatusPolling() {
       }
     }
   }, 1000);
+}
+
+function handleGroupRegistrationSuccess(res) {
+  const consoleEl = modalEl.querySelector('#wizard-log-console');
+  const badgeEl = modalEl.querySelector('#pipeline-status-badge');
+  const progressBar = modalEl.querySelector('#pipeline-progress-bar');
+  const percentText = modalEl.querySelector('#pipeline-percent-text');
+  const completionBox = modalEl.querySelector('#pipeline-completion-box');
+
+  consoleEl.innerHTML = `
+    <div class="log-line info">다중 스캔 프로젝트(Scan Group) 패키지 감지됨</div>
+    <div class="log-line success">포함된 group_alignment.json 및 개별 스캔 데이터가 정합 스튜디오에 배포되었습니다.</div>
+    <div class="log-line success">스캔 슬라이스 및 바닥 도면 준비 완료.</div>
+  `;
+  badgeEl.textContent = '그룹 정합 준비 완료 (100%)';
+  badgeEl.className = 'pipeline-phase-pill done';
+  progressBar.style.width = '100%';
+  percentText.textContent = '100%';
+
+  const rails = modalEl.querySelectorAll('.rail-step');
+  rails.forEach((r) => {
+    r.classList.remove('pending', 'active', 'error');
+    r.classList.add('done');
+    const sl = r.querySelector('.rail-step-status');
+    if (sl) sl.textContent = '그룹 반영됨';
+  });
+
+  completionBox.style.display = 'block';
+  completionBox.querySelector('.completion-title').textContent = '🎉 다중 스캔 프로젝트(Scan Group) 등록 완료!';
+  completionBox.querySelector('#pipeline-completion-desc').textContent =
+    `프로젝트 [${res.group || state.name}]의 다중 스캔 그룹이 정합 스튜디오에 등록되었습니다. 정합 스튜디오에서 각 스캔의 정합을 확인하고 완성 지도를 생성할 수 있습니다.`;
+  
+  // For groups, hide single-scan project creation button or redirect to studio
+  const btnCreate = modalEl.querySelector('#btn-complete-create-project');
+  if (btnCreate) {
+    btnCreate.textContent = '🔄 정합 스튜디오에서 다중 스캔 확인/합성';
+    btnCreate.onclick = () => {
+      closeScanWizardModal();
+      const studioBtn = document.querySelector('#subnav-maps button[data-sub="studio"]');
+      if (studioBtn) studioBtn.click();
+      const mapsTabBtn = document.querySelector('.gnb-tab[data-tab="maps"]');
+      if (mapsTabBtn) mapsTabBtn.click();
+    };
+  }
+}
+
+async function createPathfinderProjectFromScan(projectName) {
+  const btn = modalEl.querySelector('#btn-complete-create-project');
+  if (btn) btn.disabled = true;
+  try {
+    const slicemapRes = await fetch(`/scan-files/${encodeURIComponent(projectName)}/${encodeURIComponent(projectName)}.slicemap.json`);
+    if (slicemapRes.ok) {
+      const slicemap = await slicemapRes.json();
+      let floor = undefined;
+      const floorPngRes = await fetch(`/scan-files/${encodeURIComponent(projectName)}/floorplan.png`);
+      const floorJsonRes = await fetch(`/scan-files/${encodeURIComponent(projectName)}/floorplan.json`);
+      if (floorPngRes.ok && floorJsonRes.ok) {
+        const floorBlob = await floorPngRes.blob();
+        const png = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(floorBlob);
+        });
+        const meta = await floorJsonRes.json();
+        floor = { png, meta };
+      }
+      const p = await createProjectFromSlicemap({ name: projectName, slicemap, floor });
+      closeScanWizardModal();
+      const url = new URL(location.href);
+      url.searchParams.set('project', p.id);
+      location.href = url.toString();
+      return;
+    }
+    // Fallback: create normal project and switch
+    const p = await createProject({ name: projectName, sizeX: 50, sizeY: 50 });
+    closeScanWizardModal();
+    const url = new URL(location.href);
+    url.searchParams.set('project', p.id);
+    location.href = url.toString();
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    alert(`현장 생성 실패: ${err.message}`);
+  }
 }
 
 function escapeHtml(str) {
@@ -560,3 +662,4 @@ export function closeScanWizardModal() {
   }
   if (modalEl) modalEl.style.display = 'none';
 }
+
