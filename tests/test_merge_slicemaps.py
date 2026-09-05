@@ -143,8 +143,25 @@ def test_alignment_file_formats() -> None:
               "slicemap-v1 round-trip incl. sources provenance")
 
 
+def test_canonical_alignment_vectors() -> None:
+    """scan-format/alignment-vectors.json is shared with the Swift and JS
+    implementations; the Python one generated it, so this guards against the
+    formula drifting here later."""
+    p = Path(__file__).resolve().parent.parent / "scan-format" / "alignment-vectors.json"
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    check(doc["format"] == "scan-alignment-vectors-v1", "vectors file format")
+    tol = doc["tolerance"]
+    for c in doc["cases"]:
+        a = ScanAlignment(**{k: c["alignment"][k] for k in ("offsetX", "offsetZ", "yawRadians")})
+        x, z = a.apply_xz(*c["arkit_xz"])
+        assert abs(x - c["expected_arkit_xz"][0]) < tol and abs(z - c["expected_arkit_xz"][1]) < tol, c
+        sx, sy = a.apply_xy(np.array([c["slice_xy"]]))[0]
+        assert abs(sx - c["expected_slice_xy"][0]) < tol and abs(sy - c["expected_slice_xy"][1]) < tol, c
+    check(True, f"{len(doc['cases'])} canonical vectors reproduced")
+
+
 if __name__ == "__main__":
-    for t in [test_alignment_matches_swift_formula, test_identity_merge_is_the_input,
+    for t in [test_alignment_matches_swift_formula, test_canonical_alignment_vectors, test_identity_merge_is_the_input,
               test_rotated_scan_lands_where_the_formula_says, test_row_layout_does_not_overlap,
               test_alignment_file_formats]:
         print(t.__name__)
