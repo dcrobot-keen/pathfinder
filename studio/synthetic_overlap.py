@@ -13,7 +13,7 @@ import math
 
 import numpy as np
 
-from studio.merge_slicemaps import CODE_UNKNOWN, GroupAlignment, ScanAlignment, Slice, merge_slices
+from studio.merge_slicemaps import CODE_FREE, CODE_UNKNOWN, GroupAlignment, ScanAlignment, Slice, merge_slices
 from studio.preprocess import remove_ceiling
 from studio.slice_map import rasterize_slice, slice_to_codes
 from studio.synthetic_room import generate_room
@@ -43,6 +43,16 @@ def make_pair(
     sg = rasterize_slice(floor, z=0.18, band=0.05, resolution=resolution)
     codes = slice_to_codes(sg)
     origin = (float(sg.occ.origin[0]), float(sg.occ.origin[1]))
+
+    # The synthetic floor is sparse (a few thousand points over the room), so
+    # rasterize_slice leaves most interior cells UNKNOWN. A real iPhone scan has
+    # a dense floor and the whole interior comes out FREE -- and the conflict
+    # metric relies on that (it only fires deep inside FREE). Fill the room's
+    # interior so the fixture behaves like real data.
+    cx = origin[0] + (np.arange(codes.shape[1]) + 0.5) * resolution
+    cy = origin[1] + (np.arange(codes.shape[0]) + 0.5) * resolution
+    inside = (cx[None, :] > 0.05) & (cx[None, :] < width - 0.05) & (cy[:, None] > 0.05) & (cy[:, None] < depth - 0.05)
+    codes[(codes == CODE_UNKNOWN) & inside] = CODE_FREE
 
     xs = origin[0] + (np.arange(codes.shape[1]) + 0.5) * resolution
     a_codes = codes.copy(); a_codes[:, xs > split_hi] = CODE_UNKNOWN
