@@ -591,6 +591,14 @@ $('btnSave').addEventListener('click', async () => {
       $('saveResult').innerHTML = `저장됨.${pendingMsg}<br>합성: ${res.merged_summary}<br>` +
         (res.published ? `시뮬레이터로 내보냄: <code>${res.published}</code>` : '시뮬레이터 내보내기 경로(STUDIO_PUBLISH_DIR)가 설정되지 않아 합성 파일만 썼습니다.') +
         `<br><img src="${DATA.api.merged}?t=${Date.now()}" style="max-width:100%;margin-top:6px;border:1px solid var(--line)">`;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'scan-studio:saved',
+          group: DATA.group,
+          published: res.published,
+          mergedSummary: res.merged_summary,
+        }, '*');
+      }
     } catch (e) { $('saveResult').textContent = `저장 실패: ${e.message}`; }
     $('btnSave').disabled = false;
     return;

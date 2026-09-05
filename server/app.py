@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from studio.project import PROJECTS_ROOT, create_project, list_projects
@@ -25,7 +26,15 @@ from server.groups_api import router as groups_router
 from server.jobs import is_running, start_process_job
 
 app = FastAPI(title="scan-to-map-studio API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(groups_router)  # scan groups + alignment workspace (studio/groups.py)
+
 
 
 @app.on_event("startup")
