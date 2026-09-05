@@ -4,6 +4,7 @@
 // 이유는 appShared.js 헤더 주석 참고.
 import { allProjects, activeProjectId } from '../appShared.js';
 import { createProject, createProjectFromSlicemap } from './projectApi.js';
+import { openScanWizardModal } from '../scanStudio/scanWizardModal.js';
 
 function navigateToProject(id) {
   const url = new URL(location.href);
@@ -150,5 +151,14 @@ export function createProjectSelector(container) {
     }
   });
 
-  container.append(select, newBtn, scanBtn, scanInput, scanStatus);
+  const wizardBtn = document.createElement('button');
+  wizardBtn.type = 'button';
+  wizardBtn.className = 'project-new-button project-wizard-button';
+  wizardBtn.textContent = '⚡ 스캔 파이프라인';
+  wizardBtn.title = 'iPhone LiDAR 스캔(.usdz) 업로드 및 베이스맵/장애물 자동 생성 마법사';
+  wizardBtn.addEventListener('click', () => {
+    openScanWizardModal();
+  });
+
+  container.append(select, newBtn, scanBtn, wizardBtn, scanInput, scanStatus);
 }

@@ -55,6 +55,18 @@
       "description": "플랜트 순찰 및 시설 점검용 4족 보행 로봇 1호기.",
       "createdAt": "2026-08-01T23:38:17.777Z",
       "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "2756e998-4a3d-45eb-8a4a-664257c960a2",
+      "name": "heavy-bot-01",
+      "modelId": "turtlebot3-burger",
+      "status": "standby",
+      "company": "Custom Robotics",
+      "description": "",
+      "vda5050Serial": "heavy-01",
+      "vda5050Manufacturer": "Custom Robotics",
+      "createdAt": "2026-09-05T13:48:56.892Z",
+      "updatedAt": "2026-09-05T13:48:56.895Z"
     }
   ]
 }

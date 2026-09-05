@@ -27,8 +27,10 @@ import { createRobotRegistryTab } from './robots/robotRegistry.js';
 import { createBrokerSettings } from './fleet/brokerSettings.js';
 import { createProjectSelector } from './projects/projectSelector.js';
 import { subscribeFleetStream, getFleetConfig } from './fleet/fleetApi.js';
+import { openScanWizardModal, initScanWizardModal } from './scanStudio/scanWizardModal.js';
 
 createProjectSelector(document.getElementById('project-selector'));
+initScanWizardModal();
 document.title = `Pathfinder — ${activeProjectName}`;
 
 const SLICE_HEIGHT_M = 0.5;
@@ -324,6 +326,37 @@ function activateTab(tabKey) {
 
 gnbTabButtons.forEach((btn) => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
 mapSubnavTabs.forEach((btn) => btn.addEventListener('click', () => activateMapsSub(btn.dataset.sub)));
+
+// 스캔 데이터 파이프라인 마법사 모달 열기 버튼 연동
+const btnOpenScanWizard = document.getElementById('btn-open-scan-wizard');
+if (btnOpenScanWizard) {
+  btnOpenScanWizard.addEventListener('click', () => openScanWizardModal());
+}
+
+// scan-to-map-studio 정합 워크스페이스(iframe)에서 정합 저장 완료 시 부모 창 통지 수신
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'scan-studio:saved') {
+    const { group, published } = e.data;
+    console.log('[Fleet Studio] Scan alignment saved event received:', e.data);
+    showFleetToast(`'${group}' 정합 결과가 저장되었습니다.${published ? ' 새 스캔 지도로 즉시 전환할 수 있습니다.' : ''}`);
+  }
+});
+
+function showFleetToast(message, duration = 4500) {
+  const existing = document.querySelector('.fleet-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'fleet-toast';
+  toast.innerHTML = `<span>⚡</span> <span>${message}</span>`;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.transition = 'opacity 0.3s ease';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
 
 // 로봇 탭 서브내비게이션 연동
 const robotDevBtn = document.getElementById('subnav-robot-dev-btn');

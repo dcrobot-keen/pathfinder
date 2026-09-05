@@ -109,7 +109,10 @@ server.stdout.on('data', (d) => {
 process.on('exit', () => server.kill());
 
 try {
-  await wait(500);
+  const serverStart = Date.now();
+  while (!serverLog.includes(`http://localhost:${PORT}`) && Date.now() - serverStart < 5000) {
+    await wait(50);
+  }
   check('서버가 기동됨', serverLog.includes(`http://localhost:${PORT}`));
 
   // 구독자 하나를 먼저 연결하고 pose를 하나 PUT한다.

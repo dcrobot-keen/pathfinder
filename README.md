@@ -1,121 +1,123 @@
-# Fleet Studio (Robot Orchestration Toolchain)
+# Robot Orchestration Toolchain
 
-아이폰 라이다로 스캔한 컬러드 포인트 클라우드(PCD)와 슬라이스맵을 기반으로 실내 지도를 구성하고,
-그 위에서 노드/링크/장애물 편집, 다중 로봇 충돌회피(deconfliction), 산업 표준 VDA5050 기반 플릿 관제(RCS),
-그리고 로봇 모델 카탈로그와 실제 배속 기기 관리를 통합 제공하는 웹 기반 실내 로봇 오케스트레이션 스튜디오입니다.
+아이폰 라이다로 스캔한 컬러드 포인트 클라우드(PCD)를 기반으로 실내 지도를 만들고,
+그 위에서 노드/링크/장애물을 편집하고, 등록된 로봇으로 경로탐색·다중 로봇
+충돌회피(deconfliction)까지 실험하는 실내 로봇 오케스트레이션 툴체인입니다.
+전체 기획은 [`3D mesh to 2D.md`](./3D%20mesh%20to%202D.md), [`node-link.md`](./node-link.md),
+[`path-finding.md`](./path-finding.md), [`robot registry.md`](./robot%20registry.md),
+[`deconfliction.md`](./deconfliction.md), [`performance.md`](./performance.md) 참고.
+[`project.md`](./project.md)는 프로젝트 개념(좌표계 선택, 프로젝트 단위 관리) 도입을 위한
+차기 작업 메모입니다(아직 미구현).
 
 ## 기술 스택
 
-- [Vite](https://vitejs.dev/) + 순수 JavaScript (ES Modules, Vanilla UI)
-- [OpenLayers](https://openlayers.org/) — 2D 지도 (m 단위 직교 평면 좌표계, 다중 레이어 합성)
-- [Three.js](https://threejs.org/) — 3D orbit 뷰 (LiDAR 점군 / 마칭 큐브 메쉬) + 시뮬레이터 3D 뷰어 임베드
-- [Express](https://expressjs.com/) + [lowdb](https://github.com/typicode/lowdb) — 프로젝트/노드링크/로봇모델/기기/VDA5050 REST & WebSocket API 서버
-- Go (표준 라이브러리) — 경로탐색 알고리즘(Dijkstra/A*/Grid A*/Hybrid A*) HTTP API + WASM 빌드
-- [mqtt](https://github.com/mqttjs/MQTT.js) — VDA5050 2.0 MQTT 브로커(mosquitto) 통신 브리지
-- [ws](https://github.com/websockets/ws) — 실시간 로봇 위치 및 플릿 이벤트 WebSocket 브로드캐스트
+- [Vite](https://vitejs.dev/) + 순수 JavaScript
+- [OpenLayers](https://openlayers.org/) — 2D 지도 (m 단위 평면 좌표계)
+- [Three.js](https://threejs.org/) — 3D orbit 뷰 (점군 / 마칭 큐브 메쉬)
+- [Express](https://expressjs.com/) + [lowdb](https://github.com/typicode/lowdb) — 노드/링크/블록 편집 결과를 GeoJSON 파일로 저장하는 초경량 API 서버
+- Go(표준 라이브러리만 사용) — 경로탐색 알고리즘(Dijkstra/A*/Grid A*/Hybrid A*) + HTTP API 서버
+- Node.js 스크립트 — PCD 샘플 생성, PCD → 메쉬 변환 CLI
+- [ws](https://github.com/websockets/ws) — 실시간 로봇 위치를 브라우저에 fan-out하는 WebSocket 릴레이
 
 ## 실행
 
 ```bash
 npm install
-npm run dev              # Vite(3000) + lowdb API(3001) + Go pathfinder API(3002) 동시 실행
-npm run build            # 프로덕션 번들 빌드 (dist/)
-npm test                 # JS 자동 스모크 테스트 6종 전체 실행
-npm run test:pathfinder  # Go 경로탐색 알고리즘 테스트 (33개 케이스)
+npm run dev          # Vite(5173) + lowdb API(3001) + Go pathfinder API(3002) 동시 실행
+npm run build         # 프로덕션 빌드 (dist/)
+npm test              # JS 테스트 (좌표 변환 + 실시간 위치 API/WebSocket)
+npm run test:pathfinder  # Go 경로탐색 알고리즘 테스트
 ```
 
 `npm run dev`는 `concurrently`로 세 프로세스를 함께 띄웁니다. 개별 실행은
 `dev:client` / `dev:server` / `dev:pathfinder`를 사용하세요. Go 툴체인이 PATH에
 있어야 `dev:pathfinder`가 동작합니다 (`go version`으로 확인).
 
-## 정보 구조 (Information Architecture, IA) & 2단 메뉴
-
-Fleet Studio는 2단 헤더 구조(Tier 1 GNB + Tier 2 Contextual Subnav)로 설계되어 있습니다:
-
-- **Level 0 (Site / Map Scope)**: 헤더 최좌측의 현장 셀렉터(`📍 현장: default [승인]`, `+ 새 현장`, `+ 스캔 지도`). 어떤 워크스페이스에 있든 작업 기준이 되는 현장(좌표 평면 및 맵 데이터)을 즉시 전환.
-- **Level 1 (5 Core Workspaces)**:
-  1. **`지도 (Maps)`**: 2D 지도 편집(노드/링크/장애물), 3D 점군/메쉬 뷰어, 정합 스튜디오(:8000) 연동.
-  2. **`로봇 (Robots)`**: 플릿 모니터링(`Fleet`) 및 하드웨어 사양 템플릿과 기기 배속 관리(`Catalog`).
-  3. **`운영 (Operate)`**: 지도 기반 경로 계획, VDA5050 이동 명령(Order) 발행, 다중 로봇 충돌회피(Deconfliction).
-  4. **`시뮬레이션 (Simulation)`**: 시뮬레이터 3D 뷰어(:8767/:8777) 임베드 및 가상 로봇 주행 검증.
-  5. **`설정 (Settings)`**: VDA5050 MQTT 브로커 연결 설정 및 시스템 환경 구성.
-- **Tier 2 (Contextual Subnav)**: 선택된 워크스페이스에 따라 서브 탭(2D, 3D, 정합 스튜디오 링크, Fleet, Catalog 등)과 관련 툴버튼(`📥 PCD 업로드`)이 표시됩니다.
-- **실시간 GNB 텔레메트리**: 헤더 우측에 `● MQTT 온라인 (1883)`, `🤖 N대 온라인` 배지가 상시 노출되어 연결 상태를 즉각 파악 가능.
-
 ## 기능 개요
 
-1. **2D 지도 & 직교 평면 좌표계** — 원점(0,0) 기점 m 단위 평면 좌표계 위에 격자 표시. 배경 도면(blueprint) 및 앱 스캔 바닥 이미지(`*.floor.png`) 레이어 오버레이.
-2. **3D 컬러드 PCD & 메쉬** — ASCII/바이너리 PCD 파싱 후 `WebGLVectorLayer`로 실제 RGB 색상 표시, 마칭 큐브(Marching Cubes) 등위면 추출을 통한 3D 메쉬(PLY) 생성.
-3. **높이 슬라이스 & 레이어 패널** — z 높이 50cm 단위 레이어 슬라이싱 및 개별 on/off.
-4. **노드/링크/블록 편집기** — 2D 지도 위에서 노드(Point), 링크(LineString), 블록(Polygon) 그리기/수정/삭제. 프로젝트별 GeoJSON으로 영속화.
-5. **스캔 장애물 연동 (scan-to-map-studio)** — LiDAR 스캔에서 추출된 가구/벽 세그먼트를 `kind: "block"` 장애물로 불러와 수동 편집 레이어와 자동 결합.
-6. **슬라이스맵 기반 프로젝트 자동 생성** — 정합 워크스페이스가 생성한 `<group>.slicemap.json`과 바닥 이미지를 단 한 번의 클릭 또는 CLI로 새 현장 프로젝트로 변환.
-7. **장애물 회피 경로탐색 (Go 백엔드 & WASM)** — Occupancy grid 위에서 Grid A* 또는 Hybrid A*(연속 좌표+조향 고려) 경로 탐색. 대형 부지에서도 국소 영역 탐색(local bounds) 및 적응형 해상도로 고속 응답.
-8. **클라이언트 사이드 Deconfliction** — 다중 로봇 동시 주행 시 200ms 주기로 미래 lookahead 구간 내 충돌 감지. 우선순위 드래그앤드롭 조정 및 일시정지(pause & resume) 또는 실시간 재탐색(re-routing).
-9. **로봇 모델 카탈로그 (Catalog) & 기기 등록 (Fleet Devices)** — 하드웨어 사양 템플릿(카탈로그)과 실제 물리/가상 로봇 기기 인스턴스를 분리 관리.
-10. **VDA5050 2.0 표준 플릿 관제 (RCS)** — MQTT 브로커를 통한 양방향 통신. `connection`/`state`/`visualization` 구독, 이동 주문(`order`) 및 즉시 제어(`cancelOrder`, `startPause`, `stopPause`), 주문 진행률 바, 최근 주문 이력 및 이벤트 타임라인 영속화.
+브라우저에서 상단 탭으로 **3D 뷰** / **2D 뷰** / **로봇 등록** / **길찾기(장애물)** 네 가지
+뷰를 전환할 수 있고, 상단의 **PCD 업로드**로 다른 PCD 파일을 올리면 지도/3D/길찾기 뷰가
+동시에 그 파일 기준으로 갱신됩니다. (구 "길찾기(노드/링크)" 탭은 UI에서는 뺐지만 관련
+코드는 재사용을 위해 그대로 남아 있습니다 — 아래 프로젝트 구조 참고.)
+
+1. **2D 지도** — 0,0을 기점으로 하는 m 단위 200m(가로)×400m(세로) 평면 좌표계 위에 10m 격자를 표시. 배경 도면(blueprint) 이미지 레이어를 겹쳐 보이게 할 수 있음(기본 꺼짐).
+2. **3D 컬러드 PCD** — PCD(ASCII/바이너리 모두 지원)를 파싱해 `WebGLVectorLayer`로 실제 RGB 색을 입혀 2D 지도 위에 표시.
+3. **높이 슬라이스 2D 레이어 + 레이어 패널** — 같은 포인트 소스를 공유하는 레이어들을 z(높이) 구간별 50cm 단위로 나눠, 우측 패널 체크박스로 층별 on/off. 같은 패널 컴포넌트(`renderSlicePanel`)를 배경 도면·노드/링크/블록 레이어 토글에도, 길찾기(장애물) 탭의 바닥 PCD·노드/링크/블록 레이어 토글에도 재사용.
+4. **3D 메쉬 변환** — 점군을 복셀 밀도 필드로 만들고 마칭 큐브(Marching Cubes)로 등위면을 추출해 컬러 메쉬 생성. "3D 뷰" 탭에서 포인트/메쉬 토글, 또는 CLI로 임의의 PCD를 메쉬 파일(PLY)로 변환.
+5. **업로드 시 2D/3D 동시 갱신** — 새 PCD를 업로드하면 좌표 범위·높이 슬라이스·3D 점군/카메라가 모두 그 파일 기준으로 자동 재계산.
+6. **노드/링크/블록 편집 레이어** — 2D 지도 위에서 노드(point)/링크(line)/블록(polygon)을 그리고 수정·삭제. "저장" 시 GeoJSON `FeatureCollection`으로 API 서버를 통해 `data/nodelink.geojson` 파일에 저장되고, 다음 접속 시 자동으로 다시 불러옴. PCD로부터 장애물/격자를 자동 생성하는 기능은 시도했다가 정확도가 낮아 제거했고, 지금은 이 레이어에서 수동 편집하는 방식만 사용합니다.
+6-1. **스캔 장애물 (scan-to-map-studio 연동)** — 자매 저장소 [scan-to-map-studio](../scan-to-map-studio)가 iPhone LiDAR 스캔에서 뽑아낸 방 하나 분량의 `output.geojson`(가구 발자국·벽 세그먼트·방 윤곽선)을 `scripts/import-scan-to-map-studio.mjs`로 변환해 `data/imported/<room>.geojson`에 저장합니다. 화면의 "스캔 장애물" 패널에서 방을 골라 불러오면 편집 지도/길찾기(장애물) 탭 모두에 빨간색 블록으로 표시되고, 경로탐색 요청을 만들 때 `nodeLinkSource`(수동 편집)와 자동으로 합쳐져서 Go pathfinder API로 전송됩니다. `data/nodelink.geojson`(사용자가 손으로 편집하는 파일)은 전혀 건드리지 않으므로 재가져오기(re-import)가 항상 안전합니다. 자세한 설계 배경은 [`../doc/architecture-improvements.md`](../doc/architecture-improvements.md) 참고.
+7. **길찾기 (노드/링크)** — (현재 탭 메뉴에는 없음, 코드는 `pathfinding/tab.js`의 `mode: 'nodelink'`로 유지) 링크 위를 클릭(스냅 지원)해 시작/도착점을 지정하거나 "랜덤 생성"으로 그래프 위 임의의 두 점을 골라 Dijkstra/A*로 경로 탐색.
+8. **길찾기 (장애물 회피)** — 노드/링크 그래프는 무시하고 block(폴리곤)만 장애물로 판단, occupancy grid 위에서 Grid A* 또는 Hybrid A*(연속 좌표+진행방향 고려)로 경로 탐색. 클릭 또는 랜덤 생성으로 시작/도착점 지정. 경로는 랜덤 색 선으로 표시되고, 로봇 마커가 실제 m/s 속도로 지나가며 지나간 구간은 지워짐(속도는 로봇 미선택 시 기본 1.0m/s). 도착하면 로봇 마커·남은 경로선·start/end 핀이 모두 지도에서 사라짐.
+   - **등록된 로봇 선택** — 로봇을 고르면 그 로봇의 알고리즘이 자동 적용(수동 선택 잠금)되고, 로봇 마커가 원형 점 대신 해당 로봇의 아이콘으로, **등록된 실제 속도(m/s)·크기(m)**에 맞춰 표시/이동함. 로봇 목록은 유효한 알고리즘(gridastar/hybridastar)을 가진 로봇만 필터링해서 보여줌.
+   - **Deconfliction 가시화** — 로봇 선택 콤보 밑에 현재 진행 중인 모든 경로가 실시간 리스트로 표시되며, 각 항목은 해당 경로 선과 같은 색 스와치 + 생성 번호(`#id`)를 가짐. 같은 번호가 지도 위 이동 중인 로봇 아이콘 위에도 겹쳐 표시됨.
+   - **Priority 변경** — 리스트 항목을 드래그앤드롭으로 순서를 바꾸면 즉시 그 로봇의 충돌회피 우선순위가 바뀜(먼저 배치된 항목이 더 높은 우선순위). 각 항목에 생성 번호(`#id`)와 현재 우선순위 순번(`우선순위 N`)을 함께 표시해 둘을 구분.
+   - **충돌 감지(공통 로직)** — 200ms마다 모든 활성 경로 쌍에 대해 "남은 경로(remaining path)"끼리의 최근접 거리를 계산. 판정 반경은 로봇 크기 기반(두 로봇 sizeMeters 합의 배수), 실제로 경로가 스쳐 지나가는 쌍에만 적용하고(나란히 가는 평행 경로는 제외), 비교 구간도 각 로봇의 현재 속도에 비례한 lookahead 거리로 제한해 아직 멀리 있는 로봇끼리 미리 멈추는 문제를 방지함.
+   - **충돌 해소 방식 선택** — "충돌 시" 콤보에서 **정지 후 재개(pause & resume)** 또는 **재탐색(re-routing)** 을 선택 가능.
+     - *정지 후 재개*: 우선순위가 낮은 쪽을 멈추고(마커 반투명), 위험 반경을 벗어나는 즉시(별도 대기 없이) 재개. 매 틱 현재 활성 로봇 전체를 기준으로 재판정하므로 막고 있던 로봇이 먼저 도착해 사라지면 대기 중이던 로봇도 즉시 자동으로 풀림.
+     - *재탐색*: 낮은 우선순위 로봇을 멈추고, 상위 우선순위 로봇들의 현재 위치를 임시 원형 장애물로 취급해 현재 위치→원래 목적지 사이 경로를 Go pathfinder API로 다시 계산, 성공하면 같은 번호/색으로 새 애니메이션으로 교체. 실패하면 계속 정지 상태로 다음 틱에 재시도.
+9. **로봇 등록 (CRUD)** — 별도 탭. 타입(휴머노이드/AGV·AMR/4족보행/4바퀴 non-holonomic/알수없음), 길찾기 알고리즘(코드값 — pathfinder API와 동일한 dijkstra/astar/gridastar/hybridastar), 상태(미션 중/충전 중/연결 실패/대기중/고장), **크기(m)·이동 속도(m/s)**, 회사·설명, 아이콘 업로드까지 갖춘 로봇 등록/수정/삭제. 최초 실행 시 Atlas(휴머노이드, Grid A*, 0.55m/1.5m·s), MoBED(4바퀴, Hybrid A*, 0.6m/0.8m·s), SPOT(4족보행, Grid A*, 0.7m/1.2m·s), AGV·AMR(A*, 0.9m/1.2m·s) 4종이 기본 아이콘과 함께 자동 시드됨.
 
 ## 프로젝트 구조
 
 ```
-index.html             2단 IA 헤더(GNB + Contextual Subnav), 5대 워크스페이스 뷰 컨테이너
+index.html             탭(3D/2D/로봇 등록/길찾기(장애물)), PCD 업로드, 각종 패널 UI
 vite.config.js          /api/path -> Go(3002), /api -> Express(3001) 프록시
 src/
-  main.js               앱 진입점, 워크스페이스 탭 전환 오케스트레이션, GNB 텔레메트리
-  appShared.js            프로젝트별 직교 좌표계 및 공유 VectorSource (탭 간 상태 공유)
-  grid2d.js                재사용 가능한 m 단위 격자 레이어
+  main.js               지도/탭/업로드 오케스트레이션 (앱 진입점), 배경 도면 레이어, 뷰 extent 설정
+  appShared.js            좌표계(200x400m indoor-plane) + 공유 VectorSource(PCD, 노드/링크) — 탭 간 상태 공유
+  grid2d.js                재사용 가능한 sizeX x sizeY 격자 레이어
   nodeLinkStyle.js          노드/링크/블록 공통 스타일
   pcd.js                 PCD 파서 (ASCII/바이너리, FIELDS x y z rgb)
-  heightSlices.js        z 높이 슬라이스 레이어 생성 + 레이어 패널 UI
-  meshify.js             점군 -> 복셀 밀도 필드 -> 마칭 큐브 메쉬 변환
-  ply.js                 메쉬 -> ASCII PLY 직렬화
-  view3d.js               Three.js 3D 점군/메쉬 뷰어
-  editLayer.js            노드/링크/블록 대화형 그리기·수정 툴바
-  geojsonApi.js            프로젝트 스코프 GeoJSON CRUD API 클라이언트
-  importedObstacles.js     스캔 장애물 패널 및 스타일
-  livePoseTransform.js     scan_basemap <-> map 좌표 역/정변환 (순수 함수)
-  liveRobotPose.js         실시간 위치 구독 및 지도 마커 렌더링
+  heightSlices.js        z 구간별 높이 슬라이스 레이어 생성 + 레이어 토글 패널 렌더링(renderSlicePanel, 여러 탭에서 재사용)
+  meshify.js             점군 → 복셀 밀도 필드 → 마칭 큐브 메쉬 변환
+  ply.js                 메쉬 → ASCII PLY 직렬화
+  view3d.js               Three.js 3D orbit 뷰어 (점군/메쉬 렌더링)
+  editLayer.js            노드/링크/블록 그리기·수정·삭제 + 저장/불러오기 툴바
+  geojsonApi.js            편집 레이어의 GeoJSON 저장/조회 API 클라이언트
+  importedObstacles.js     "스캔 장애물" 패널 (scan-to-map-studio에서 가져온 방 목록 선택/불러오기) + 스타일
+  importedObstaclesApi.js  가져온 장애물 목록/조회 API 클라이언트
+  livePoseTransform.js     scan_basemap <-> map 좌표 역/정변환 (ROS 없이, vps-capture.html과 동일 수학)
+  liveRobotPose.js         /api/live-pose/stream WebSocket 구독 + 로봇 아이콘 마커 갱신
   pathfinding/
-    tab.js                 길찾기 & Deconfliction & VDA5050 실제 이동 명령 뷰
+    tab.js                 길찾기 탭 공통 팩토리 (노드/링크·장애물 두 모드, 현재 UI에는 장애물 탭만 노출) — deconfliction(가시화/우선순위 드래그앤드롭/재탐색) 포함
     pathfindingApi.js        Go pathfinder API 클라이언트
-    robotAnimation.js        경로 주행 애니메이션 및 마커 스타일
+    robotAnimation.js        경로 애니메이션(로봇 마커 + trail 삭제 + 아이콘 위 번호 라벨)
   robots/
-    robotRegistry.js         Fleet 관제 뷰 & 로봇 모델 카탈로그/기기 등록 UI
-    robotApi.js               로봇 기기 및 모델 카탈로그 API 클라이언트
-    robotCodes.js              타입/알고리즘/상태 라벨 매핑
-  projects/
-    projectApi.js            프로젝트 CRUD 및 slicemap 임포트 API 클라이언트
-    projectSelector.js       GNB Level 0 현장 선택기 컴포넌트
-  style.css               Fleet Studio 통합 스타일 (2단 헤더, 반응형 레이아웃, 다크 테마)
+    robotRegistry.js         로봇 등록 CRUD 탭 (폼 + 카드 목록)
+    robotApi.js               로봇 CRUD API 클라이언트
+    robotCodes.js              타입/알고리즘/상태 코드값 <-> 라벨 매핑
+  style.css
 shared/
-  robotIcons.mjs           로봇 모델별 기본 SVG 아이콘 (서버 시드 및 프론트엔드 공용)
+  robotIcons.mjs           로봇 타입별 기본 SVG 아이콘 (서버 시드 + 프론트 폼 미리보기 공용)
 server/
-  index.mjs               Express API 서버 진입점 (프로젝트, 로봇, 카탈로그, VDA5050 마운트)
-  projects.mjs            현장(Project) CRUD API (`/api/projects`) 및 slicemap 변환기
-  robotModels.mjs         로봇 모델 카탈로그 CRUD API (`/api/robot-models`)
-  robots.mjs                로봇 기기 CRUD API (`/api/robots`) + modelId 데코레이터
-  vda5050.mjs               VDA5050 2.0 MQTT 브리지 (`/api/vda5050/*`) 및 WebSocket 릴레이
-  slicemap.mjs            slicemap-v1 -> GeoJSON 및 메타데이터 변환 파서
+  index.mjs               Express + lowdb API 서버 (/api/nodelink) + 실시간 로봇 위치 릴레이
+                            (/api/live-pose, WebSocket /api/live-pose/stream)
+  robots.mjs                로봇 등록 CRUD API (/api/robots) + 기본 4종 자동 시드
+  vda5050.mjs               VDA5050 MQTT 브리지 (/api/vda5050/*): 브로커 구독 -> live-pose 합류 + 플릿 상태, order/instantActions 발행
 pathfinder/               Go 모듈 — 경로탐색 알고리즘 + HTTP API + WASM
-  graph/                   Dijkstra/A*, 그래프 스냅
-  grid/                    Occupancy grid, Grid A*, Hybrid A*
-  server/                  Go HTTP 서버 (`/api/path/nodelink`, `/api/path/obstacle`)
-  wasm/                    grid 패키지 WASM 빌드 (`pathfinderFindPath`)
+  graph/                   Dijkstra/A*, 그래프 스냅/가상노드 삽입
+  grid/                    occupancy grid, Grid A*, Hybrid A*. NewGridFromOccupancy로 폴리곤 대신
+                            원시 점유 비트맵(예: LIDAR 누적 costmap)을 직접 주입 가능
+  server/                  net/http API 서버 (/api/path/nodelink, /api/path/obstacle) — 지역 검색 범위·장애물 필터링·격자 해상도 자동 조정으로 대형 부지에서도 빠른 응답
+  wasm/                    grid 패키지를 GOOS=js GOARCH=wasm으로 노출 (pathfinderFindPath) — 서버 없이
+                            브라우저에서 직접 호출. 첫 소비자: ros-chromium/robot-os-chromium의 PlannerNode
 scripts/
-  live-pose-smoke.mjs      좌표 역변환 및 실시간 위치 릴레이 스모크 테스트
-  projects-smoke.mjs       프로젝트 격리 및 CRUD 스모크 테스트
-  scan-alignment-smoke.mjs 정합 transform 계산 스모크 테스트
-  vda5050-smoke.mjs        VDA5050 MQTT 브리지 스모크 테스트
-  scan-project-smoke.mjs   slicemap 프로젝트 생성 스모크 테스트
-  robot-models-smoke.mjs   로봇 모델 카탈로그 CRUD & 기기 데코레이터 스모크 테스트
-  build-wasm.mjs           Go WASM 컴파일 빌드 스크립트
-data/
-  projects.json            현장(Project) 메타데이터 목록
-  robot-models.json        로봇 모델 하드웨어 사양 카탈로그
-  robots.json              배속된 로봇 기기 인스턴스 (modelId 참조)
-  vda5050.json             VDA5050 브로커 설정, 최근 주문, 이벤트 타임라인
-  nodelink.geojson         기본 현장 노드/링크/블록 데이터
-  projects/<id>/           개별 현장별 독립 nodelink.geojson
+  pcd-lib.mjs             PCD 생성 스크립트 공용 유틸 (rgb 패킹, ascii 저장)
+  generate-sample-pcd.mjs   고정 샘플 방 PCD 생성
+  generate-random-pcd.mjs   랜덤 방 PCD 여러 개 생성 (업로드 테스트용)
+  pcd-to-mesh.mjs           PCD → 메쉬(PLY) 변환 CLI
+  import-scan-to-map-studio.mjs   scan-to-map-studio의 output.geojson -> data/imported/<room>.geojson 변환
+  build-wasm.mjs           pathfinder/wasm -> dist-wasm/pathfinder.wasm + wasm_exec.js 빌드
+  live-pose-smoke.mjs      pathfinder의 첫 JS 자동 테스트 -- 좌표 변환 + 서버 PUT/WebSocket 릴레이 검증
+  vda5050-smoke.mjs        VDA5050 브리지 검증 (가짜 MQTT 클라이언트 주입, 브로커 불필요)
+public/samples/            샘플 PCD 파일들 (앱이 초기 로드에 사용). 100MB를 넘는 실측 스캔 파일은
+                            GitHub 용량 제한 때문에 git에 커밋하지 않고 로컬에만 둠(.gitignore 참고).
+public/vps-capture.html    카메라 → vps-system /localize → map 프레임 변환 → /api/live-pose PUT까지
+                            하는 독립 정적 페이지(Vite 번들에 안 들어감, ROS 없음)
+data/nodelink.geojson       노드/링크/블록 편집 결과 GeoJSON 파일 DB
+data/robots.json            로봇 등록 CRUD 데이터 (최초 실행 시 4종 자동 시드)
+data/imported/<room>.geojson  scan-to-map-studio에서 가져온 장애물(스크립트로만 생성, git에는 커밋 안 함)
 ```
 
 ## 경로탐색 API (Go)
@@ -153,33 +155,19 @@ npm run build:wasm   # dist-wasm/pathfinder.wasm + wasm_exec.js 생성 (git에�
 
 첫 소비자는 [ros-chromium](../ros-chromium)/robot-os-chromium의 `packages/planner-wasm` + `PlannerNode`입니다 — roadmap.md Phase 7("PlannerNode — 격자 A*")을 새로 구현하는 대신 이 빌드를 그대로 가져다 씁니다. 자세한 배경은 [`../doc/architecture-improvements.md`](../doc/architecture-improvements.md) 참고.
 
-## 로봇 모델 카탈로그 & 기기 등록 API
-
-Fleet Studio는 **로봇 사양 템플릿(카탈로그)**과 현장에 배속된 **실제 로봇 기기(Fleet)**를 분리하여 관리합니다.
-
-### 1. 로봇 모델 카탈로그 (`/api/robot-models`)
-하드웨어 사양(외형 크기, 주행 속도, 기본 알고리즘, SVG 아이콘 등)을 정의합니다. 기본으로 6종(TurtleBot3 Burger, Former 2.0, Atlas, MoBED, SPOT, AGV/AMR)이 제공됩니다.
+## 로봇 등록 API
 
 ```bash
-GET    /api/robot-models        # 전체 모델 사양 목록
-POST   /api/robot-models        # 새 모델 등록 { id, name, type, algorithm, sizeMeters, speedMps, company, description, icon }
-PUT    /api/robot-models/:id    # 모델 사양 수정
-DELETE /api/robot-models/:id    # 모델 사양 삭제
+GET    /api/robots        # 목록
+POST   /api/robots        # 생성 { name, type, algorithm, status, sizeMeters, speedMps, company, description, icon }
+PUT    /api/robots/:id    # 수정 (부분 업데이트)
+DELETE /api/robots/:id    # 삭제
 ```
 
-### 2. 배속 로봇 기기 (`/api/robots`)
-현장에 투입된 개별 물리/가상 로봇 인스턴스입니다. 기기는 `modelId`를 통해 모델 카탈로그를 참조합니다.
-
-```bash
-GET    /api/robots        # 기기 목록 (modelId의 사양 필드가 자동 병합 데코레이션되어 반환)
-POST   /api/robots        # 기기 등록 { name, modelId, status, serialNumber?, vda5050Manufacturer?, ... }
-PUT    /api/robots/:id    # 기기 상태/정보 수정
-DELETE /api/robots/:id    # 기기 삭제
-```
-
-**100% 하위 호환성 (API Decorator):**
-`GET /api/robots` 호출 시 서버(`server/robots.mjs`)가 기기의 `modelId`를 조회하여 모델의 제원(`sizeMeters`, `speedMps`, `algorithm`, `icon`, `type`)을 기기 객체에 자동 주입(decorate)하여 반환합니다. 따라서 기존 Go 플래너, 실시간 렌더러, VDA5050 브리지 및 모든 레거시 클라이언트와 스모크 테스트가 어떤 수정도 없이 100% 호환됩니다.
-
+`type`/`algorithm`/`status`는 코드값(`src/robots/robotCodes.js`, `server/robots.mjs`에 정의)만 허용되고,
+알 수 없는 값이 오면 안전한 기본값으로 대체됩니다. `sizeMeters`(로봇 폭/지름, m)와 `speedMps`(이동 속도, m/s)는
+양수만 허용되며 잘못된 값은 기본값(0.5m / 1.0m/s)이나 기존 값으로 대체됩니다. `icon`은 data URI
+문자열(업로드한 이미지 또는 `shared/robotIcons.mjs`의 기본 SVG)로 저장됩니다.
 
 ## 스캔 장애물 가져오기 (scan-to-map-studio 연동)
 
@@ -270,44 +258,39 @@ node scripts/create-project-from-slicemap.mjs ../ros-chromium/simulator/worlds/p
   이를 "바닥 이미지 (앱 스캔)" 레이어로 장애물 아래에 깝니다. 정합을 다시 저장한 뒤에는
   `--project <id>`(`PUT /api/projects/:id/from-slicemap`)로 같은 프로젝트를 갱신합니다.
 
-## 플릿 관제 (RCS) — VDA5050 2.0 브리지
+## 플릿 (RCS) — VDA5050 브리지
 
-Fleet Studio를 산업 표준 AGV/AMR 관제(RCS) 서버로 동작시키는 통신 및 제어 서브시스템입니다. 상세 설계 및 토픽 규약은 [`../doc/vda5050-rcs.md`](../doc/vda5050-rcs.md) 참고.
+pathfinder를 관제(RCS) 쪽으로 세우는 탭입니다. 설계와 우리가 고정한 규약(토픽 접두사
+`uagv/v2/<manufacturer>/<serialNumber>`, `mapId` = 프로젝트 이름, 좌표 = pathfinder 평면)은
+[`../doc/vda5050-rcs.md`](../doc/vda5050-rcs.md) 참고.
 
-- **MQTT 브리지(`server/vda5050.mjs`)**: MQTT 브로커(:1883)에 연결하여 `uagv/v2/<manufacturer>/<serialNumber>/connection`, `state`, `visualization` 토픽을 구독합니다.
-- **실시간 위치 릴레이**: 로봇 위치는 기존 `/api/live-pose/stream` fan-out 스트림에 자동 합류되어 지도 뷰어가 MQTT의 존재를 몰라도 실시간 마커가 갱신됩니다.
-- **플릿 상태 스트림**: 로봇별 연결 상태, 배터리, 에러, 주문 진행 상황은 `/api/vda5050/stream` WebSocket을 통해 UI로 실시간 브로드캐스트됩니다.
-- **주문(Order) 발행 & 진행률 바**: 로봇 목적지를 지정하면 Go 플래너가 벽 인플레이션(로봇 반경 + 5cm)을 반영한 최적 경로를 계산하여 VDA5050 `order` 메시지로 발행합니다. UI에는 현재 로봇이 통과한 노드(`lastNodeId`)와 남은 노드(`nodeStates`)를 기반으로 퍼센트 진행률 바가 실시간 표시됩니다.
-- **즉시 제어 (Instant Actions)**: 이동 취소(`cancelOrder`), 일시정지(`startPause`), 주행 재개(`stopPause`)를 즉시 발행할 수 있습니다.
-- **주문 이력 및 타임라인 영속화**: 최근 20건의 주문 내역 및 중요한 플릿 이벤트(로봇 온라인/오프라인, 주문 시작/완료, 경고 발생 등)를 `data/vda5050.json`에 안전하게 영속화합니다.
-- **자동 기기 배속**: 최초로 감지된 VDA5050 로봇은 `robots.json`에 자동 등록되며, 시뮬레이터 로봇(`tb3-sim-*`)은 카탈로그의 TurtleBot3 Burger 모델과 자동 매핑됩니다.
+- **서버(`server/vda5050.mjs`)**가 MQTT 브로커에 붙어 `connection`/`state`/`visualization`을 구독합니다.
+  위치는 기존 `/api/live-pose/stream` fan-out에 그대로 합류하므로 2D/길찾기 탭의 마커 코드는 전송
+  수단을 모릅니다. 로봇별 플릿 상태(연결·주문·오류)는 `/api/vda5050/stream` WebSocket으로 탭에 흐릅니다.
+- **"플릿 (RCS)" 탭**에서 브로커 URL·구독 목록을 저장하면 즉시 재접속하고(`data/vda5050.json`,
+  기본 `enabled:false`), 로봇 표에서 `cancelOrder`/`stopPause`/`startPause`를 보냅니다.
+- **길찾기 탭의 "시뮬레이터로 실행"**은 그 robotId가 VDA5050으로 ONLINE이면 서버가 자동으로
+  `order`로 발행하고(`transport: "vda5050"`), 아니면 예전 `drive-request` WebSocket 릴레이를 씁니다.
+- 로봇 쪽 상대는 ros-chromium `robot-os-chromium/packages/nodes`의 `Vda5050Node`(sim-driver가
+  `MQTT_URL`로 켬)이고, 브로커는 ros-chromium compose의 `mosquitto`(127.0.0.1:1883)입니다.
+- **자동 등록**: 처음 보는 VDA5050 로봇은 서버가 로봇 등록(`robots.json`)에 자동으로 넣습니다
+  (`vda5050Serial`/`vda5050Manufacturer` 필드, 시뮬레이터 serial은 TB3 치수 0.2 m / 0.22 m/s, AGV 아이콘).
+  지도 마커는 serial로 이 항목을 찾아 아이콘·이름을 붙입니다. 로봇 등록 탭에서 수정할 수 있습니다.
+- **이동 명령**: 길찾기(장애물) 탭의 "실제 로봇 이동 명령 (VDA5050)"에서 로봇을 고르고 "목적지 클릭" 뒤
+  지도를 클릭하면, 로봇의 현재 위치에서 그 지점까지 경로를 찾아(로봇의 알고리즘) order로 보냅니다.
+  계획 경로는 주황 점선으로 남고, 도착(`nodeStates` 0)하면 지워집니다. 경로는 Go 계획기에
+  `inflationM`(로봇 반경 + 5 cm)을 넘겨 벽에서 그만큼 떨어지게 계산합니다(0.1 m 격자). 벽에 너무 가까운
+  목적지는 계획기가 거절합니다.
 
 ```bash
 GET    /api/vda5050/config                                    # { config, status, supportedInstantActions }
-PUT    /api/vda5050/config                                    # 브로커 설정 저장 및 즉시 재접속
+PUT    /api/vda5050/config                                    # 저장 + 재접속. body = config
 GET    /api/vda5050/robots                                    # { robots: [...], status, staleAfterMs }
-DELETE /api/vda5050/robots/:manufacturer/:serialNumber        # 목록에서 로봇 제거
-POST   /api/vda5050/robots/:manufacturer/:serialNumber/order  # { path: [[x,y],...], mapId? } -> 이동 주문 발행
+DELETE /api/vda5050/robots/:manufacturer/:serialNumber        # 표에서 제거
+POST   /api/vda5050/robots/:manufacturer/:serialNumber/order  # { path: [[x,y],...], mapId?, updatePrevious? } -> { orderId, orderUpdateId }
 POST   /api/vda5050/robots/:manufacturer/:serialNumber/instant-actions   # { actionType: cancelOrder|stopPause|startPause }
-WS     /api/vda5050/stream                                    # snapshot -> robot/status/orders/timeline 이벤트 스트림
+WS     /api/vda5050/stream                                    # snapshot -> robot/status/forget 이벤트
 ```
-
-## 테스트 커버리지
-
-Fleet Studio는 안정적인 CI/CD와 회귀 방지를 위해 6종의 Node.js 스모크 테스트와 Go 알고리즘 테스트 슈트를 갖추고 있습니다:
-
-```bash
-npm test                 # JS 스모크 테스트 6종 순차 실행
-npm run test:pathfinder  # Go 단위/통합 테스트 33종 실행
-```
-
-1. **`live-pose-smoke.mjs`**: ARKit 좌표계 변환, VPS 지면 투영, `/api/live-pose` PUT 및 WebSocket 릴레이 검증.
-2. **`projects-smoke.mjs`**: 현장 프로젝트 CRUD, 프로젝트별 `nodelink.geojson` 저장소 격리 및 검증.
-3. **`scan-alignment-smoke.mjs`**: 정합 행렬 변환(group_alignment) 및 좌표계 무결성 검증.
-4. **`vda5050-smoke.mjs`**: 가짜 MQTT 클라이언트를 통한 연결/상태/시각화 토픽 수신, 주문 발행 및 즉시 제어 동작 검증.
-5. **`scan-project-smoke.mjs`**: `slicemap-v1` 파싱 및 현장 프로젝트/장애물 자동 생성 파이프라인 검증.
-6. **`robot-models-smoke.mjs`**: 로봇 모델 카탈로그 CRUD, 기기 인스턴스 배속, API 데코레이터를 통한 하위 호환성 검증.
-
 
 ## PCD 샘플 생성 스크립트
 

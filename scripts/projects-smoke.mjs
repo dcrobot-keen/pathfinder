@@ -36,7 +36,10 @@ server.stdout.on('data', (d) => {
 process.on('exit', () => server.kill());
 
 try {
-  await wait(500);
+  const serverStart = Date.now();
+  while (!serverLog.includes(`http://localhost:${PORT}`) && Date.now() - serverStart < 5000) {
+    await wait(50);
+  }
   check('서버가 기동됨', serverLog.includes(`http://localhost:${PORT}`));
 
   // --- 1. 시드된 기본 프로젝트 ---
