@@ -185,12 +185,12 @@ function inverseXY(a, x, y) { const c = Math.cos(a.yaw), s = Math.sin(a.yaw); co
 const b64 = (s) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
 const layers = DATA.layers.map((L) => {
   const codes = b64(L.data);
+  // every occupied cell (wall or furniture tag) -- the classifier's wall tag is not
+  // trusted as a filter (== scan_alignment_metrics.wall_points)
   const walls = [];
-  let hasWall = false;
-  for (let i = 0; i < codes.length; i++) if (codes[i] === 3) { hasWall = true; break; }
   for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) {
     const v = codes[r * L.cols + c];
-    if (v === 3 || (!hasWall && v === 2)) walls.push(L.origin[0] + (c + 0.5) * L.resolution, L.origin[1] + (r + 0.5) * L.resolution);
+    if (v === 3 || v === 2) walls.push(L.origin[0] + (c + 0.5) * L.resolution, L.origin[1] + (r + 0.5) * L.resolution);
   }
   const a = L.alignment;
   const al = { ox: a.offsetX, oz: a.offsetZ, yaw: a.yawRadians };

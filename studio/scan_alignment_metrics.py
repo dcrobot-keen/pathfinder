@@ -45,13 +45,13 @@ def cell_centres(s: Slice, mask: np.ndarray) -> np.ndarray:
 
 
 def wall_points(s: Slice) -> np.ndarray:
-    """Wall-tagged cells; if the slice carries no wall tags at all (no
-    --classify), fall back to every occupied cell so there is still structure
-    to match against."""
-    walls = cell_centres(s, s.codes == CODE_OCC_WALL)
-    if len(walls) == 0:
-        walls = cell_centres(s, (s.codes == CODE_OCC_WALL) | (s.codes == CODE_OCC_FURNITURE))
-    return walls
+    """Every occupied cell (wall-tagged or furniture-tagged) at the slice
+    height. The wall/furniture tag from studio.classify is NOT used to filter:
+    on the 2026-09-05 rooms it called 1756 cells furniture and only 114 wall,
+    starving the metrics of structure (decided 2026-09-05: drop the tag
+    dependency). At LiDAR height (~0.18 m) "furniture" is table legs, sofa
+    fronts, cabinet bases -- fixed enough to align against."""
+    return cell_centres(s, (s.codes == CODE_OCC_WALL) | (s.codes == CODE_OCC_FURNITURE))
 
 
 def codes_at(s: Slice, xy_local: np.ndarray) -> np.ndarray:
