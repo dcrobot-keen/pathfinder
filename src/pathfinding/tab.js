@@ -927,8 +927,10 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
         if (!anim.pathCoords) return;
         simBtn.disabled = true;
         try {
-          await sendDriveRequest(SIM_ROBOT_ID, anim.pathCoords);
-          setStatus(`로봇#${anim.id} 경로를 시뮬레이터(${SIM_ROBOT_ID})로 전송했습니다.`);
+          const sent = await sendDriveRequest(SIM_ROBOT_ID, anim.pathCoords);
+          // 서버가 로봇이 VDA5050(MQTT)로 온라인이면 order로, 아니면 예전 WebSocket 릴레이로 보낸다.
+          const via = sent.transport === 'vda5050' ? `VDA5050 order ${String(sent.orderId).slice(0, 8)}…` : 'drive-request 릴레이';
+          setStatus(`로봇#${anim.id} 경로를 시뮬레이터(${SIM_ROBOT_ID})로 전송했습니다 (${via}).`);
         } catch (err) {
           console.error('시뮬레이터 전송 실패', err);
           setStatus(`시뮬레이터 전송 실패: ${err.message}`);

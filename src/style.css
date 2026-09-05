@@ -692,3 +692,122 @@ body {
   display: flex;
   gap: 8px;
 }
+
+/* ---- 플릿 (RCS) 탭: VDA5050 브로커 설정 + 로봇 표 (robot-* 스타일 재사용) ---- */
+.fleet-broker-status {
+  font-size: 12px;
+  min-height: 16px;
+}
+
+.fleet-check {
+  font-size: 13px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fleet-id-row {
+  display: flex;
+  gap: 8px;
+}
+
+.fleet-id-row .robot-field {
+  flex: 1;
+}
+
+.fleet-help {
+  font-size: 11px;
+  color: #777;
+  line-height: 1.5;
+}
+
+.fleet-help code {
+  font-size: 11px;
+  background: #f3f3f3;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.fleet-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  font-size: 12px;
+}
+
+.fleet-table th,
+.fleet-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+.fleet-table th {
+  font-weight: bold;
+  color: #555;
+  background: #fafafa;
+  white-space: nowrap;
+}
+
+.fleet-table[hidden],
+.fleet-empty[hidden] {
+  display: none;
+}
+
+.fleet-name {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.fleet-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.fleet-serial {
+  font-weight: bold;
+}
+
+.fleet-sub {
+  font-size: 11px;
+  color: #888;
+}
+
+.fleet-mono {
+  font-family: ui-monospace, monospace;
+}
+
+.fleet-table-wrap {
+  overflow-x: auto;
+}
+
+.fleet-errors div {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.fleet-actions {
+  white-space: nowrap;
+}
+
+.fleet-actions .robot-button {
+  flex: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.fleet-empty {
+  color: #888;
+  font-size: 13px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}

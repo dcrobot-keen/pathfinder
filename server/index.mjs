@@ -10,9 +10,12 @@ import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { createRobotsRouter } from './robots.mjs';
 import { createProjectsRouter } from './projects.mjs';
+import { createVda5050Bridge } from './vda5050.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const IMPORTED_DIR = resolve(__dirname, '../data/imported');
+// projects.mjs와 같은 규칙: PATHFINDER_DATA_DIR로 데이터 루트를 바꿀 수 있다(스모크 테스트용).
+const DATA_DIR = process.env.PATHFINDER_DATA_DIR ? resolve(process.env.PATHFINDER_DATA_DIR) : resolve(__dirname, '../data');
 const ROOM_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 const app = express();
@@ -104,8 +107,21 @@ app.put('/api/drive-request/:robotId', (req, res) => {
     return;
   }
   const { robotId } = req.params;
+  // 이 robotId가 VDA5050(MQTT)로 ONLINE이면 표준 order로 보낸다 -- 같은 로봇이 두
+  // 경로로 동시에 경로를 받지 않게 WebSocket 릴레이는 그 경우 건너뛴다(sim-driver도
+  // MQTT_URL이 있으면 릴레이를 구독하지 않는다). 아니면 예전 릴레이 그대로.
+  const viaMqtt = vda5050.findOnlineBySerial(robotId);
+  if (viaMqtt) {
+    try {
+      const sent = vda5050.sendOrder(viaMqtt.manufacturer, robotId, req.body.path, { mapId: req.body.mapId });
+      res.json({ ok: true, transport: 'vda5050', ...sent });
+    } catch (err) {
+      res.status(err.status ?? 400).json({ error: err.message });
+    }
+    return;
+  }
   broadcastOn(driveRequestWss, { robotId, path: req.body.path });
-  res.json({ ok: true });
+  res.json({ ok: true, transport: 'relay' });
 });
 
 const PORT = process.env.PORT || 3001;
@@ -115,8 +131,19 @@ const httpServer = createServer(app);
 // 업그레이드 요청을 검사 없이 서로가 가로채지 않도록.
 const livePoseWss = new WebSocketServer({ noServer: true });
 const driveRequestWss = new WebSocketServer({ noServer: true });
+// VDA5050 브리지(server/vda5050.mjs): MQTT로 들어온 로봇 위치를 위 live-pose fan-out에
+// 그대로 합류시킨다 -- 지도 마커 코드(src/liveRobotPose.js)는 전송 수단을 모른다.
+const vda5050 = await createVda5050Bridge({
+  dataDir: DATA_DIR,
+  onPose: (robotId, pose) => {
+    latestPoseByRobot.set(robotId, pose);
+    broadcastPose(robotId, pose);
+  },
+});
+app.use('/api', vda5050.router);
+
 httpServer.on('upgrade', (req, socket, head) => {
-  const wss = { '/api/live-pose/stream': livePoseWss, '/api/drive-request/stream': driveRequestWss }[req.url];
+  const wss = { '/api/live-pose/stream': livePoseWss, '/api/drive-request/stream': driveRequestWss, [vda5050.streamPath]: vda5050.wss }[req.url];
   if (!wss) {
     socket.destroy();
     return;

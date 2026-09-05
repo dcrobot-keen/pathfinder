@@ -22,6 +22,7 @@ import { importedObstacleStyle, createImportedObstaclesPanel } from './importedO
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
 import { createPathfindingTab } from './pathfinding/tab.js';
 import { createRobotRegistryTab } from './robots/robotRegistry.js';
+import { createFleetTab } from './fleet/tab.js';
 import { createProjectSelector } from './projects/projectSelector.js';
 
 createProjectSelector(document.getElementById('project-selector'));
@@ -143,6 +144,7 @@ let currentPoints = [];
 let sliceLayers = [];
 let pfObstacleTab = null;
 let robotsTab = null;
+let fleetTab = null;
 
 function activateTab(tabKey) {
   tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
@@ -179,6 +181,12 @@ function activateTab(tabKey) {
 
   if (tabKey === 'robots' && !robotsTab) {
     robotsTab = createRobotRegistryTab(document.getElementById('robots'));
+  }
+
+  // VDA5050 관제(doc/vda5050-rcs.md): 브로커 설정 + 구독 로봇 표. 마커는 2D/길찾기
+  // 탭의 liveRobotPose.js가 그대로 그린다.
+  if (tabKey === 'fleet' && !fleetTab) {
+    fleetTab = createFleetTab(document.getElementById('fleet'));
   }
 }
 

@@ -94,6 +94,7 @@ server/
   index.mjs               Express + lowdb API 서버 (/api/nodelink) + 실시간 로봇 위치 릴레이
                             (/api/live-pose, WebSocket /api/live-pose/stream)
   robots.mjs                로봇 등록 CRUD API (/api/robots) + 기본 4종 자동 시드
+  vda5050.mjs               VDA5050 MQTT 브리지 (/api/vda5050/*): 브로커 구독 -> live-pose 합류 + 플릿 상태, order/instantActions 발행
 pathfinder/               Go 모듈 — 경로탐색 알고리즘 + HTTP API + WASM
   graph/                   Dijkstra/A*, 그래프 스냅/가상노드 삽입
   grid/                    occupancy grid, Grid A*, Hybrid A*. NewGridFromOccupancy로 폴리곤 대신
@@ -109,6 +110,7 @@ scripts/
   import-scan-to-map-studio.mjs   scan-to-map-studio의 output.geojson -> data/imported/<room>.geojson 변환
   build-wasm.mjs           pathfinder/wasm -> dist-wasm/pathfinder.wasm + wasm_exec.js 빌드
   live-pose-smoke.mjs      pathfinder의 첫 JS 자동 테스트 -- 좌표 변환 + 서버 PUT/WebSocket 릴레이 검증
+  vda5050-smoke.mjs        VDA5050 브리지 검증 (가짜 MQTT 클라이언트 주입, 브로커 불필요)
 public/samples/            샘플 PCD 파일들 (앱이 초기 로드에 사용). 100MB를 넘는 실측 스캔 파일은
                             GitHub 용량 제한 때문에 git에 커밋하지 않고 로컬에만 둠(.gitignore 참고).
 public/vps-capture.html    카메라 → vps-system /localize → map 프레임 변환 → /api/live-pose PUT까지
@@ -233,6 +235,32 @@ pathfinder의 첫 JS 자동 테스트)로 검증되고, 실제 Chrome에서 서�
 로봇 아이콘이 정확한 좌표로 나타나는 것까지 수동으로 확인했습니다. `vps-capture.html`의 카메라
 캡처·실제 vps-system 서버 호출 구간은 실제 카메라/서버가 없어 검증하지 못했습니다 — "알려진 제한"
 참고.
+
+## 플릿 (RCS) — VDA5050 브리지
+
+pathfinder를 관제(RCS) 쪽으로 세우는 탭입니다. 설계와 우리가 고정한 규약(토픽 접두사
+`uagv/v2/<manufacturer>/<serialNumber>`, `mapId` = 프로젝트 이름, 좌표 = pathfinder 평면)은
+[`../doc/vda5050-rcs.md`](../doc/vda5050-rcs.md) 참고.
+
+- **서버(`server/vda5050.mjs`)**가 MQTT 브로커에 붙어 `connection`/`state`/`visualization`을 구독합니다.
+  위치는 기존 `/api/live-pose/stream` fan-out에 그대로 합류하므로 2D/길찾기 탭의 마커 코드는 전송
+  수단을 모릅니다. 로봇별 플릿 상태(연결·주문·오류)는 `/api/vda5050/stream` WebSocket으로 탭에 흐릅니다.
+- **"플릿 (RCS)" 탭**에서 브로커 URL·구독 목록을 저장하면 즉시 재접속하고(`data/vda5050.json`,
+  기본 `enabled:false`), 로봇 표에서 `cancelOrder`/`stopPause`/`startPause`를 보냅니다.
+- **길찾기 탭의 "시뮬레이터로 실행"**은 그 robotId가 VDA5050으로 ONLINE이면 서버가 자동으로
+  `order`로 발행하고(`transport: "vda5050"`), 아니면 예전 `drive-request` WebSocket 릴레이를 씁니다.
+- 로봇 쪽 상대는 ros-chromium `robot-os-chromium/packages/nodes`의 `Vda5050Node`(sim-driver가
+  `MQTT_URL`로 켬)이고, 브로커는 ros-chromium compose의 `mosquitto`(127.0.0.1:1883)입니다.
+
+```bash
+GET    /api/vda5050/config                                    # { config, status, supportedInstantActions }
+PUT    /api/vda5050/config                                    # 저장 + 재접속. body = config
+GET    /api/vda5050/robots                                    # { robots: [...], status, staleAfterMs }
+DELETE /api/vda5050/robots/:manufacturer/:serialNumber        # 표에서 제거
+POST   /api/vda5050/robots/:manufacturer/:serialNumber/order  # { path: [[x,y],...], mapId?, updatePrevious? } -> { orderId, orderUpdateId }
+POST   /api/vda5050/robots/:manufacturer/:serialNumber/instant-actions   # { actionType: cancelOrder|stopPause|startPause }
+WS     /api/vda5050/stream                                    # snapshot -> robot/status/forget 이벤트
+```
 
 ## PCD 샘플 생성 스크립트
 
