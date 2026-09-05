@@ -17,7 +17,7 @@ import VectorLayer from 'ol/layer/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom, activeProjectFloorImage } from './appShared.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
 import { loadImportedObstacles } from './importedObstaclesApi.js';
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
@@ -41,13 +41,18 @@ const SLICE_HEIGHT_M = 0.5;
 const BLUEPRINT_WIDTH_M = 25.923;
 const BLUEPRINT_HEIGHT_M = 25.923;
 const BLUEPRINT_URL = new URL('../data/blueprint_9108.jpg', import.meta.url).href;
+// 스캔 지도로 만든 프로젝트(from-slicemap + floor)는 앱의 바닥 이미지를 배경으로 깐다 --
+// 정합 워크스페이스가 같은 격자로 합성해 publish 한 <group>.floor.png. 없으면 예전 샘플 도면.
+const BLUEPRINT_LABEL = activeProjectFloorImage ? '바닥 이미지 (앱 스캔)' : '배경 도면';
 const blueprintLayer = new ImageLayer({
-  source: new ImageStatic({
-    url: BLUEPRINT_URL,
-    imageExtent: [0, 0, BLUEPRINT_WIDTH_M, BLUEPRINT_HEIGHT_M],
-    projection: indoorProjection,
-  }),
-  visible: false, // 기본은 꺼둔 채로 시작 — 레이어 패널에서 필요할 때 켠다
+  source: new ImageStatic(
+    activeProjectFloorImage
+      ? { url: activeProjectFloorImage.url, imageExtent: activeProjectFloorImage.extent, projection: indoorProjection }
+      : { url: BLUEPRINT_URL, imageExtent: [0, 0, BLUEPRINT_WIDTH_M, BLUEPRINT_HEIGHT_M], projection: indoorProjection }
+  ),
+  // 샘플 도면은 꺼둔 채 시작(레이어 패널에서 켬); 스캔 바닥 이미지는 프로젝트의 것이라 바로 보인다.
+  visible: Boolean(activeProjectFloorImage),
+  opacity: activeProjectFloorImage ? 0.85 : 1,
 });
 
 const gridLayer = buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10);
@@ -142,7 +147,7 @@ if (activeProjectImportedRoom) {
 // PCD를 아직 업로드하지 않은 초기 상태에도 레이어 토글 패널이 보이도록 먼저 한 번 그린다
 // (배경 도면 / 노드·링크·블록만 — 높이 슬라이스·원본 PCD는 업로드 후에 채워짐).
 renderSlicePanel(document.getElementById('slice-panel'), [], [], [
-  { layer: blueprintLayer, label: '배경 도면' },
+  { layer: blueprintLayer, label: BLUEPRINT_LABEL },
   { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
   { layer: editLayerApi.layer, label: '노드/링크/블록' },
   { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
@@ -235,7 +240,7 @@ function applyPoints(points, label) {
   sliceLayers = createSliceLayers(pcdSource, bands);
   sliceLayers.forEach((layer) => map.addLayer(layer));
   renderSlicePanel(document.getElementById('slice-panel'), bands, sliceLayers, [
-    { layer: blueprintLayer, label: '배경 도면' },
+    { layer: blueprintLayer, label: BLUEPRINT_LABEL },
     { layer: editLayerApi.layer, label: '노드/링크/블록' },
     { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
     { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },

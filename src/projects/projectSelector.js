@@ -104,25 +104,42 @@ export function createProjectSelector(container) {
   // 시뮬레이터가 월드로 쓰므로 로봇 좌표가 그대로 맞는다(doc/vda5050-rcs.md).
   const scanInput = document.createElement('input');
   scanInput.type = 'file';
-  scanInput.accept = '.json,application/json';
+  scanInput.accept = '.json,.png,application/json,image/png';
+  scanInput.multiple = true; // <group>.slicemap.json + (선택) <group>.floor.png + <group>.floor.json
   scanInput.hidden = true;
   const scanBtn = document.createElement('button');
   scanBtn.type = 'button';
   scanBtn.className = 'project-new-button project-scan-button';
   scanBtn.textContent = '스캔 지도로 만들기';
-  scanBtn.title = 'slicemap-v1 파일(예: project_20260905.slicemap.json)로 프로젝트 + 장애물 생성';
+  scanBtn.title = 'slicemap-v1 파일(예: project_20260905.slicemap.json)로 프로젝트 + 장애물 생성. 같은 이름의 .floor.png/.floor.json 을 함께 고르면 바닥 이미지도 배경으로 깐다';
   scanBtn.addEventListener('click', () => scanInput.click());
   const scanStatus = document.createElement('span');
   scanStatus.className = 'project-create-status';
   scanInput.addEventListener('change', async () => {
-    const file = scanInput.files?.[0];
-    if (!file) return;
+    const files = Array.from(scanInput.files ?? []);
+    if (files.length === 0) return;
     scanBtn.disabled = true;
     scanStatus.textContent = '만드는 중...';
     try {
+      const floorPng = files.find((f) => /\.floor\.png$/i.test(f.name));
+      const floorJson = files.find((f) => /\.floor\.json$/i.test(f.name));
+      const file = files.find((f) => /\.slicemap\.json$/i.test(f.name)) ?? files.find((f) => /\.json$/i.test(f.name) && f !== floorJson);
+      if (!file) throw new Error('slicemap-v1 .json 파일이 없습니다.');
       const slicemap = JSON.parse(await file.text());
       const name = file.name.replace(/\.slicemap\.json$|\.json$/i, '');
-      const project = await createProjectFromSlicemap({ name, slicemap });
+      let floor;
+      if (floorPng && floorJson) {
+        const png = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(floorPng);
+        });
+        floor = { png, meta: JSON.parse(await floorJson.text()) };
+      } else if (floorPng || floorJson) {
+        throw new Error('.floor.png 와 .floor.json 은 둘 다 골라야 합니다.');
+      }
+      const project = await createProjectFromSlicemap({ name, slicemap, floor });
       navigateToProject(project.id);
     } catch (err) {
       scanStatus.textContent = `실패: ${err.message}`;

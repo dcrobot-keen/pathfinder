@@ -76,6 +76,19 @@ const doc = { format: 'slicemap-v1', z: 0.18, band: 0.05, resolution: r, origin:
   check('imported geojson written under the data dir', fc.type === 'FeatureCollection' && fc.features.length === 3);
   r = await api('GET', `/api/projects/${projectId}`);
   check('project keeps slicemap provenance + importedRoom', r.body.importedRoom === 'scan_test' && r.body.slicemap.origin[0] === -3);
+  // 바닥 이미지: 1x1 PNG, floor origin (-2, -1.5) @ 0.5 m -> 프로젝트 평면 extent = origin - slicemap origin (-3, -2)
+  const PNG_1x1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  r = await api('POST', '/api/projects/from-slicemap', { name: 'with floor', slicemap: doc, floor: { png: 'data:image/png;base64,' + PNG_1x1, meta: { format: 'floor-image-v1', resolution: 0.5, origin: [-2, -1.5], width_px: 1, height_px: 1 } } });
+  check('from-slicemap stores the floor image with a project-plane extent', r.status === 201 && r.body.floorImage?.url === '/api/imported-obstacles/with_floor/floor.png' && JSON.stringify(r.body.floorImage.extent) === '[1,0.5,1.5,1]');
+  const floorBytes = await readFile(join(dataDir, 'imported', 'with_floor.floor.png'));
+  check('floor png written', floorBytes.length > 20 && floorBytes.readUInt32BE(0) === 0x89504e47);
+  const withFloorId = r.body.id;
+  r = await api('PUT', `/api/projects/${withFloorId}/from-slicemap`, { slicemap: doc });
+  check('PUT from-slicemap refreshes in place (same id, keeps floor, keeps name)', r.status === 200 && r.body.id === withFloorId && r.body.floorImage?.extent[0] === 1 && r.body.name === 'with floor');
+  r = await api('POST', '/api/projects/from-slicemap', { name: 'bad floor', slicemap: doc, floor: { png: 'bm90IGEgcG5n', meta: { resolution: 0.5, origin: [0, 0], width_px: 1, height_px: 1 } } });
+  check('non-PNG floor rejected', r.status === 400);
+  r = await api('PUT', '/api/projects/nope/from-slicemap', { slicemap: doc });
+  check('PUT from-slicemap 404 for unknown project', r.status === 404);
   r = await api('POST', '/api/projects/from-slicemap', { name: 'bad', slicemap: { format: 'x' } });
   check('from-slicemap validates', r.status === 400);
   r = await api('POST', '/api/projects/from-slicemap', { slicemap: doc });

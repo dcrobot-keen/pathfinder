@@ -32,11 +32,11 @@ export async function createProject({ name, sizeX, sizeY }) {
  * (server/projects.mjs POST /api/projects/from-slicemap). 평면 크기는 격자 크기,
  * 좌표는 시뮬레이터 월드와 동일(격자 왼쪽-아래 = 0,0).
  */
-export async function createProjectFromSlicemap({ name, slicemap, room }) {
+export async function createProjectFromSlicemap({ name, slicemap, room, floor }) {
   const res = await fetch(`${API_URL}/from-slicemap`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, slicemap, room }),
+    body: JSON.stringify({ name, slicemap, room, floor }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

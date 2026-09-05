@@ -34,6 +34,19 @@ app.get('/api/imported-obstacles', async (req, res) => {
   res.json({ rooms });
 });
 
+// from-slicemap 이 저장한 바닥 이미지(정합 워크스페이스의 합성 floorplan). 프로젝트의
+// floorImage.url 이 여기를 가리키고 extent 는 프로젝트 평면 기준이다.
+app.get('/api/imported-obstacles/:room/floor.png', (req, res) => {
+  const { room } = req.params;
+  if (!ROOM_NAME_RE.test(room)) {
+    res.status(400).json({ error: '올바르지 않은 room 이름입니다.' });
+    return;
+  }
+  res.sendFile(resolve(IMPORTED_DIR, `${room}.floor.png`), (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: `"${room}" 바닥 이미지가 없습니다.` });
+  });
+});
+
 app.get('/api/imported-obstacles/:room', async (req, res) => {
   const { room } = req.params;
   if (!ROOM_NAME_RE.test(room)) {

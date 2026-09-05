@@ -252,6 +252,11 @@ node scripts/create-project-from-slicemap.mjs ../ros-chromium/simulator/worlds/p
   `importedRoom`으로 기억해 열 때 자동으로 불러옵니다.
 - VDA5050 `mapId`: sim-driver는 `MAP_ID`가 비어 있으면 시뮬레이터 월드 이름(= slicemap 파일 이름 = 이 프로젝트
   이름)을 씁니다.
+- **바닥 이미지**: 정합 워크스페이스가 함께 publish한 `<group>.floor.png/.json`(앱 floorplan 합성, slicemap과
+  같은 격자)을 같이 넘기면(`floor: { png, meta }`; 버튼은 파일을 함께 선택, 스크립트는 옆 파일을 자동 감지)
+  `data/imported/<room>.floor.png`로 저장되고 프로젝트 `floorImage {url, extent}`가 됩니다. 2D 뷰와 길찾기 탭이
+  이를 "바닥 이미지 (앱 스캔)" 레이어로 장애물 아래에 깝니다. 정합을 다시 저장한 뒤에는
+  `--project <id>`(`PUT /api/projects/:id/from-slicemap`)로 같은 프로젝트를 갱신합니다.
 
 ## 플릿 (RCS) — VDA5050 브리지
 

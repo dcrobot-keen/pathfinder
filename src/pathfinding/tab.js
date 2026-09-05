@@ -3,6 +3,8 @@ import View from 'ol/View.js';
 import VectorLayer from 'ol/layer/Vector.js';
 import VectorSource from 'ol/source/Vector.js';
 import WebGLVectorLayer from 'ol/layer/WebGLVector.js';
+import ImageLayer from 'ol/layer/Image.js';
+import ImageStatic from 'ol/source/ImageStatic.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import Feature from 'ol/Feature.js';
 import PointGeom from 'ol/geom/Point.js';
@@ -17,7 +19,7 @@ import Stroke from 'ol/style/Stroke.js';
 import Text from 'ol/style/Text.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource, activeProjectName } from '../appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource, activeProjectName, activeProjectFloorImage } from '../appShared.js';
 import { sendFleetOrder, subscribeFleetStream } from '../fleet/fleetApi.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
@@ -101,6 +103,14 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       'circle-opacity': 0.6,
     },
   });
+  // 스캔 프로젝트의 바닥 이미지(앱 floorplan 합성) -- 2D 뷰와 같은 파일, 이동 명령을 내릴 때
+  // 실제 바닥이 보여야 목적지를 고르기 쉽다. 없는 프로젝트면 레이어를 만들지 않는다.
+  const floorImageLayer = activeProjectFloorImage
+    ? new ImageLayer({
+        source: new ImageStatic({ url: activeProjectFloorImage.url, imageExtent: activeProjectFloorImage.extent, projection: indoorProjection }),
+        opacity: 0.85,
+      })
+    : null;
   const graphLayer = new VectorLayer({ source: nodeLinkSource, style: nodeLinkStyle });
   const importedObstacleLayer = new VectorLayer({ source: importedObstacleSource, style: importedObstacleStyle });
   // WebSocket 연결은 main.js가 한 번만 시작한다 — 여기서는 같은 공유 소스를 감싸기만 함.
@@ -114,6 +124,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
     target: mapEl,
     layers: [
       buildGridLayer(MAP_SIZE_X, MAP_SIZE_Y, 10),
+      ...(floorImageLayer ? [floorImageLayer] : []),
       floorLayer,
       graphLayer,
       importedObstacleLayer,
@@ -150,6 +161,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
   const layersPanelEl = document.createElement('div');
   mapEl.appendChild(layersPanelEl);
   renderSlicePanel(layersPanelEl, [], [], [
+    ...(floorImageLayer ? [{ layer: floorImageLayer, label: '바닥 이미지 (앱 스캔)' }] : []),
     { layer: floorLayer, label: '바닥 PCD (0.5m)' },
     { layer: graphLayer, label: '노드/링크/블록' },
     { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },

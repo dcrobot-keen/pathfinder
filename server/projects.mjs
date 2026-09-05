@@ -117,38 +117,84 @@ export async function createProjectsRouter() {
   // 점유 셀 = data/imported/<room>.geojson 장애물 블록, importedRoom 으로 연결.
   // 같은 파일을 시뮬레이터 SIM_WORLD 로 쓰면 두 좌표계가 그대로 일치한다
   // (server/slicemap.mjs 헤더 참고). doc/vda5050-rcs.md 의 "프로젝트 = mapId".
-  router.post('/projects/from-slicemap', async (req, res) => {
-    const body = req.body || {};
-    if (!body.name || typeof body.name !== 'string') {
-      res.status(400).json({ error: 'name은 필수입니다.' });
-      return;
+  // body.floor (선택): 정합 워크스페이스가 함께 publish한 <group>.floor.png/.json --
+  // { png: base64 또는 data URL, meta: floor-image-v1 { resolution, origin:[x,y], width_px, height_px } }.
+  // 격자 좌표계가 slicemap과 같으므로(둘 다 slice 평면, origin = 왼쪽-아래) 프로젝트 평면
+  // extent 는 slicemap origin 을 빼서 얻는다. 파일은 data/imported/<room>.floor.png.
+  async function saveFloorImage(room, slice, floor) {
+    if (!floor) return null;
+    const meta = floor.meta ?? {};
+    const png = typeof floor.png === 'string' ? floor.png.replace(/^data:image\/png;base64,/, '') : null;
+    if (!png) throw new Error('floor.png (base64) 가 필요합니다.');
+    for (const k of ['resolution', 'width_px', 'height_px']) {
+      if (!Number.isFinite(Number(meta[k])) || Number(meta[k]) <= 0) throw new Error(`floor.meta.${k} 가 양수가 아닙니다.`);
     }
-    let slice;
-    try {
-      slice = parseSlicemap(body.slicemap);
-    } catch (err) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    const room = roomIdFromName(body.room ?? body.name);
+    if (!Array.isArray(meta.origin) || meta.origin.length < 2) throw new Error('floor.meta.origin [x, y] 가 필요합니다.');
+    const bytes = Buffer.from(png, 'base64');
+    if (bytes.length < 8 || bytes.readUInt32BE(0) !== 0x89504e47) throw new Error('floor.png 가 PNG 가 아닙니다.');
+    await writeFile(resolve(IMPORTED_DIR, `${room}.floor.png`), bytes);
+    const res_ = Number(meta.resolution);
+    const x0 = Number(meta.origin[0]) - slice.origin[0];
+    const y0 = Number(meta.origin[1]) - slice.origin[1];
+    return {
+      url: `/api/imported-obstacles/${room}/floor.png`,
+      extent: [x0, y0, x0 + Number(meta.width_px) * res_, y0 + Number(meta.height_px) * res_].map((v) => Math.round(v * 10000) / 10000),
+      widthPx: Number(meta.width_px),
+      heightPx: Number(meta.height_px),
+    };
+  }
+
+  /** slicemap(+floor) -> 프로젝트 필드 + 장애물 파일. existing 이 있으면 그 프로젝트를 갱신한다. */
+  async function applySlicemap(body, existing = null) {
+    const slice = parseSlicemap(body.slicemap);
+    const name = typeof body.name === 'string' && body.name ? body.name : existing?.name;
+    if (!name) throw Object.assign(new Error('name은 필수입니다.'), { status: 400 });
+    const room = existing?.importedRoom ?? roomIdFromName(body.room ?? name);
     const { sizeX, sizeY } = slicemapSize(slice);
     const timestamp = nowIso();
     const { featureCollection, counts } = slicemapToObstacles(slice, { room, importedAt: timestamp });
     await mkdir(IMPORTED_DIR, { recursive: true });
     await writeFile(resolve(IMPORTED_DIR, `${room}.geojson`), JSON.stringify(featureCollection), 'utf-8');
+    const floorImage = await saveFloorImage(room, slice, body.floor);
     const project = {
-      id: randomUUID(),
-      name: body.name,
+      ...(existing ?? { id: randomUUID(), createdAt: timestamp }),
+      name,
       sizeX: Math.round(sizeX * 1000) / 1000,
       sizeY: Math.round(sizeY * 1000) / 1000,
       importedRoom: room,
       slicemap: { resolution: slice.resolution, cols: slice.cols, rows: slice.rows, origin: slice.origin, z: slice.z, sources: slice.sources },
-      createdAt: timestamp,
+      floorImage: floorImage ?? existing?.floorImage ?? null,
       updatedAt: timestamp,
     };
-    db.data.projects.push(project);
-    await db.write();
-    res.status(201).json({ ...project, obstacleCounts: counts, featureCount: featureCollection.features.length });
+    return { project, counts, featureCount: featureCollection.features.length };
+  }
+
+  router.post('/projects/from-slicemap', async (req, res) => {
+    try {
+      const { project, counts, featureCount } = await applySlicemap(req.body || {});
+      db.data.projects.push(project);
+      await db.write();
+      res.status(201).json({ ...project, obstacleCounts: counts, featureCount });
+    } catch (err) {
+      res.status(err.status ?? 400).json({ error: err.message });
+    }
+  });
+
+  // 같은 프로젝트를 새 slicemap/floor 로 갱신 (id, nodelink 유지) -- 정합을 다시 저장했을 때.
+  router.put('/projects/:id/from-slicemap', async (req, res) => {
+    const idx = db.data.projects.findIndex((p) => p.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ error: '프로젝트를 찾을 수 없습니다.' });
+      return;
+    }
+    try {
+      const { project, counts, featureCount } = await applySlicemap(req.body || {}, db.data.projects[idx]);
+      db.data.projects[idx] = project;
+      await db.write();
+      res.json({ ...project, obstacleCounts: counts, featureCount });
+    } catch (err) {
+      res.status(err.status ?? 400).json({ error: err.message });
+    }
   });
 
   router.get('/projects/:id', (req, res) => {

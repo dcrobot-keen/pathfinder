@@ -40,6 +40,8 @@ export const activeProjectName = activeProject.name;
 // POST /api/projects/from-slicemap 으로 만든 프로젝트는 자기 스캔 장애물 방(room)을
 // 기억한다 -- 열자마자 main.js가 importedObstacleSource에 불러온다.
 export const activeProjectImportedRoom = activeProject.importedRoom ?? null;
+// 정합 워크스페이스가 합성한 바닥 이미지(앱 floorplan) -- { url, extent:[minX,minY,maxX,maxY] } (프로젝트 평면).
+export const activeProjectFloorImage = activeProject.floorImage ?? null;
 
 // 실내 지도용 평면 좌표계: 0,0을 기점으로 m 단위, 활성 프로젝트가 정한 크기.
 export const MAP_SIZE_X = activeProject.sizeX;
