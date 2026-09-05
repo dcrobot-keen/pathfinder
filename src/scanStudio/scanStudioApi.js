@@ -82,3 +82,49 @@ export async function getScanProjectStatus(name) {
   return request(`/projects/${encodeURIComponent(name)}/status`);
 }
 
+
+// ---- 다중 스캔 그룹 (정합 워크스페이스 네이티브 통합, architecture-improvements ⑱) ----
+export function listGroups() {
+  return request('/groups');
+}
+
+export function prepareGroup(name) {
+  return request(`/groups/${encodeURIComponent(name)}/prepare`, { method: 'POST' });
+}
+
+/** 스캔별 슬라이스(b64 코드 격자)·정합·지표·바닥 이미지·게이트 -- 워크스페이스 페이로드 */
+export function getGroupWorkspace(name) {
+  return request(`/groups/${encodeURIComponent(name)}/workspace`);
+}
+
+export function postGroupMetrics(name, body) {
+  return request(`/groups/${encodeURIComponent(name)}/metrics`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+}
+
+export function postGroupIcp(name, body) {
+  return request(`/groups/${encodeURIComponent(name)}/icp`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+}
+
+/** 저장: 서버가 group_alignment.json 을 쓰고 합성 슬라이스맵을 다시 만들어 publish 한다 */
+export function putGroupAlignment(name, doc) {
+  return request(`/groups/${encodeURIComponent(name)}/alignment`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc),
+  });
+}
+
+export function getGroupMergedSlicemap(name) {
+  return request(`/groups/${encodeURIComponent(name)}/merged.slicemap.json`);
+}
+
+export function getGroupMergedFloorMeta(name) {
+  return request(`/groups/${encodeURIComponent(name)}/merged.floor.json`);
+}
+
+/** 그룹의 파일(merged.png, merged.floor.png ...) URL -- <img>/fetch 용 */
+export function groupFileUrl(name, file) {
+  return `${activeBase}/groups/${encodeURIComponent(name)}/${file}`;
+}

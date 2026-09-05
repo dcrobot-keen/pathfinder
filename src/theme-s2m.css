@@ -371,3 +371,35 @@ button:disabled { opacity: .5; cursor: not-allowed; filter: none; }
 .s2m-progress[hidden] { display: none; }
 .s2m-actionbar__select[hidden] { display: none; }
 .s2m-order__meta--danger { color: var(--danger); white-space: normal; }
+
+/* ---- 지도 › 다중 스캔 정합 (네이티브 워크스페이스) ---- */
+.align-ws.active { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; }
+.align-ws__rail, .align-ws__side { background: var(--panel); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.align-ws__rail { border-right: 1px solid var(--border); }
+.align-ws__side { border-left: 1px solid var(--border); }
+.align-ws__map { position: relative; min-width: 0; background: var(--panel-3); outline: none; }
+.align-ws__section { display: flex; flex-direction: column; gap: 8px; }
+.align-ws__title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); font-weight: 600; display: flex; justify-content: space-between; }
+.align-ws__count { font-family: var(--font-mono); color: var(--text-dim); text-transform: none; letter-spacing: 0; }
+.align-ws__row { display: flex; gap: 6px; flex-wrap: wrap; }
+.align-ws__row .pathfinding-select { flex: 1; min-width: 0; }
+.align-ws__rot .robot-button { flex: 1; padding: 5px 4px; font-size: 11px; white-space: nowrap; }
+.align-ws__note { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; word-break: break-word; }
+.align-ws__note--warn { color: var(--warn); }
+.align-ws__help { display: block; font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+.align-ws__help b { color: var(--text-dim); font-family: var(--font-mono); font-weight: 600; }
+.align-ws__check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+.align-ws__layers { display: flex; flex-direction: column; gap: 6px; }
+.align-ws__layer { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; }
+.align-ws__layer.selected { border-color: var(--warn); background: rgba(245, 166, 35, .1); }
+.align-ws__layer.ref { border-color: rgba(79, 209, 197, .4); }
+.align-ws__sw { width: 12px; height: 12px; border-radius: 3px; }
+.align-ws__layer-name { font-size: 12.5px; font-weight: 600; color: var(--text); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.align-ws__layer-meta { font-size: 11px; color: var(--text-faint); }
+.align-ws__selname { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+.align-ws__grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.align-ws__grid3 label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--text-faint); }
+.align-ws__grid3 .robot-input { width: 100%; box-sizing: border-box; padding: 5px 6px; font-family: var(--font-mono); font-size: 12px; }
+.align-ws__merged { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.align-ws .s2m-stats { grid-template-columns: 1fr 1fr; }
+.align-ws .ol-scale-line { left: 8px; bottom: 8px; }

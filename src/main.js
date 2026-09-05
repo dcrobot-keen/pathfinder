@@ -28,6 +28,7 @@ import { createBrokerSettings } from './fleet/brokerSettings.js';
 import { createProjectSelector } from './projects/projectSelector.js';
 import { subscribeFleetStream, getFleetConfig } from './fleet/fleetApi.js';
 import { openScanWizardModal, initScanWizardModal } from './scanStudio/scanWizardModal.js';
+import { createAlignWorkspace } from './scanStudio/alignWorkspace.js';
 
 createProjectSelector(document.getElementById('project-selector'));
 initScanWizardModal();
@@ -180,6 +181,7 @@ let operateTab = null;
 let simulationTab = null;
 let robotsTab = null;
 let settingsTab = null;
+let alignWorkspace = null;
 let mapsSub = '2d';
 
 // 탭 = 정보 구조(플릿 스튜디오 기획서 §5): 지도(2D/3D) · 로봇 · 운영 · 시뮬레이션 · 설정.
@@ -193,6 +195,11 @@ function activateMapsSub(sub) {
   showView(sub);
   if (sub === '2d') {
     map.updateSize();
+    return;
+  }
+  if (sub === 'align') {
+    if (!alignWorkspace) alignWorkspace = createAlignWorkspace(document.getElementById('view-align'), { onToast: showFleetToast });
+    alignWorkspace.show();
     return;
   }
   if (sub === 'studio') {

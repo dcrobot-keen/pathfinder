@@ -66,9 +66,13 @@
               <span class="subnav-tab-icon">🧊</span>
               <span>3D 포인트 클라우드</span>
             </button>
+            <button class="subnav-tab" data-sub="align">
+              <span class="subnav-tab-icon">⧉</span>
+              <span>다중 스캔 정합</span>
+            </button>
             <button class="subnav-tab" data-sub="studio">
               <span class="subnav-tab-icon">🔄</span>
-              <span>정합 스튜디오 (:8000)</span>
+              <span>정합 스튜디오 (:8000, iframe)</span>
             </button>
           </div>
           <div class="subnav-actions">
@@ -168,6 +172,9 @@
         <div id="mesh-status" class="mesh-status"></div>
       </div>
     </div>
+
+    <!-- 지도 › 다중 스캔 정합: 스튜디오 워크스페이스의 네이티브(OpenLayers) 구현 (src/scanStudio/alignWorkspace.js) -->
+    <div id="view-align" class="view" data-view="align"></div>
 
     <div id="view-studio" class="view" data-view="studio">
       <div class="studio-embed-container">
