@@ -64,3 +64,48 @@ func TestBoundsCoversAllPointsWithPadding(t *testing.T) {
 		t.Errorf("cols/rows = %d/%d, want at least 10/4", cols, rows)
 	}
 }
+
+func TestInflateGrowsObstaclesByRadius(t *testing.T) {
+	g := NewGrid(0, 0, 1, 11, 11)
+	// single occupied cell at (5,5)
+	g.setOccupied(5, 5)
+	g.Inflate(2.0)
+	if !g.IsOccupiedCell(7, 5) || !g.IsOccupiedCell(5, 3) {
+		t.Error("cells 2 m away along an axis should be occupied after Inflate(2)")
+	}
+	if !g.IsOccupiedCell(6, 6) {
+		t.Error("diagonal neighbour (1.41 m) should be occupied")
+	}
+	if g.IsOccupiedCell(7, 7) {
+		t.Error("diagonal at 2.83 m should stay free (Euclidean disc, not a square)")
+	}
+	if g.IsOccupiedCell(8, 5) {
+		t.Error("cell 3 m away should stay free")
+	}
+	before := NewGrid(0, 0, 1, 3, 3)
+	before.Inflate(0)
+	if before.IsOccupiedCell(1, 1) {
+		t.Error("Inflate(0) must be a no-op")
+	}
+}
+
+func TestClearDiscFreesStartAfterInflate(t *testing.T) {
+	g := NewGrid(0, 0, 0.5, 20, 20)
+	wall := []Point{{X: 4, Y: 0}, {X: 4.5, Y: 0}, {X: 4.5, Y: 10}, {X: 4, Y: 10}, {X: 4, Y: 0}}
+	g.RasterizeBlocks([][]Point{wall})
+	g.Inflate(0.6)
+	start := Point{X: 3.6, Y: 5.1} // 0.4 m from the wall: swallowed by the inflated ring
+	if !g.IsOccupiedPoint(start) {
+		t.Fatal("start next to the wall should be occupied after Inflate")
+	}
+	g.ClearDisc(start, 0.6)
+	if g.IsOccupiedPoint(start) {
+		t.Error("ClearDisc should free the start cell")
+	}
+	if !g.IsOccupiedPoint(Point{X: 4.25, Y: 5.1}) {
+		t.Error("the wall itself must stay occupied even inside the carved disc")
+	}
+	if !g.IsOccupiedPoint(Point{X: 4.25, Y: 8}) {
+		t.Error("wall far from the start must remain occupied")
+	}
+}

@@ -27,6 +27,10 @@ type Grid struct {
 	Cols     int
 	Rows     int
 	occupied []bool // row-major, length Cols*Rows
+	// raw is the occupancy before Inflate() grew it (nil until Inflate runs).
+	// ClearDisc only frees cells that were free here, so carving the robot's
+	// start position never opens a path through a real obstacle it is touching.
+	raw []bool
 }
 
 // NewGrid creates an empty (fully free) grid covering
@@ -171,4 +175,68 @@ func Bounds(points []Point, padding, cellSize float64) (originX, originY float64
 		rows = 1
 	}
 	return
+}
+
+// Inflate grows every occupied cell by radiusM (Euclidean distance between
+// cell centers), so a path planned through the remaining free cells keeps at
+// least that clearance from the original obstacles. Callers pass the robot's
+// body radius plus a safety margin; without this the planner happily routes a
+// cell-center path along a wall and a real body (or the simulator's) collides.
+func (g *Grid) Inflate(radiusM float64) {
+	if radiusM <= 0 {
+		return
+	}
+	r := int(math.Ceil(radiusM / g.CellSize))
+	r2 := radiusM * radiusM
+	type offset struct{ dc, dr int }
+	var disc []offset
+	for dr := -r; dr <= r; dr++ {
+		for dc := -r; dc <= r; dc++ {
+			dx := float64(dc) * g.CellSize
+			dy := float64(dr) * g.CellSize
+			if dx*dx+dy*dy <= r2+1e-9 {
+				disc = append(disc, offset{dc, dr})
+			}
+		}
+	}
+	src := make([]bool, len(g.occupied))
+	copy(src, g.occupied)
+	g.raw = src
+	for row := 0; row < g.Rows; row++ {
+		for col := 0; col < g.Cols; col++ {
+			if !src[row*g.Cols+col] {
+				continue
+			}
+			for _, o := range disc {
+				g.setOccupied(col+o.dc, row+o.dr)
+			}
+		}
+	}
+}
+
+// ClearDisc frees every cell whose center lies within radiusM of p that was
+// NOT an obstacle before Inflate (only the inflated ring is carved). Used for
+// the robot's own start position: the body is physically there, so the ring
+// around a nearby wall must not swallow the start cell and make every plan
+// fail with "start is occupied" -- but the wall itself stays a wall.
+func (g *Grid) ClearDisc(p Point, radiusM float64) {
+	if radiusM <= 0 {
+		return
+	}
+	c0, r0 := g.CellAt(p)
+	r := int(math.Ceil(radiusM/g.CellSize)) + 1
+	for row := r0 - r; row <= r0+r; row++ {
+		for col := c0 - r; col <= c0+r; col++ {
+			if !g.InBounds(col, row) {
+				continue
+			}
+			if dist(g.WorldAt(col, row), p) > radiusM+1e-9 {
+				continue
+			}
+			if g.raw != nil && g.raw[g.index(col, row)] {
+				continue // a real obstacle cell, never carve
+			}
+			g.occupied[g.index(col, row)] = false
+		}
+	}
 }

@@ -22,7 +22,7 @@ import { sendFleetOrder, subscribeFleetStream } from '../fleet/fleetApi.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
-import { findNodeLinkPath, findObstaclePath, sendDriveRequest } from './pathfindingApi.js';
+import { findNodeLinkPath, findObstaclePath, sendDriveRequest, inflationForRobot } from './pathfindingApi.js';
 import { animatePathAndRobot, randomPathColor, REFERENCE_SIZE_M as DEFAULT_SIZE_M } from './robotAnimation.js';
 import { listRobots } from '../robots/robotApi.js';
 import { typeLabel } from '../robots/robotCodes.js';
@@ -584,7 +584,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       const result =
         mode === 'nodelink'
           ? await findNodeLinkPath({ featureCollection, start, end, algorithm })
-          : await findObstaclePath({ featureCollection, start, end, algorithm, cellSize: 0.2 });
+          : await findObstaclePath({ featureCollection, start, end, algorithm, cellSize: 0.2, inflationM: inflationForRobot(selectedRobot?.sizeMeters, DEFAULT_SIZE_M) });
 
       const id = nextAnimId++;
       const color = randomPathColor();
@@ -665,7 +665,7 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       const result =
         mode === 'nodelink'
           ? await findNodeLinkPath({ featureCollection, start, end, algorithm: entry.algorithm })
-          : await findObstaclePath({ featureCollection, start, end, algorithm: entry.algorithm, cellSize: 0.2 });
+          : await findObstaclePath({ featureCollection, start, end, algorithm: entry.algorithm, cellSize: 0.2, inflationM: inflationForRobot(entry.sizeMeters, DEFAULT_SIZE_M) });
 
       // 기다리는 동안 초기화(reset)되었거나 이미 목적지에 도착해 정리된 경우 결과를 버린다.
       if (!activeAnimations.includes(entry)) return;
@@ -964,7 +964,16 @@ export function createPathfindingTab(mapEl, panelEl, mode) {
       const result =
         mode === 'nodelink'
           ? await findNodeLinkPath({ featureCollection, start, end, algorithm })
-          : await findObstaclePath({ featureCollection, start, end, algorithm, cellSize: 0.2 });
+          : await findObstaclePath({
+              featureCollection,
+              start,
+              end,
+              algorithm,
+              // 실제 주행이라 촘촘한 격자(0.1 m) + 로봇 반경 인플레이션: 벽에 붙은 경로가 나오면
+              // 순수 추종(lookahead 0.3 m)이 모서리를 깎아 몸체가 벽에 걸린다.
+              cellSize: 0.1,
+              inflationM: inflationForRobot(robot.sizeMeters, DEFAULT_SIZE_M),
+            });
       clearCommandFeatures(robot.vda5050Serial);
       const line = new Feature(new LineString(result.path));
       line.setStyle(COMMAND_PATH_STYLE);

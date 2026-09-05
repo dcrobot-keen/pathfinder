@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"encoding/json"
 	"log"
 	"math"
@@ -34,6 +35,10 @@ type obstacleRequest struct {
 	End               pointDTO                `json:"end"`
 	Algorithm         string                  `json:"algorithm"` // "gridastar" | "hybridastar"
 	CellSize          float64                 `json:"cellSize"`
+	// InflationM: robot body radius + safety margin (m). Obstacles are grown by
+	// this much before planning so the path keeps clearance from walls; the
+	// start cell is carved back out (the robot is physically there). 0 = off.
+	InflationM float64 `json:"inflationM"`
 }
 
 type pathResponse struct {
@@ -222,6 +227,15 @@ func handleObstaclePath(w http.ResponseWriter, r *http.Request) {
 	originX, originY, cols, rows := grid.Bounds(boundsInput, 1.0, cellSize)
 	occupancy := grid.NewGrid(originX, originY, cellSize, cols, rows)
 	occupancy.RasterizeBlocks(relevantBlocks)
+	if req.InflationM > 0 {
+		occupancy.Inflate(req.InflationM)
+		occupancy.ClearDisc(start, req.InflationM)
+		if occupancy.IsOccupiedPoint(end) {
+			writeError(w, http.StatusUnprocessableEntity,
+				fmt.Sprintf("goal is within %.2f m of an obstacle (robot clearance); pick a point further from walls", req.InflationM))
+			return
+		}
+	}
 
 	algo := req.Algorithm
 	var path []graph.Point

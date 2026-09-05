@@ -17,9 +17,19 @@ export function findNodeLinkPath({ featureCollection, start, end, algorithm }) {
   return postPath('/api/path/nodelink', { featureCollection, start, end, algorithm });
 }
 
-/** block(폴리곤) 장애물을 피해 자유 공간에서 경로를 찾는다 (algorithm: "gridastar" | "hybridastar"). */
-export function findObstaclePath({ featureCollection, start, end, algorithm, cellSize }) {
-  return postPath('/api/path/obstacle', { featureCollection, start, end, algorithm, cellSize });
+/**
+ * block(폴리곤) 장애물을 피해 자유 공간에서 경로를 찾는다 (algorithm: "gridastar" | "hybridastar").
+ * inflationM: 로봇 반경 + 여유(m). Go 서버가 장애물을 이만큼 부풀려 벽에서 떨어진 경로를 낸다
+ * (없으면 셀 중심 경로가 벽에 붙어 실제/시뮬레이터 몸체가 충돌한다). 출발점 주변은 다시 비운다.
+ */
+export function findObstaclePath({ featureCollection, start, end, algorithm, cellSize, inflationM }) {
+  return postPath('/api/path/obstacle', { featureCollection, start, end, algorithm, cellSize, inflationM });
+}
+
+/** 등록 로봇 크기(지름, m) -> 계획 시 장애물 인플레이션(반경 + 5 cm 여유). */
+export function inflationForRobot(sizeMeters, fallbackSizeMeters = 0.5) {
+  const size = Number.isFinite(sizeMeters) && sizeMeters > 0 ? sizeMeters : fallbackSizeMeters;
+  return Math.round((size / 2 + 0.05) * 1000) / 1000;
 }
 
 // server/index.mjs(:3001, ROS 없음)의 폐루프 제어 릴레이 호출용. ros-chromium의
