@@ -10,7 +10,10 @@ dependency on FastAPI so the CLI/offline install path is unaffected.
 """
 from __future__ import annotations
 
+import io
+import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -19,6 +22,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from studio.groups import groups_root, prepare as prepare_group
 from studio.project import PROJECTS_ROOT, create_project, list_projects
 from studio.status import read_status, write_status
 from server.align import align_geojson, align_image
@@ -76,7 +80,8 @@ def api_create_project(name: str = Form(...)) -> dict:
 @app.post("/api/projects/{name}/process", status_code=202)
 async def api_process_project(
     name: str,
-    usdz: UploadFile = File(...),
+    usdz: UploadFile | None = File(None),
+    scan_file: UploadFile | None = File(None),
     robot_map_pgm: UploadFile | None = File(None),
     robot_map_yaml: UploadFile | None = File(None),
     trajectory: UploadFile | None = File(None),
@@ -84,17 +89,115 @@ async def api_process_project(
     isolated_cluster_min_area: float = Form(0.3),
     classify: bool = Form(False),
 ) -> dict:
+    file_to_process = scan_file if scan_file is not None else usdz
+    if file_to_process is None:
+        raise HTTPException(status_code=422, detail="scan_file 또는 usdz 파일이 필요합니다.")
+
     project_dir = PROJECTS_ROOT / name
     if not project_dir.exists():
-        raise HTTPException(status_code=404, detail=f"project not found: {name}")
+        create_project(name)
     if is_running(name):
         raise HTTPException(status_code=409, detail=f"a processing job is already running for project {name!r}")
 
     uploads_dir = project_dir / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    usdz_path = uploads_dir / (usdz.filename or "scan.usdz")
-    usdz_path.write_bytes(await usdz.read())
+    filename = file_to_process.filename or "scan.usdz"
+    raw_bytes = await file_to_process.read()
+
+    # Check if uploaded file is a zip archive
+    is_zip = filename.lower().endswith(".zip") or (file_to_process.content_type and "zip" in file_to_process.content_type)
+    if is_zip:
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw_bytes)) as z:
+                names = z.namelist()
+
+                # 1) Multi-scan Project Group zip (contains group_alignment.json)
+                align_names = [n for n in names if n.endswith("group_alignment.json")]
+                if align_names:
+                    group_dir = groups_root() / name
+                    group_dir.mkdir(parents=True, exist_ok=True)
+
+                    align_entry = align_names[0]
+                    prefix = ""
+                    if "/" in align_entry:
+                        prefix = align_entry.rsplit("group_alignment.json", 1)[0]
+
+                    for item in z.infolist():
+                        if item.is_dir():
+                            continue
+                        item_name = item.filename
+                        rel_name = item_name[len(prefix):] if prefix and item_name.startswith(prefix) else item_name
+                        rel_path = Path(rel_name)
+                        if ".." in rel_path.parts:
+                            continue
+                        dest = group_dir / rel_path
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        dest.write_bytes(z.read(item.filename))
+
+                    try:
+                        prepare_group(name)
+                    except Exception as exc:
+                        print(f"[Warning] prepare_group({name}) during zip upload: {exc}")
+
+                    return {
+                        "status": "group_ready",
+                        "type": "group",
+                        "group": name,
+                        "group_url": f"/groups/{name}",
+                        "message": f"다중 스캔 프로젝트 [{name}] 등록 완료 (정합 워크스페이스 준비됨)",
+                    }
+
+                # 2) Single Scan zip (contains scan.usdz or other files)
+                root_folders = {n.split('/')[0] for n in names if '/' in n}
+                prefix = ""
+                if len(root_folders) == 1 and not any('/' not in n for n in names if not n.endswith('/')):
+                    prefix = list(root_folders)[0] + "/"
+
+                for item in z.infolist():
+                    if item.is_dir():
+                        continue
+                    item_name = item.filename
+                    rel_name = item_name[len(prefix):] if prefix and item_name.startswith(prefix) else item_name
+                    rel_path = Path(rel_name)
+                    if ".." in rel_path.parts:
+                        continue
+                    dest = uploads_dir / rel_path
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(z.read(item.filename))
+
+                usdz_candidates = list(uploads_dir.glob("**/*.usdz")) + list(uploads_dir.glob("**/*.ply"))
+                if not usdz_candidates:
+                    raise HTTPException(status_code=400, detail="zip 파일 내에 .usdz 또는 .ply 스캔 모델이 없습니다.")
+                usdz_path = usdz_candidates[0]
+
+                # Check for floorplan.png and floorplan.json
+                floorplan_pngs = list(uploads_dir.glob("**/floorplan.png"))
+                floorplan_jsons = list(uploads_dir.glob("**/floorplan.json"))
+                if floorplan_pngs and floorplan_jsons:
+                    shutil.copyfile(floorplan_pngs[0], project_dir / "floorplan.png")
+                    shutil.copyfile(floorplan_jsons[0], project_dir / "floorplan.json")
+
+                # Check for poses / trajectory
+                trajectory_path = None
+                if trajectory is not None:
+                    trajectory_path = uploads_dir / "trajectory.json"
+                    trajectory_path.write_bytes(await trajectory.read())
+                else:
+                    poses_files = list(uploads_dir.glob("**/poses.jsonl"))
+                    if poses_files:
+                        trajectory_path = poses_files[0]
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail=f"손상된 zip 파일입니다: {exc}") from exc
+    else:
+        # Standard single usdz/ply upload
+        usdz_path = uploads_dir / filename
+        usdz_path.write_bytes(raw_bytes)
+
+        trajectory_path = None
+        if trajectory is not None:
+            trajectory_path = uploads_dir / "trajectory.json"
+            trajectory_path.write_bytes(await trajectory.read())
 
     robot_map_prefix = None
     if robot_map_pgm is not None and robot_map_yaml is not None:
@@ -103,11 +206,6 @@ async def api_process_project(
         pgm_path.write_bytes(await robot_map_pgm.read())
         yaml_path.write_bytes(await robot_map_yaml.read())
         robot_map_prefix = uploads_dir / "robot_map"
-
-    trajectory_path = None
-    if trajectory is not None:
-        trajectory_path = uploads_dir / "trajectory.json"
-        trajectory_path.write_bytes(await trajectory.read())
 
     try:
         start_process_job(
@@ -123,7 +221,12 @@ async def api_process_project(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    return {"status": "started"}
+    return {
+        "status": "started",
+        "type": "single",
+        "name": name,
+        "has_floorplan": (project_dir / "floorplan.png").exists(),
+    }
 
 
 @app.get("/api/projects/{name}/status")

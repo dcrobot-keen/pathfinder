@@ -95,6 +95,22 @@ def _run(
             classify=classify,
             on_progress=on_progress,
         )
+
+        # Generate single-project slicemap if base_map.ply was created
+        try:
+            base_map = project_dir / "base_map.ply"
+            if base_map.exists():
+                import numpy as np
+                from studio.classify import classify_floor_wall_furniture
+                from studio.point_cloud_io import load_point_cloud
+                from studio.slice_map import rasterize_slice, save_slice_json
+                pts, _ = load_point_cloud(base_map)
+                lbls = classify_floor_wall_furniture(pts, rng=np.random.default_rng(0)).labels if classify else None
+                sg = rasterize_slice(pts, z=0.18, band=0.05, resolution=0.05, labels=lbls)
+                save_slice_json(project_dir / f"{name}.slicemap.json", sg)
+        except Exception as exc:
+            print(f"[Warning] single slicemap generation skipped: {exc}")
+
         write_status(project_dir, phase="done", steps=dict(steps), log_line="처리 완료")
     except Exception as exc:  # noqa: BLE001 -- must not let this vanish silently in a bg thread
         tb = traceback.format_exc()

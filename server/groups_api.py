@@ -15,9 +15,11 @@ slicemap), and run the ICP finisher. Mounted by server/app.py.
 from __future__ import annotations
 
 import html
+import io
+import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from studio import groups
@@ -48,6 +50,56 @@ def api_prepare(name: str) -> dict:
         return groups.prepare(name).to_json()
     except FileNotFoundError as exc:
         raise _404(exc)
+
+
+@router.post("/api/groups/upload")
+async def api_upload_group(file: UploadFile = File(...), name: str | None = Form(None)) -> dict:
+    filename = file.filename or "group.zip"
+    group_name = (name or Path(filename).stem).strip()
+    if not group_name:
+        raise HTTPException(status_code=422, detail="group name is required")
+
+    raw_bytes = await file.read()
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as z:
+            group_dir = groups.groups_root() / group_name
+            group_dir.mkdir(parents=True, exist_ok=True)
+
+            names = z.namelist()
+            align_names = [n for n in names if n.endswith("group_alignment.json")]
+            prefix = ""
+            if align_names and "/" in align_names[0]:
+                prefix = align_names[0].rsplit("group_alignment.json", 1)[0]
+            elif names and all("/" in n for n in names if not n.endswith("/")):
+                root_folders = {n.split("/")[0] for n in names}
+                if len(root_folders) == 1:
+                    prefix = list(root_folders)[0] + "/"
+
+            for item in z.infolist():
+                if item.is_dir():
+                    continue
+                item_name = item.filename
+                rel_name = item_name[len(prefix):] if prefix and item_name.startswith(prefix) else item_name
+                rel_path = Path(rel_name)
+                if ".." in rel_path.parts:
+                    continue
+                dest = group_dir / rel_path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(z.read(item.filename))
+
+            try:
+                groups.prepare(group_name)
+            except Exception as exc:
+                print(f"[Warning] prepare error during group upload: {exc}")
+
+            return {
+                "status": "ok",
+                "group": group_name,
+                "url": f"/groups/{group_name}",
+                "scans": len(groups.group_status(group_name).scans),
+            }
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail=f"Bad zip file: {exc}") from exc
 
 
 @router.get("/api/groups/{name}/alignment")

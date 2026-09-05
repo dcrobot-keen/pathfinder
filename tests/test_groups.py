@@ -110,6 +110,17 @@ def test_api() -> None:
             r = c.put("/api/groups/demo/alignment", json={"format": "x"})
             check(r.status_code == 422, "invalid alignment -> 422")
             check(c.get("/api/groups/nope").status_code == 404, "unknown group -> 404")
+
+            # Test POST /api/groups/upload with a zip archive
+            import io
+            import zipfile
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, "w") as z:
+                z.writestr("group_alignment.json", json.dumps({"format": "scan-group-alignment-v1", "group": "uploaded_group", "reference": "scan_1", "alignments": {}}))
+                z.writestr("scan_1/dummy.txt", "hello")
+            zip_buf.seek(0)
+            upload_res = c.post("/api/groups/upload", files={"file": ("uploaded_group.zip", zip_buf.getvalue(), "application/zip")})
+            check(upload_res.status_code == 200 and upload_res.json()["group"] == "uploaded_group", "POST /api/groups/upload unpacks group zip")
         finally:
             os.environ.pop("STUDIO_GROUPS_DIR", None)
             os.environ.pop("STUDIO_PUBLISH_DIR", None)
