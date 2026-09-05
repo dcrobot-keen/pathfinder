@@ -26,10 +26,14 @@ export function findObstaclePath({ featureCollection, start, end, algorithm, cel
   return postPath('/api/path/obstacle', { featureCollection, start, end, algorithm, cellSize, inflationM });
 }
 
-/** 등록 로봇 크기(지름, m) -> 계획 시 장애물 인플레이션(반경 + 5 cm 여유). */
+/**
+ * 등록 로봇 크기(지름, m) -> 계획 시 장애물 인플레이션 = 반경 + 10 cm 여유.
+ * 계획 격자가 0.1 m 이고 슬라이스맵 셀이 0.05 m 라 5 cm 여유로는 실제 여유가 0.10 m 까지
+ * 줄어들었고(TB3 반경 0.11 m 가 가구에 걸려 정지, 2026-09-05), 10 cm 로 올렸다.
+ */
 export function inflationForRobot(sizeMeters, fallbackSizeMeters = 0.5) {
   const size = Number.isFinite(sizeMeters) && sizeMeters > 0 ? sizeMeters : fallbackSizeMeters;
-  return Math.round((size / 2 + 0.05) * 1000) / 1000;
+  return Math.round((size / 2 + 0.1) * 1000) / 1000;
 }
 
 // server/index.mjs(:3001, ROS 없음)의 폐루프 제어 릴레이 호출용. ros-chromium의
