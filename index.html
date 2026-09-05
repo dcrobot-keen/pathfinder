@@ -193,15 +193,15 @@
       <div id="simulation-panel"></div>
       <div id="simulation-viewer-wrap">
         <div class="viewer-embed-bar">
-          <span class="viewer-embed-title">3D 시뮬레이터</span>
+          <span class="viewer-embed-title">시뮬레이터 3D 뷰</span>
           <div class="viewer-bot-selector">
-            <button class="sim-bot-btn active" data-url="http://localhost:8767">tb3-sim-01 (:8767)</button>
-            <button class="sim-bot-btn" data-url="http://localhost:8777">tb3-sim-02 (:8777)</button>
+            <button class="sim-bot-btn active" data-url="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-01">tb3-sim-01</button>
+            <button class="sim-bot-btn" data-url="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-02">tb3-sim-02</button>
           </div>
           <button id="btn-viewer-toggle" class="sim-viewer-toggle-btn">3D 접기</button>
-          <a id="link-sim-external" class="settings-service-link" href="http://localhost:8767" target="_blank" rel="noopener">열기 ↗</a>
+          <a id="link-sim-external" class="settings-service-link" href="http://localhost:8767/?view=3d" target="_blank" rel="noopener">열기 ↗</a>
         </div>
-        <iframe id="sim-frame" src="http://localhost:8767" title="Robot Simulator 3D View"></iframe>
+        <iframe id="sim-frame" src="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-01" title="시뮬레이터 3D 뷰 (simulator viewer.html)"></iframe>
       </div>
     </div>
 
