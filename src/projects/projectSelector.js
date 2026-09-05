@@ -87,7 +87,8 @@ export function createProjectSelector(container) {
   allProjects.forEach((p) => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} (${p.sizeX}×${p.sizeY}m)`;
+    const badge = p.approved ? ' [승인]' : (p.importedRoom ? ' [스캔]' : '');
+    opt.textContent = `${p.name}${badge} (${p.sizeX}×${p.sizeY}m)`;
     if (p.id === activeProjectId) opt.selected = true;
     select.appendChild(opt);
   });

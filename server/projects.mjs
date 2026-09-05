@@ -162,6 +162,8 @@ export async function createProjectsRouter() {
       sizeX: Math.round(sizeX * 1000) / 1000,
       sizeY: Math.round(sizeY * 1000) / 1000,
       importedRoom: room,
+      approved: body.approved ?? true,
+      site: body.site ?? (existing?.site ?? { id: room, group: room, name }),
       slicemap: { resolution: slice.resolution, cols: slice.cols, rows: slice.rows, origin: slice.origin, z: slice.z, sources: slice.sources },
       floorImage: floorImage ?? existing?.floorImage ?? null,
       updatedAt: timestamp,
@@ -203,6 +205,18 @@ export async function createProjectsRouter() {
       res.status(404).json({ error: '프로젝트를 찾을 수 없습니다.' });
       return;
     }
+    res.json(project);
+  });
+
+  router.patch('/projects/:id/approve', async (req, res) => {
+    const project = findProject(req.params.id);
+    if (!project) {
+      res.status(404).json({ error: '프로젝트를 찾을 수 없습니다.' });
+      return;
+    }
+    project.approved = req.body.approved !== undefined ? Boolean(req.body.approved) : !project.approved;
+    project.updatedAt = nowIso();
+    await db.write();
     res.json(project);
   });
 
