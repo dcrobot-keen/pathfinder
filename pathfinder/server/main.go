@@ -39,6 +39,11 @@ type obstacleRequest struct {
 	// this much before planning so the path keeps clearance from walls; the
 	// start cell is carved back out (the robot is physically there). 0 = off.
 	InflationM float64 `json:"inflationM"`
+	// GoalClearanceM: extra clearance demanded at the goal on top of InflationM (default 0.2 =
+	// the follower's goal tolerance). A robot that stops 0.2 m short of a goal placed right at
+	// the inflation edge ends up touching the obstacle, and its NEXT plan has to carve the start
+	// and hug the wall at a few cm -- seen 2026-09-05 (min clearance 0.07 m, robot stuck).
+	GoalClearanceM float64 `json:"goalClearanceM"`
 }
 
 type pathResponse struct {
@@ -228,13 +233,21 @@ func handleObstaclePath(w http.ResponseWriter, r *http.Request) {
 	occupancy := grid.NewGrid(originX, originY, cellSize, cols, rows)
 	occupancy.RasterizeBlocks(relevantBlocks)
 	if req.InflationM > 0 {
-		occupancy.Inflate(req.InflationM)
-		occupancy.ClearDisc(start, req.InflationM)
-		if occupancy.IsOccupiedPoint(end) {
+		goalClearance := req.GoalClearanceM
+		if goalClearance <= 0 {
+			goalClearance = 0.2
+		}
+		// goal check first, on a copy inflated by the extra clearance, before the planning grid is carved
+		goalGrid := grid.NewGrid(originX, originY, cellSize, cols, rows)
+		goalGrid.RasterizeBlocks(relevantBlocks)
+		goalGrid.Inflate(req.InflationM + goalClearance)
+		if goalGrid.IsOccupiedPoint(end) {
 			writeError(w, http.StatusUnprocessableEntity,
-				fmt.Sprintf("goal is within %.2f m of an obstacle (robot clearance); pick a point further from walls", req.InflationM))
+				fmt.Sprintf("goal is within %.2f m of an obstacle (robot clearance %.2f m + stopping margin %.2f m); pick a point further from walls", req.InflationM+goalClearance, req.InflationM, goalClearance))
 			return
 		}
+		occupancy.Inflate(req.InflationM)
+		occupancy.ClearDisc(start, req.InflationM)
 	}
 
 	algo := req.Algorithm
