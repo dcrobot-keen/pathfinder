@@ -4,10 +4,12 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n vite,api,pathfinder -c blue,green,magenta \"vite\" \"node server/index.mjs\" \"npm:dev:pathfinder\"",
+    "dev": "concurrently -n vite,api,pathfinder,scan-engine -c blue,green,magenta,yellow \"vite\" \"node server/index.mjs\" \"npm:dev:pathfinder\" \"npm:dev:scan-engine\"",
     "dev:client": "vite",
     "dev:server": "node server/index.mjs",
     "dev:pathfinder": "cd pathfinder && go run ./server",
+    "dev:scan-engine": "node scripts/dev-scan-engine.mjs",
+    "test:scan-engine": "node scripts/dev-scan-engine.mjs --test",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node scripts/live-pose-smoke.mjs && node scripts/projects-smoke.mjs && node scripts/scan-alignment-smoke.mjs && node scripts/vda5050-smoke.mjs && node scripts/scan-project-smoke.mjs && node scripts/robot-models-smoke.mjs",

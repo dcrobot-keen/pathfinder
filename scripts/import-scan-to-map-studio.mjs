@@ -29,7 +29,7 @@
 //
 // 사용법:
 //   node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15] [--room-walls]
-//   예) node scripts/import-scan-to-map-studio.mjs ../scan-to-map-studio/projects/bedroom --room bedroom
+//   예) node scripts/import-scan-to-map-studio.mjs scan-engine/projects/bedroom --room bedroom
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import {resolve, dirname, basename } from 'node:path';
 import { alignmentFor, parseGroupAlignment, transformGeoJSON } from '../shared/scanAlignment.mjs';

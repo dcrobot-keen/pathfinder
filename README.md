@@ -1,5 +1,11 @@
 # Robot Orchestration Toolchain
 
+> **모노레포(2026-09-06)** — `scan-engine/` 은 예전 `scan-to-map-studio` 저장소를 `git subtree` 로 합친 것이다(히스토리 보존).
+> 파이썬 FastAPI 계산 서비스(천장 제거·ICP·슬라이스·정합·usdz/glb)이고 화면은 이 저장소의 Fleet Studio 가 맡는다.
+> `npm run dev` 가 Vite(:3000)·API(:3001)·Go 플래너(:3002)·scan-engine(:8000) 을 함께 띄운다
+> (`scan-engine/.venv` 필요: `cd scan-engine && python -m venv .venv && .venv\Scripts\pip install -r requirements.txt -r requirements-server.txt`,
+> 설정은 `scan-engine/.env.example` → `.env`). 처리된 스캔 데이터는 `scan-engine/projects/`(gitignored).
+
 아이폰 라이다로 스캔한 컬러드 포인트 클라우드(PCD)를 기반으로 실내 지도를 만들고,
 그 위에서 노드/링크/장애물을 편집하고, 등록된 로봇으로 경로탐색·다중 로봇
 충돌회피(deconfliction)까지 실험하는 실내 로봇 오케스트레이션 툴체인입니다.
@@ -172,7 +178,7 @@ DELETE /api/robots/:id    # 삭제
 ## 스캔 장애물 가져오기 (scan-to-map-studio 연동)
 
 ```bash
-# scan-to-map-studio 프로젝트 폴더(예: ../scan-to-map-studio/projects/bedroom)를
+# scan-to-map-studio 프로젝트 폴더(예: scan-engine/projects/bedroom)를
 # data/imported/<room>.geojson으로 변환
 node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15] [--room-walls] [--alignment group_alignment.json [--scan <id>]]
 ```

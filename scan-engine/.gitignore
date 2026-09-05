@@ -16,3 +16,6 @@ data/
 projects/
 out/
 
+
+# local server settings (scripts/dev-scan-engine.mjs); commit .env.example instead
+.env

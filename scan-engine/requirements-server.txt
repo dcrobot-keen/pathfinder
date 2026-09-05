@@ -5,3 +5,4 @@
 fastapi
 uvicorn[standard]
 python-multipart
+httpx  # fastapi.testclient (tests/test_groups.py, tests/test_zip_pipeline.py)
