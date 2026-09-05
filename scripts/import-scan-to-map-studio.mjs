@@ -27,7 +27,8 @@
 //   node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15]
 //   예) node scripts/import-scan-to-map-studio.mjs ../scan-to-map-studio/projects/bedroom --room bedroom
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import {resolve, dirname, basename } from 'node:path';
+import { alignmentFor, parseGroupAlignment, transformGeoJSON } from '../shared/scanAlignment.mjs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,10 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === '--room') {
       options.room = argv[++i];
+    } else if (arg === '--alignment') {
+      options.alignment = argv[++i];
+    } else if (arg === '--scan') {
+      options.scan = argv[++i];
     } else if (arg === '--wall-thickness') {
       options.wallThickness = Number(argv[++i]);
     } else {
@@ -123,7 +128,7 @@ async function main() {
 
   if (!projectDir || !options.room) {
     console.error(
-      '사용법: node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15]'
+      '사용법: node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15] [--alignment group_alignment.json [--scan <scan id>]]'
     );
     process.exit(1);
   }
@@ -137,12 +142,29 @@ async function main() {
     throw new Error(`${inputPath} 가 유효한 GeoJSON FeatureCollection이 아닙니다.`);
   }
 
+  // --alignment <group_alignment.json>: move this room into its project's reference
+  // frame (scan-group-alignment-v1, shared with the iPhone app and the studio
+  // workspace) so several rooms of one project land on the plane where they
+  // really are relative to each other. --scan names this room's scan id
+  // (default: the project folder's basename, which is the scan id when the
+  // studio project was created by orchestrate/groups).
+  let alignment = null;
+  let alignmentInfo = null;
+  if (options.alignment) {
+    const parsed = parseGroupAlignment(JSON.parse(await readFile(resolve(process.cwd(), options.alignment), 'utf-8')));
+    const scanId = options.scan ?? basename(resolve(process.cwd(), projectDir));
+    alignment = alignmentFor(parsed, scanId);
+    alignmentInfo = { file: options.alignment, reference: parsed.reference, scan: scanId, ...alignment };
+    console.log(`  정렬 적용: ${scanId} -> 기준 ${parsed.reference} (${alignment.method}, offsetX ${alignment.offsetX.toFixed(3)}, offsetZ ${alignment.offsetZ.toFixed(3)}, yaw ${(alignment.yawRadians * 180 / Math.PI).toFixed(2)}°)`);
+  }
+
   const importedAt = new Date().toISOString();
   const outFeatures = [];
   const counts = { furniture: 0, wall: 0, room: 0, skipped: 0 };
 
   for (const feature of input.features) {
-    const result = convertFeature(feature, { room: options.room, wallThickness: options.wallThickness, importedAt });
+    const placed = alignment ? transformGeoJSON(feature, alignment) : feature;
+    const result = convertFeature(placed, { room: options.room, wallThickness: options.wallThickness, importedAt });
     if (result.skipped) {
       counts.skipped++;
       console.warn(`  스킵: ${result.skipped}`);
@@ -156,7 +178,7 @@ async function main() {
   const outDir = resolve(__dirname, '../data/imported');
   await mkdir(outDir, { recursive: true });
   const outPath = resolve(outDir, `${options.room}.geojson`);
-  const outFeatureCollection = { type: 'FeatureCollection', features: outFeatures };
+  const outFeatureCollection = { type: 'FeatureCollection', features: outFeatures, ...(alignmentInfo ? { scanAlignment: alignmentInfo } : {}) };
   await writeFile(outPath, JSON.stringify(outFeatureCollection, null, 2), 'utf-8');
 
   console.log(

@@ -10,7 +10,7 @@
     "dev:pathfinder": "cd pathfinder && go run ./server",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/live-pose-smoke.mjs && node scripts/projects-smoke.mjs",
+    "test": "node scripts/live-pose-smoke.mjs && node scripts/projects-smoke.mjs && node scripts/scan-alignment-smoke.mjs",
     "test:pathfinder": "cd pathfinder && go test ./...",
     "build:wasm": "node scripts/build-wasm.mjs"
   },
