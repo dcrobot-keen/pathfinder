@@ -337,15 +337,27 @@ getFleetConfig()
   })
   .catch(() => updateMqttStatus(false));
 
+// 배지는 스트림의 로봇 레코드(connectionState)를 그대로 세어 갱신한다 -- 스냅샷 한 번이
+// 아니라 robot/forget 이벤트마다.
+// 주의: 이 파일의 `Map`은 OpenLayers 지도 클래스라(import) JS Map 대신 일반 객체를 쓴다.
+const gnbRobots = {}; // key -> 플릿 레코드
+function recountFleet() {
+  updateFleetOnlineCount(Object.values(gnbRobots).filter((r) => r.connectionState === 'ONLINE').length);
+}
 subscribeFleetStream((msg) => {
   if (msg.type === 'status' && msg.status) {
     updateMqttStatus(msg.status.connected);
   } else if (msg.type === 'snapshot') {
     if (msg.status) updateMqttStatus(msg.status.connected);
-    const count = (msg.robots || []).filter((r) => r.connection === 'ONLINE').length;
-    updateFleetOnlineCount(count);
+    for (const k of Object.keys(gnbRobots)) delete gnbRobots[k];
+    for (const r of msg.robots || []) gnbRobots[r.key] = r;
+    recountFleet();
   } else if (msg.type === 'robot') {
-    // 로봇 상태 갱신
+    gnbRobots[msg.robot.key] = msg.robot;
+    recountFleet();
+  } else if (msg.type === 'forget') {
+    delete gnbRobots[msg.key];
+    recountFleet();
   }
 });
 

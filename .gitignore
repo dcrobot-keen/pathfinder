@@ -15,3 +15,4 @@ public/samples/scan.pcd
 
 # local VDA5050 broker config (플릿 탭에서 저장)
 data/vda5050.json
+data/fleet-log.json

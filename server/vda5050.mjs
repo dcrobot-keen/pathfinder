@@ -51,8 +51,21 @@ export async function createVda5050Bridge({
   db.data.config = normalizeConfig(db.data.config).config ?? { ...DEFAULT_CONFIG };
 
   const robots = new Map(); // key -> record
-  const events = []; // recent system/robot events (max 100)
-  const orderHistory = new Map(); // serialNumber -> recent orders (max 20)
+  // 이벤트·주문 이력은 재시작해도 남아야 하는 운영 기록이라 data/fleet-log.json 에 쓴다
+  // (lowdb, 쓰기는 1초 디바운스). 메모리 상한: 이벤트 300, 로봇당 주문 50.
+  const logDb = await JSONFilePreset(resolve(dataDir, 'fleet-log.json'), { events: [], orders: {} });
+  const events = Array.isArray(logDb.data.events) ? logDb.data.events : []; // newest first
+  const orderHistory = new Map(Object.entries(logDb.data.orders ?? {})); // serialNumber -> recent orders, newest first
+  const EVENTS_MAX = 300, ORDERS_MAX = 50;
+  let logWriteTimer = null;
+  function persistLog() {
+    if (logWriteTimer) return;
+    logWriteTimer = setTimeout(() => {
+      logWriteTimer = null;
+      logDb.data = { events, orders: Object.fromEntries(orderHistory) };
+      logDb.write().catch((err) => log(`fleet-log write failed: ${err.message || err}`));
+    }, 1000);
+  }
   const status = { connected: false, brokerUrl: null, error: null, since: null };
   const headerIds = new Map(); // topic -> next headerId
   let client = null;
@@ -71,7 +84,8 @@ export async function createVda5050Bridge({
   function pushEvent(type, level, serialNumber, message) {
     const ev = { id: randomUUID(), timestamp: Date.now(), type, level, serialNumber, message };
     events.unshift(ev);
-    if (events.length > 100) events.pop();
+    if (events.length > EVENTS_MAX) events.length = EVENTS_MAX;
+    persistLog();
     broadcast({ type: 'event', event: ev });
   }
 
@@ -82,7 +96,8 @@ export async function createVda5050Bridge({
       orderHistory.set(serialNumber, list);
     }
     list.unshift(orderInfo);
-    if (list.length > 20) list.pop();
+    if (list.length > ORDERS_MAX) list.length = ORDERS_MAX;
+    persistLog();
     broadcast({ type: 'order', serialNumber, order: orderInfo });
   }
 
@@ -92,6 +107,7 @@ export async function createVda5050Bridge({
     const found = list.find((o) => o.orderId === orderId);
     if (found) {
       Object.assign(found, patch);
+      persistLog();
       broadcast({ type: 'order_update', serialNumber, order: found });
     }
   }
@@ -321,7 +337,8 @@ export async function createVda5050Bridge({
   });
 
   router.get('/vda5050/events', (req, res) => {
-    res.json({ events });
+    const limit = Math.min(Number(req.query.limit) || 100, EVENTS_MAX);
+    res.json({ events: events.slice(0, limit) });
   });
 
   router.get('/vda5050/orders/:serialNumber', (req, res) => {
