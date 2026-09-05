@@ -103,3 +103,20 @@ $env:STUDIO_PUBLISH_DIR = 'D:\code\robot-project\ros-chromium\simulator\worlds'
 
 API: `GET /api/groups`, `GET /api/groups/{g}`, `POST /api/groups/{g}/prepare`,
 `GET|PUT /api/groups/{g}/alignment`, `POST /api/groups/{g}/icp`, `GET /api/groups/{g}/merged.png`.
+
+### 바닥 이미지 오버레이 (앱 floorplan.png)
+
+앱(ios-capture)이 스캔마다 내보내는 `floorplan.png/json`(5 cm/px 톱다운 바닥 텍스처 + 궤적,
+format_version 2)을 `studio/floorplan.py`가 읽어
+
+- **워크스페이스**: 각 스캔의 슬라이스 아래에 같은 정합 변환으로 겹쳐 그립니다("바닥 이미지" 체크박스와
+  불투명도 슬라이더). 벽 셀만 보고 맞추는 대신 실제 바닥 무늬로 정합을 확인할 수 있습니다. 앱의 회색
+  배경(픽셀 (0,0) 색)은 투명 처리합니다.
+- **저장 시**: 모든 스캔의 바닥 이미지를 `group_alignment.json`으로 합쳐 `merged.floor.png/.json`
+  (merged 슬라이스맵과 같은 격자: 같은 origin/해상도/크기, `floor-image-v1`)을 만들고, publish 디렉터리에
+  `<group>.floor.png/.json`으로 함께 내보냅니다. pathfinder는 이 파일을 `POST /api/projects/from-slicemap`의
+  `floor`로 받아 프로젝트 배경으로 깝니다(`scripts/create-project-from-slicemap.mjs`가 옆 파일을 자동으로 붙임).
+- `GET /api/groups/<name>/merged.floor.png`로 합성 결과를 볼 수 있습니다.
+
+픽셀 규약(FloorPlanRenderer.swift v2): `x = origin_x + col*res`, `z = origin_top_z + row*res`(row 0 = 최소 z),
+슬라이스 평면에서는 `y = -z`라 이미지 위쪽이 +y 입니다. 테스트: `python tests/test_floorplan.py`.

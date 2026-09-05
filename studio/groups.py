@@ -32,6 +32,7 @@ from pathlib import Path
 import numpy as np
 
 from studio.align_workspace_html import build_alignment_workspace_html
+from studio.floorplan import FLOOR_STEM, composite_floorplans, load_floorplan, save_floor
 from studio.merge_slicemaps import (
     ALIGNMENT_FORMAT,
     GroupAlignment,
@@ -89,6 +90,7 @@ class GroupStatus:
     has_alignment: bool
     has_merged: bool
     ready: bool  # every scan has a slice -> workspace can open without preparing
+    has_floor: bool = False  # merged.floor.png exists (app floor images composited on save)
 
     def to_json(self) -> dict:
         d = asdict(self)
@@ -139,6 +141,7 @@ def group_status(name: str, root: Path | None = None, projects_root: Path = PROJ
         scans=scans,
         has_alignment=ga is not None,
         has_merged=(group_dir / f"{MERGED_STEM}.slicemap.json").exists(),
+        has_floor=(group_dir / f"{MERGED_STEM}.{FLOOR_STEM}.png").exists(),
         ready=bool(scans) and all(s.has_slice for s in scans),
     )
 
@@ -200,6 +203,16 @@ def _load_slices(group_dir: Path, ids: list[str]) -> dict[str, Slice]:
     return {sid: load_slice(slice_path(group_dir, sid)) for sid in ids if slice_path(group_dir, sid).exists()}
 
 
+def _load_floors(group_dir: Path, ids: list[str]) -> dict:
+    """scan id -> FloorPlan for every scan folder that has the app's floorplan.png/json."""
+    out = {}
+    for sid in ids:
+        fp = load_floorplan(group_dir / sid)
+        if fp is not None:
+            out[sid] = fp
+    return out
+
+
 def _alignment_or_identity(group_dir: Path, ids: list[str]) -> GroupAlignment:
     ga = _load_alignment(group_dir)
     if ga is None:
@@ -230,7 +243,8 @@ def workspace_html(name: str, api_base: str | None, root: Path | None = None, pr
     api = None
     if api_base:
         api = {"save": f"{api_base}/alignment", "icp": f"{api_base}/icp", "merged": f"{api_base}/merged.png", "status": f"{api_base}"}
-    return build_alignment_workspace_html(slices, ga, title=f"정합: {name}", order=ids, api=api)
+    floors = _load_floors(group_dir, ids)
+    return build_alignment_workspace_html(slices, ga, title=f"정합: {name}", order=ids, api=api, floors=floors or None)
 
 
 # --------------------------------------------------------------------------
@@ -275,12 +289,25 @@ def save_alignment(name: str, doc: dict, root: Path | None = None, projects_root
     merged_json = save_slice(group_dir / f"{MERGED_STEM}.slicemap.json", merged)
     save_preview_png(group_dir / f"{MERGED_STEM}.png", merged)
 
+    # 앱 바닥 이미지가 있는 스캔들을 같은 정합으로 합친 한 장 -- merged 슬라이스맵과 격자가
+    # 같아서 pathfinder 배경 / 시뮬레이터 뷰어가 픽셀 단위로 겹쳐 쓸 수 있다.
+    floor_png = floor_json = None
+    floors = _load_floors(group_dir, ids)
+    if floors:
+        img = composite_floorplans(floors, ga, merged)
+        floor_png, floor_json = save_floor(group_dir / f"{MERGED_STEM}.{FLOOR_STEM}.png", group_dir / f"{MERGED_STEM}.{FLOOR_STEM}.json", img, merged)
+
     published = None
+    published_floor = None
     target_dir = publish if publish is not None else publish_dir()
     if target_dir is not None:
         target_dir.mkdir(parents=True, exist_ok=True)
         published = target_dir / f"{name}.slicemap.json"
         shutil.copyfile(merged_json, published)
+        if floor_png is not None:
+            published_floor = target_dir / f"{name}.{FLOOR_STEM}.png"
+            shutil.copyfile(floor_png, published_floor)
+            shutil.copyfile(floor_json, target_dir / f"{name}.{FLOOR_STEM}.json")
 
     approved = [s for s, a in doc["alignments"].items() if a.get("approved")]
     return {
@@ -293,6 +320,9 @@ def save_alignment(name: str, doc: dict, root: Path | None = None, projects_root
         "approved": approved,
         "pending": [s for s in doc["alignments"] if s not in approved],
         "published": str(published) if published else None,
+        "floor": str(floor_png) if floor_png else None,
+        "floor_scans": sorted(floors),
+        "published_floor": str(published_floor) if published_floor else None,
     }
 
 

@@ -88,6 +88,14 @@ def api_merged_png(name: str) -> FileResponse:
     return FileResponse(str(p), media_type="image/png")
 
 
+@router.get("/api/groups/{name}/merged.floor.png")
+def api_merged_floor_png(name: str) -> FileResponse:
+    p = groups.groups_root() / name / f"{groups.MERGED_STEM}.floor.png"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="not merged yet -- save an alignment first")
+    return FileResponse(str(p), media_type="image/png")
+
+
 @router.get("/groups", response_class=HTMLResponse)
 def groups_index() -> str:
     rows = []

@@ -47,11 +47,15 @@ def build_alignment_workspace_html(
     title: str = "스캔 정합 워크스페이스",
     order: Iterable[str] | None = None,
     api: dict | None = None,
+    floors: dict | None = None,
 ) -> str:
     """`api` (from studio/groups.py when served): {"save": PUT url, "icp": POST
     url, "merged": png url, "status": url}. With it the page saves to the
     server (which rebuilds + publishes the merged slicemap) and the ICP
-    button works; without it the page is the offline file (download save)."""
+    button works; without it the page is the offline file (download save).
+    `floors` (scan id -> studio.floorplan.FloorPlan): the app's floor images,
+    drawn under each slice with the same alignment so the operator lines up
+    real floor texture, not just wall cells."""
     ids = list(order) if order is not None else [ga.reference] + [k for k in slices if k != ga.reference]
     if ga.reference not in slices:
         raise ValueError(f"reference {ga.reference!r} has no slicemap")
@@ -61,10 +65,12 @@ def build_alignment_workspace_html(
         a = ga.get(sid)
         others = [(slices[o], ga.get(o)) for o in ids if o != sid]
         m = evaluate(slices[sid], a, others) if sid != ga.reference else None
+        fp = floors.get(sid) if floors else None
         layers.append({
             **_slice_payload(sid, slices[sid]),
             "alignment": {"offsetX": a.offsetX, "offsetZ": a.offsetZ, "yawRadians": a.yawRadians, "method": a.method},
             "metrics": m.to_json() if m else None,
+            "floor": fp.payload() if fp is not None else None,
         })
 
     payload = {
@@ -141,6 +147,7 @@ _TEMPLATE = r"""<!doctype html>
   <aside>
     <h2>스캔</h2>
     <div id="layers"></div>
+    <label class="chk" id="floorRow" style="display:none"><input type="checkbox" id="chkFloor" checked> 바닥 이미지 (앱 floorplan) &nbsp;<input id="floorAlpha" type="range" min="0.1" max="1" step="0.1" value="0.9" style="width:70px;vertical-align:middle"></label>
     <div class="note">기준 스캔은 고정. 다른 스캔을 골라 가운데에서 끌어 움직입니다. 체크박스로 표시를 끕니다.</div>
     <h2>범례</h2>
     <div class="note"><span style="color:var(--ref)">■</span> 기준 · <span style="color:var(--cand)">■</span> 선택 · <span style="color:#7d848a">■</span> 나머지 · <span style="color:var(--danger)">■</span> conflict(상대가 바닥으로 본 자리의 벽)</div>
@@ -225,8 +232,23 @@ const layers = DATA.layers.map((L) => {
     align: { ...al }, loaded: { ...al }, method: a.method, loadedMethod: a.method,
     approved: false, dirty: false, imgs: {},
     isRef: L.id === DATA.reference,
+    floor: L.floor, floorImg: null,
   };
 });
+// 앱 바닥 이미지(floorplan.png)를 레이어마다 비동기로 올린다 -- 로드되는 대로 다시 그림.
+let showFloor = true, floorAlpha = 0.9;
+for (const L of layers) {
+  if (!L.floor) continue;
+  const img = new Image();
+  img.onload = () => draw();
+  img.src = L.floor.dataUrl;
+  L.floorImg = img;
+}
+if (layers.some((l) => l.floor)) {
+  $('floorRow').style.display = '';
+  $('chkFloor').addEventListener('change', (e) => { showFloor = e.target.checked; draw(); });
+  $('floorAlpha').addEventListener('input', (e) => { floorAlpha = Number(e.target.value); draw(); });
+}
 const refLayer = layers.find((l) => l.isRef);
 let selected = layers.find((l) => !l.isRef) || null;
 
@@ -288,6 +310,17 @@ function draw() {
     const a = L.align, c = Math.cos(a.yaw), s = Math.sin(a.yaw);
     const A = new DOMMatrix([c, s, -s, c, a.ox, -a.oz]);
     const Lm = new DOMMatrix([L.res, 0, 0, -L.res, L.origin[0], L.origin[1] + L.rows * L.res]);
+    if (showFloor && L.floorImg && L.floorImg.complete && L.floorImg.naturalWidth > 0) {
+      // floorplan pixel (col,row) -> slice plane (originX + col*res, -(originTopZ + row*res)):
+      // top row = max y, i.e. the image is already the right way up.
+      const f = L.floor;
+      const Fm = new DOMMatrix([f.resolution, 0, 0, -f.resolution, f.originX, -f.originTopZ]);
+      const MF = V.multiply(A).multiply(Fm);
+      ctx.setTransform(MF.a, MF.b, MF.c, MF.d, MF.e, MF.f);
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = floorAlpha * ((L === selected || L.isRef) ? 1 : 0.7);
+      ctx.drawImage(L.floorImg, 0, 0, f.width, f.height);
+    }
     const M = V.multiply(A).multiply(Lm);
     ctx.setTransform(M.a, M.b, M.c, M.d, M.e, M.f);
     ctx.imageSmoothingEnabled = false;
