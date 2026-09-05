@@ -41,13 +41,78 @@ scan_<name>/
 
 ## depth/*.depth, depth/*.conf
 
-raw binary float32, row-major, 고정 `(192, 256)` = `(height, width)`, 헤더 없음. `.conf`는 신뢰도(개념적으로는 0/1/2 정수)를 같은 float32/192x256 포맷으로 저장한 것.
+raw binary, row-major, `(192, 256)` = `(height, width)`, 헤더 없음. 인코딩은 두 버전이 있고 `manifest.json`의 `depth_encoding`이 어느 쪽인지 말해준다.
 
-> **알려진 취약점**: 이 `(192, 256)` 크기는 세 Python 소비자 전부(`pipeline/config.py`, `convert_to_colmap.py`)에 **각자 따로** 하드코딩된 상수이지, `manifest.json`이나 `poses.jsonl` 어디에도 명시적으로 기록되지 않는다. 다른 LiDAR 해상도를 쓰는 기기가 추가되면 이 스펙 문서만 봐서는 알 수 없고, 세 곳의 하드코딩을 전부 찾아 고쳐야 한다. **개선 여지(이번 범위 밖)**: depth 해상도를 `poses.jsonl`의 `intrinsics` 옆에 명시적으로 적어두면 이 리스크가 사라진다 — 지금은 스펙을 공유하는 데까지만 하고, 실제 포맷 변경은 별도 작업으로 남겨둔다.
+| | v1 (`depth_encoding` 키 없음, 2026-09-05 이전 스캔) | v2 (`depth_encoding.format_version: 2`) |
+|---|---|---|
+| `.depth` | float32 미터 | **uint16 little-endian 밀리미터**, `0` = 미측정 |
+| `.conf` | float32로 저장된 0/1/2 | **uint8** 0/1/2 (ARKit `confidenceMap` 원본 그대로) |
+| 프레임당 크기 | 196,608 + 196,608 B | 98,304 + 49,152 B |
+
+v2로 바꾼 이유: v1은 `.conf`가 값 셋(0/1/2)을 4바이트씩 쓰고 `.depth`도 LiDAR 정밀도(cm급)에 비해 과한 float32라, 방 하나에 700 MB 중 약 180 MB가 0으로 채워진 바이트였다. 정밀도 손실은 없다(mm 양자화, 65.5 m 범위).
+
+```json
+"depth_encoding": { "format_version": 2, "width": 256, "height": 192, "depth": "uint16_mm", "confidence": "uint8" }
+```
+
+**읽는 쪽 규칙**: `depth_encoding`이 있으면 그대로 따르고, 없으면 v1. 파일 크기로도 구분된다(`4·w·h` = float32, `2·w·h` = uint16, `w·h` = uint8) — `pipeline/dc_vps_pipeline/scan_loader.py`(`load_depth_raw`/`load_confidence_raw`)와 `dc-vps-digital-twin/convert_to_colmap.py`는 2026-09-05부터 둘 다 읽고, 어느 쪽이든 float32 미터 / float32 0-1-2 배열로 돌려준다. 새로 쓰는 코드는 이 로더를 거쳐야 한다.
+
+> v1에서 `(192, 256)`가 소비자마다 하드코딩돼 있던 문제는 v2의 `width`/`height`로 해소된다(v1 스캔은 여전히 하드코딩 상수에 의존). `conformance_check.py`는 매니페스트의 인코딩에 맞춰 두 파일의 크기를 검사한다.
 
 ## scan.usdz
 
 LiDAR 메시. **`scan-to-map-studio`는 이 파일만 쓰고 `manifest.json`/`poses.jsonl`/`depth/`는 전혀 읽지 않는다**(코드로 직접 확인, 2026-08-29) — 그래서 이 저장소의 `scan-format/` 사본에는 `conformance_check.py`가 없다(검증할 것 자체가 없다).
+
+## 프로젝트 zip (여러 스캔을 한 번에 내보낼 때)
+
+ios-capture가 프로젝트(여러 스캔 묶음) 단위로 내보내는 zip은 스캔 폴더 하나짜리 zip과
+두 가지가 다르다.
+
+1. 스캔 폴더마다 자기 이름이 최상위 접두사로 붙는다: `scan_A/rgb/...`, `scan_B/rgb/...`.
+   폴더 하나만 내보낼 때는 접두사 없이 `rgb/`, `depth/`, `poses/`가 최상위다(이전과 동일).
+2. 최상위에 `group_alignment.json`(포맷 `scan-group-alignment-v1`)이 하나 들어간다.
+   스캔마다 기준 스캔 좌표계로 옮기는 강체 변환이다.
+
+```json
+{
+  "format": "scan-group-alignment-v1",
+  "group": "우리집 1층",
+  "reference": "scan_20260904_210428",
+  "up_axis_convention": "top = -z",
+  "alignments": {
+    "scan_20260904_210551": { "offsetX": 3.412, "offsetZ": -1.087, "yawRadians": -0.1047, "method": "app" },
+    "scan_20260904_210652": { "offsetX": 0, "offsetZ": 0, "yawRadians": 0, "method": "identity" }
+  }
+}
+```
+
+- `reference`는 그룹의 첫 스캔이며 항상 identity라 `alignments`에 들어가지 않는다.
+  나머지 스캔은 정렬 여부와 관계없이 전부 들어간다.
+- 변환은 ARKit 지면 평면 (x, z)에서 "회전 후 이동"이다(`ScanAlignment.applyXZ`):
+  `x' = x·cos(yaw) + z·sin(yaw) + offsetX`, `z' = −x·sin(yaw) + z·cos(yaw) + offsetZ`.
+  scan-to-map-studio의 Z-up 평면에서는 `(x, y) = (x, −z)`이므로 같은 변환이
+  "yaw만큼 반시계 회전 + (offsetX, −offsetZ) 이동"이 된다. 이 대응은
+  `studio/merge_slicemaps.py` 한 곳에서만 처리한다.
+- `method`: 앱이 내보낼 때는 `app`(사용자가 정렬 화면이나 앵커링으로 놓은 값) 또는
+  `identity`(정렬한 적 없음). 데스크탑 정합 도구가 값을 고치면 `pins`, `icp`, `manual`
+  등으로 바뀌고 `metrics`(inlier, conflict, rmse_m, overlap_m)가 붙을 수 있다.
+- 소비자: scan-to-map-studio `scripts/merge_slicemaps.py`(스캔별 slicemap을 이 변환으로 한
+  격자에 합성). 이 파일은 그 저장소의 `tests/test_merge_slicemaps.py`와 이 저장소의
+  `GroupAlignmentExportTests`가 양쪽에서 고정한다.
+
+### 지도용 프로파일 (부분집합)
+
+프로젝트 zip은 두 프로파일로 나간다(앱 `ScanExportProfile`).
+
+| 프로파일 | 들어가는 것 | 크기(방 하나) | 용도 |
+|---|---|---|---|
+| 전체 | 위 폴더 구조 전부 | 수백 MB | VPS DB 빌드(hloc), 텍스처 |
+| 지도용 | `manifest.json`, `poses/poses.jsonl`, `scan.usdz`, `floorplan.png`, `floorplan.json` (+ `group_alignment.json`) | 수 MB | 2D 지도, 슬라이스, 시뮬레이터 월드, 정렬 워크스페이스 |
+
+지도용은 scan_<name>/의 **부분집합**이라 `conformance_check.py`를 통과하지 않는다
+(rgb/depth 없음). scan-to-map-studio의 `studio.py process --usdz`, `slice_map.py`,
+`merge_slicemaps.py`, `align_workspace.py`는 이 부분집합만으로 동작하고, vps-system
+`pipeline`(DB 빌드)은 전체 프로파일이 필요하다.
 
 ## 검증
 
