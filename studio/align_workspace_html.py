@@ -46,7 +46,12 @@ def build_alignment_workspace_html(
     ga: GroupAlignment,
     title: str = "스캔 정합 워크스페이스",
     order: Iterable[str] | None = None,
+    api: dict | None = None,
 ) -> str:
+    """`api` (from studio/groups.py when served): {"save": PUT url, "icp": POST
+    url, "merged": png url, "status": url}. With it the page saves to the
+    server (which rebuilds + publishes the merged slicemap) and the ICP
+    button works; without it the page is the offline file (download save)."""
     ids = list(order) if order is not None else [ga.reference] + [k for k in slices if k != ga.reference]
     if ga.reference not in slices:
         raise ValueError(f"reference {ga.reference!r} has no slicemap")
@@ -69,6 +74,7 @@ def build_alignment_workspace_html(
         "layers": layers,
         "gates": {"overlapLockM": 1.5, "inlierMin": 0.60, "conflictMax": 0.12, "corrDist": 0.15, "coarseDist": 0.5,
                   "conflictMargin": CONFLICT_MARGIN_CELLS},
+        "api": api,
     }
     data_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     return _TEMPLATE.replace("__TITLE__", title).replace("__DATA__", data_json)
@@ -162,13 +168,15 @@ _TEMPLATE = r"""<!doctype html>
     <button id="btnPin" class="primary">기준점 쌍 찍기</button>
     <div id="pins"></div>
     <button id="btnFit" disabled>기준점 쌍으로 맞추기</button>
-    <button id="btnIcp" disabled title="Phase 2: 서버 ICP 연결 뒤 활성화">ICP 마무리</button>
+    <button id="btnIcp" disabled>ICP 마무리</button>
     <div class="note" id="icpNote"></div>
+    <button id="btnIcpUndo" hidden>ICP 결과 취소</button>
     <button id="btnRevert">불러온 값으로 되돌리기</button>
     <h2>확정</h2>
     <label class="chk"><input type="checkbox" id="chkApprove"> 이 스캔 승인</label>
     <button id="btnSave" class="ok">group_alignment.json 저장</button>
-    <div class="note">저장한 파일을 <code>scripts/merge_slicemaps.py</code>에 넘기면 합성 slicemap과 시뮬레이터 월드가 갱신됩니다.</div>
+    <div class="note" id="saveNote">저장한 파일을 <code>scripts/merge_slicemaps.py</code>에 넘기면 합성 slicemap과 시뮬레이터 월드가 갱신됩니다.</div>
+    <div id="saveResult" class="note" hidden></div>
   </aside>
 </main>
 <script>
@@ -370,7 +378,11 @@ function updatePanel() {
     : pass ? `통과 기준 안: inlier ≥ ${G.inlierMin}, conflict ≤ ${G.conflictMax}.`
     : m.conflict > G.conflictMax ? `벽이 상대 스캔의 바닥 위에 ${(m.conflict * 100).toFixed(0)}% 놓여 있습니다. 자리가 틀렸을 가능성이 큽니다.`
     : `대응 비율이 ${(m.inlier * 100).toFixed(0)}%로 낮습니다. 더 가깝게 놓고 다시 보세요.`;
-  $('icpNote').textContent = locked ? 'ICP 잠김: 겹침 부족' : 'ICP는 Phase 2에서 서버와 연결됩니다 (현재 자리가 초기값이 됩니다).';
+  const icpAvailable = !!(DATA.api && DATA.api.icp);
+  $('btnIcp').disabled = locked || !icpAvailable;
+  $('icpNote').textContent = locked ? `ICP 잠김: 겹치는 벽 ${m.overlapM.toFixed(2)} m < ${G.overlapLockM} m`
+    : icpAvailable ? '현재 자리를 초기값으로 서버 ICP(0.5 → 0.25 → 0.15 m)를 돌립니다. 결과는 게이지로 확인 후 취소할 수 있습니다.'
+    : 'ICP는 서버에서 연 페이지(/groups/…)에서만 동작합니다.';
   $('chkApprove').checked = L.approved;
   renderLayerList();
 }
@@ -483,10 +495,36 @@ $('btnFit').addEventListener('click', () => {
   markDirty('pins'); renderPins(); updatePanel(); draw();
 });
 
+// ---------------- ICP (server) ----------------
+let icpUndo = null;
+$('btnIcp').addEventListener('click', async () => {
+  if (!selected || !DATA.api || !DATA.api.icp) return;
+  const L = selected;
+  const others = {}; for (const o of layers) if (o !== L) others[o.id] = { offsetX: o.align.ox, offsetZ: o.align.oz, yawRadians: o.align.yaw };
+  $('btnIcp').disabled = true; $('icpNote').textContent = 'ICP 계산 중…';
+  try {
+    const r = await fetch(DATA.api.icp, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scan: L.id, alignment: { offsetX: L.align.ox, offsetZ: L.align.oz, yawRadians: L.align.yaw }, others }) });
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    const res = await r.json();
+    icpUndo = { layer: L, align: { ...L.align }, method: L.method };
+    L.align = { ox: res.alignment.offsetX, oz: res.alignment.offsetZ, yaw: res.alignment.yawRadians };
+    markDirty('icp'); updatePanel(); draw();
+    const a = res.after, b = res.before;
+    const worse = a.conflict > b.conflict + 0.05 || a.inlier < b.inlier - 0.1;
+    $('icpNote').textContent = `ICP: ${(res.moved_m * 100).toFixed(0)} cm, ${res.rotated_deg.toFixed(1)}° 이동 · inlier ${b.inlier.toFixed(2)}→${a.inlier.toFixed(2)}, conflict ${b.conflict.toFixed(2)}→${a.conflict.toFixed(2)}` + (worse ? ' — 나빠졌습니다. 취소를 권합니다.' : '');
+    $('btnIcpUndo').hidden = false;
+  } catch (e) { $('icpNote').textContent = `ICP 실패: ${e.message}`; updatePanel(); }
+});
+$('btnIcpUndo').addEventListener('click', () => {
+  if (!icpUndo) return; const u = icpUndo; icpUndo = null;
+  u.layer.align = { ...u.align }; u.layer.method = u.method; $('btnIcpUndo').hidden = true; updatePanel(); draw();
+});
+
 // ---------------- revert / approve / save ----------------
-$('btnRevert').addEventListener('click', () => { if (!selected) return; selected.align = { ...selected.loaded }; selected.method = selected.loadedMethod; selected.dirty = false; selected.approved = false; pins = []; renderPins(); updatePanel(); draw(); });
+$('btnRevert').addEventListener('click', () => { if (!selected) return; selected.align = { ...selected.loaded }; selected.method = selected.loadedMethod; selected.dirty = false; selected.approved = false; pins = []; icpUndo = null; $('btnIcpUndo').hidden = true; renderPins(); updatePanel(); draw(); });
 $('chkApprove').addEventListener('change', (e) => { if (selected) { selected.approved = e.target.checked; renderLayerList(); } });
-$('btnSave').addEventListener('click', () => {
+function buildAlignmentDoc() {
   const out = { format: 'scan-group-alignment-v1', group: DATA.group, reference: DATA.reference, up_axis_convention: 'top = -z', alignments: {} };
   const now = new Date().toISOString();
   for (const L of layers) {
@@ -499,11 +537,35 @@ $('btnSave').addEventListener('click', () => {
       approved: L.approved, ...(L.approved ? { approved_at: now } : {}),
     };
   }
+  return out;
+}
+if (DATA.api && DATA.api.save) {
+  $('btnSave').textContent = '서버에 저장 → 합성 반영';
+  $('saveNote').textContent = '저장하면 서버가 group_alignment.json을 쓰고 합성 slicemap을 다시 만들어 시뮬레이터 worlds/로 내보냅니다.';
+}
+$('btnSave').addEventListener('click', async () => {
+  const out = buildAlignmentDoc();
+  const pending = layers.filter((L) => !L.isRef && !L.approved).length;
+  const pendingMsg = pending ? ` 승인 안 된 스캔 ${pending}개가 남아 있습니다.` : ' 모든 스캔 승인.';
+  if (DATA.api && DATA.api.save) {
+    $('btnSave').disabled = true; $('saveResult').hidden = false; $('saveResult').textContent = '저장 중…';
+    try {
+      const r = await fetch(DATA.api.save, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      const res = await r.json();
+      for (const L of layers) { L.loaded = { ...L.align }; L.loadedMethod = L.method; L.dirty = false; }
+      renderLayerList();
+      $('saveResult').innerHTML = `저장됨.${pendingMsg}<br>합성: ${res.merged_summary}<br>` +
+        (res.published ? `시뮬레이터로 내보냄: <code>${res.published}</code>` : '시뮬레이터 내보내기 경로(STUDIO_PUBLISH_DIR)가 설정되지 않아 합성 파일만 썼습니다.') +
+        `<br><img src="${DATA.api.merged}?t=${Date.now()}" style="max-width:100%;margin-top:6px;border:1px solid var(--line)">`;
+    } catch (e) { $('saveResult').textContent = `저장 실패: ${e.message}`; }
+    $('btnSave').disabled = false;
+    return;
+  }
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'group_alignment.json'; a.click();
-  const pending = layers.filter((L) => !L.isRef && !L.approved).length;
   $('status').style.display = 'block';
-  $('status').textContent = pending ? `저장됨 — 승인 안 된 스캔 ${pending}개가 남아 있습니다.` : '저장됨 — 모든 스캔 승인.';
+  $('status').textContent = '저장됨 —' + pendingMsg;
 });
 
 // ---------------- boot ----------------

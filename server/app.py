@@ -21,9 +21,11 @@ from fastapi.staticfiles import StaticFiles
 from studio.project import PROJECTS_ROOT, create_project, list_projects
 from studio.status import read_status, write_status
 from server.align import align_geojson, align_image
+from server.groups_api import router as groups_router
 from server.jobs import is_running, start_process_job
 
 app = FastAPI(title="scan-to-map-studio API")
+app.include_router(groups_router)  # scan groups + alignment workspace (studio/groups.py)
 
 
 @app.on_event("startup")

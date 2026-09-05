@@ -13,7 +13,7 @@ import math
 
 import numpy as np
 
-from studio.merge_slicemaps import CODE_FREE, CODE_UNKNOWN, GroupAlignment, ScanAlignment, Slice, merge_slices
+from studio.merge_slicemaps import CODE_FREE, CODE_OCC_FURNITURE, CODE_UNKNOWN, GroupAlignment, ScanAlignment, Slice, merge_slices
 from studio.preprocess import remove_ceiling
 from studio.slice_map import rasterize_slice, slice_to_codes
 from studio.synthetic_room import generate_room
@@ -35,9 +35,12 @@ def make_pair(
     split_hi: float = 5.0,
     resolution: float = 0.05,
     seed: int = 0,
+    obstacles: tuple[tuple[float, float, float, float], ...] = ((3.6, 1.4, 0.4, 0.4),),
 ) -> tuple[Slice, Slice]:
     """Returns (scan_A in the reference frame, scan_B in its own local frame),
-    such that applying `truth` to B lands it on A. Overlap = x in [split_lo, split_hi]."""
+    such that applying `truth` to B lands it on A. Overlap = x in [split_lo, split_hi].
+    `obstacles` = (x, y, w, h) blocks stamped into the grid (default: one in the
+    overlap band, see below)."""
     pts = generate_room(width=width, depth=depth, points_per_surface=6000, seed=seed)
     floor = remove_ceiling(pts, seed=seed).points
     sg = rasterize_slice(floor, z=0.18, band=0.05, resolution=resolution)
@@ -53,6 +56,15 @@ def make_pair(
     cy = origin[1] + (np.arange(codes.shape[0]) + 0.5) * resolution
     inside = (cx[None, :] > 0.05) & (cx[None, :] < width - 0.05) & (cy[:, None] > 0.05) & (cy[:, None] < depth - 0.05)
     codes[(codes == CODE_UNKNOWN) & inside] = CODE_FREE
+
+    # A bare rectangle is degenerate for ICP: sliding along the two long walls
+    # costs nothing (both stay collinear) and B's far wall lies where A never
+    # looked. Real rooms always have something in the shared zone -- a door
+    # frame, a cabinet, a pillar. Put one block in the overlap band so the
+    # fixture has the same anchor a real doorway gives.
+    for (bx, by, bw, bh) in obstacles:
+        block = (cx[None, :] >= bx) & (cx[None, :] <= bx + bw) & (cy[:, None] >= by) & (cy[:, None] <= by + bh)
+        codes[block] = CODE_OCC_FURNITURE
 
     xs = origin[0] + (np.arange(codes.shape[1]) + 0.5) * resolution
     a_codes = codes.copy(); a_codes[:, xs > split_hi] = CODE_UNKNOWN

@@ -78,3 +78,28 @@ python scripts/studio.py process officescan --usdz <scan.usdz> --robot-map robot
 - `pip install` 실패(오프라인) → 위 체크리스트의 `vendor_wheels` 방법 사용
 - `register_maps.py`가 `robot_map.yaml`을 못 읽음 → 실제 로 나온 yaml 내용과 에러 메시지를 그대로 기록해두면, 그 사내망 nav2 배포판 차이에 맞춰 `studio/rasterize.py`의 로더를 보강할 수 있음
 - 그 외 막히는 지점은 PLAN.md §6(미해결 질문)·§7-1(검증 가이드)에 이미 알려진 한계가 정리되어 있으니 먼저 확인
+
+## 정합 워크스페이스 서버 (여러 스캔을 한 좌표계로)
+
+iPhone 앱의 프로젝트 zip(스캔 여러 개 + `group_alignment.json`)을 폴더에 풀어 두고 서버를 띄우면,
+브라우저에서 스캔을 끌어 맞추고 저장하는 것만으로 합성 slicemap이 다시 만들어져 시뮬레이터
+`worlds/`로 내보내진다. 세부 설계는 전략 문서(아티팩트 "스캔 정합 워크스페이스") 참고.
+
+```powershell
+# 그룹 폴더(zip을 푼 곳)와 내보낼 곳(ros-chromium 시뮬레이터 worlds/)을 지정해 서버 실행
+$env:STUDIO_GROUPS_DIR = 'D:\code\robot-project\vps-system\data'
+$env:STUDIO_PUBLISH_DIR = 'D:\code\robot-project\ros-chromium\simulator\worlds'
+.venv\Scripts\python.exe -m uvicorn server.app:app --port 8000
+```
+
+- `http://localhost:8000/groups` — 그룹 목록. 그룹을 열면 스캔별 슬라이스가 없을 때 처음 한 번 만든다(스캔당 수십 초).
+- 워크스페이스에서 드래그·회전·기준점 쌍·ICP 마무리(겹침이 1.5 m 이상일 때만 열림)로 맞추고
+  "서버에 저장 → 합성 반영"을 누르면 `group_alignment.json`이 갱신되고 `merged.slicemap.json`/`.png`가
+  그룹 폴더에, `<그룹>.slicemap.json`이 `STUDIO_PUBLISH_DIR`에 쓰인다.
+- 시뮬레이터는 slicemap 파일을 월드로 바로 읽는다: `SIM_WORLD=worlds/<그룹>.slicemap.json`.
+  nav.html의 iPhone map에도 같은 파일을 넣으면 된다.
+- 서버 없이 쓰려면 `scripts/align_workspace.py`(오프라인 페이지, 저장은 다운로드) +
+  `scripts/merge_slicemaps.py`.
+
+API: `GET /api/groups`, `GET /api/groups/{g}`, `POST /api/groups/{g}/prepare`,
+`GET|PUT /api/groups/{g}/alignment`, `POST /api/groups/{g}/icp`, `GET /api/groups/{g}/merged.png`.

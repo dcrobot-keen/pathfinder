@@ -58,11 +58,20 @@ def icp_2d(
     max_iterations: int = 100,
     tolerance: float = 1e-7,
     max_correspondence_distance: float | None = None,
+    start_from_centroids: bool = True,
 ) -> ICPResult:
     """Iterative Closest Point: find the rigid transform aligning `source`
-    onto `target`. Starts from a centroid-alignment initial guess (robust to
-    the two point sets not overlapping much at the start), then alternates
-    nearest-neighbor correspondence and closed-form rigid refit.
+    onto `target`, alternating nearest-neighbor correspondence and closed-form
+    rigid refit.
+
+    `start_from_centroids=True` (default, the robot-map-vs-base-map case) first
+    moves the source centroid onto the target centroid -- right when both sets
+    cover the same room. For PARTIAL overlap (two adjacent scans sharing a
+    doorway, studio/groups.icp_refine) that initial move is catastrophic: it
+    slides the scan metres along the corridor before the first iteration.
+    Pass False to start exactly where `source` already is; then, if fewer than
+    3 correspondences survive the distance gate, the loop stops instead of
+    falling back to "use every point" (which would be the same jump).
     """
     if len(source) == 0 or len(target) == 0:
         raise ValueError("source and target must be non-empty")
@@ -70,7 +79,7 @@ def icp_2d(
     target_tree = cKDTree(target)
 
     rotation = np.eye(2)
-    translation = target.mean(axis=0) - source.mean(axis=0)
+    translation = target.mean(axis=0) - source.mean(axis=0) if start_from_centroids else np.zeros(2)
     current = apply_transform_2d(source, rotation, translation)
 
     rmse_history: list[float] = []
@@ -83,6 +92,8 @@ def icp_2d(
         if max_correspondence_distance is not None:
             keep = distances < max_correspondence_distance
             if keep.sum() < 3:
+                if not start_from_centroids:
+                    break  # nothing within reach: refining in place has nothing to refine
                 keep = np.ones_like(keep)  # too few correspondences left; use all
         else:
             keep = np.ones(len(current), dtype=bool)
