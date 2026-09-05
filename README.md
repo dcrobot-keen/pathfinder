@@ -172,14 +172,18 @@ DELETE /api/robots/:id    # 삭제
 ```bash
 # scan-to-map-studio 프로젝트 폴더(예: ../scan-to-map-studio/projects/bedroom)를
 # data/imported/<room>.geojson으로 변환
-node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15]
+node scripts/import-scan-to-map-studio.mjs <scan-to-map-studio 프로젝트 폴더> --room <이름> [--wall-thickness 0.15] [--room-walls] [--alignment group_alignment.json [--scan <id>]]
 ```
 
 `output.geojson`의 `category: "furniture"`(가구 발자국)와 `category: "wall"`(벽 세그먼트, 지정한
 두께로 얇은 사각형 block으로 변환)만 `kind: "block"` 장애물로 변환됩니다. `category: "room"`(방
-전체 윤곽)은 장애물로 바꾸지 않고 `kind: "room-outline"` 참고용으로만 보존합니다 — "바깥쪽이
+전체 윤곽)은 기본으로는 장애물로 바꾸지 않고 `kind: "room-outline"` 참고용으로만 보존합니다 — "바깥쪽이
 막힘"을 표현하려면 홀(hole) 폴리곤이 필요한데 Go `RasterizeBlocks`의 홀 지원 여부가 검증되지
-않았기 때문입니다(2단계 과제).
+않았기 때문입니다. `--room-walls`를 주면 방 윤곽선의 각 변을 두께 있는 벽 block으로도 함께
+내보내 지도를 닫습니다(`derived_from: "room-outline"`). studio의 `pipeline.py`(오케스트레이터가
+부르는 경로)는 `--classify`를 켜도 room + furniture만 만들고 wall LineString은 만들지 않으므로,
+스캔 지도를 장애물로 닫으려면 이 옵션이 필요합니다. `--alignment`는 프로젝트의
+`group_alignment.json`(scan-group-alignment-v1)으로 방을 기준 스캔 좌표계로 옮깁니다.
 
 ```bash
 GET /api/imported-obstacles         # { rooms: string[] } -- 가져온 방 목록

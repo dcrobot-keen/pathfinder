@@ -53,4 +53,19 @@ check(Math.abs(seg[1][0] - 0) < 1e-9 && Math.abs(seg[1][1] - 2) < 1e-9, 'wall en
 check(fc.features[0].geometry.coordinates[0][0] === 1, 'input not mutated');
 check(out.features[1].geometry.coordinates[0].length === 4, 'polygon ring length preserved');
 
+
+
+// 3) --room-walls: a room outline becomes one thickened wall block per edge
+{
+  const { roomOutlineToWallBlocks } = await import('./import-scan-to-map-studio.mjs');
+  const room = { type: 'Feature', properties: { category: 'room', area_m2: 6 }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [3, 0], [3, 2], [0, 2], [0, 0]]] } };
+  const blocks = roomOutlineToWallBlocks(room, { wallThickness: 0.2, baseProps: { room: 'r' } });
+  check(blocks.length === 4, 'one wall block per outline edge');
+  check(blocks.every((b) => b.properties.kind === 'block' && b.properties.category === 'wall' && b.properties.derived_from === 'room-outline'), 'wall blocks tagged');
+  check(blocks.every((b) => b.geometry.coordinates[0].length === 5), 'wall rings closed (5 points)');
+  const first = blocks[0].geometry.coordinates[0];
+  const ys = first.map((p) => p[1]);
+  check(Math.abs(Math.max(...ys) - 0.1) < 1e-9 && Math.abs(Math.min(...ys) + 0.1) < 1e-9, 'bottom edge buffered ±thickness/2');
+  check(Math.abs(blocks[1].properties.length_m - 2) < 1e-9, 'edge length recorded');
+}
 console.log(`all scan-alignment smoke checks passed (${passed})`);
