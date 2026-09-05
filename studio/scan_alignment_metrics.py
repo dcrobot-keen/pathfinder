@@ -13,8 +13,9 @@ Three numbers, always together (strategy doc "품질 게이지"):
               alone proves nothing: on the 2026-09-04 rooms, WRONG fits
               still scored 0.4-0.6.
 - conflict    of those same observed points, the fraction that land where
-              another scan saw FREE floor. This is the number that catches a
-              wrong fit (0.25-0.30 on those same rooms). Must be low.
+              another scan saw FREE floor -- at least CONFLICT_MARGIN_CELLS
+              inside it, so grid aliasing next to a wall does not count.
+              This is the number that catches a wrong fit. Must be low.
 
 Why "observed subset": adjacent rooms share a doorway and a strip of
 corridor, not the whole room. Most of a scan's walls fall where the other
@@ -68,6 +69,34 @@ def codes_at(s: Slice, xy_local: np.ndarray) -> np.ndarray:
 def is_free_at(s: Slice, xy_local: np.ndarray) -> np.ndarray:
     """Boolean per point: does this slice call that (local-frame) spot FREE?"""
     return codes_at(s, xy_local) == CODE_FREE
+
+
+CONFLICT_MARGIN_CELLS = 2  # 0.10 m at the usual 0.05 m cell
+
+
+def deep_free_mask(s: Slice, margin_cells: int = CONFLICT_MARGIN_CELLS) -> np.ndarray:
+    """FREE cells at least `margin_cells` (4-connected steps) away from any
+    non-free cell. Conflict is only counted here: a structure point landing
+    right next to the other scan's wall is aliasing (thin legs, 5 cm grid,
+    slightly different slice), not evidence of a wrong pose. On the
+    2026-09-05 rooms this took the anchored pose from 0.58 to 0.06 while a
+    deliberately wrong pose stayed at 0.52 (margin 2)."""
+    from scipy import ndimage
+
+    free = s.codes == CODE_FREE
+    if margin_cells <= 0:
+        return free
+    return ndimage.binary_erosion(free, iterations=margin_cells)
+
+
+def is_deep_free_at(s: Slice, xy_local: np.ndarray, margin_cells: int = CONFLICT_MARGIN_CELLS) -> np.ndarray:
+    mask = deep_free_mask(s, margin_cells)
+    col = np.floor((xy_local[:, 0] - s.origin[0]) / s.resolution).astype(np.int64)
+    row = np.floor((xy_local[:, 1] - s.origin[1]) / s.resolution).astype(np.int64)
+    ok = (col >= 0) & (col < s.cols) & (row >= 0) & (row < s.rows)
+    out = np.zeros(len(xy_local), dtype=bool)
+    out[ok] = mask[row[ok], col[ok]]
+    return out
 
 
 def is_observed_at(s: Slice, xy_local: np.ndarray) -> np.ndarray:
@@ -142,7 +171,7 @@ def evaluate(
     for t, a in targets:
         local = a.inverse_xy(src_ref)
         observed |= is_observed_at(t, local)
-        conflict |= is_free_at(t, local)
+        conflict |= is_deep_free_at(t, local)
     n_obs = int(observed.sum())
 
     inlier = float(inl[observed].mean()) if n_obs else 0.0

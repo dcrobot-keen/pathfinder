@@ -26,7 +26,7 @@ from typing import Iterable
 import numpy as np
 
 from studio.merge_slicemaps import GroupAlignment, Slice
-from studio.scan_alignment_metrics import evaluate
+from studio.scan_alignment_metrics import CONFLICT_MARGIN_CELLS, evaluate
 
 
 def _slice_payload(scan_id: str, s: Slice) -> dict:
@@ -67,7 +67,8 @@ def build_alignment_workspace_html(
         "group": ga.group,
         "reference": ga.reference,
         "layers": layers,
-        "gates": {"overlapLockM": 1.5, "inlierMin": 0.60, "conflictMax": 0.12, "corrDist": 0.15, "coarseDist": 0.5},
+        "gates": {"overlapLockM": 1.5, "inlierMin": 0.60, "conflictMax": 0.12, "corrDist": 0.15, "coarseDist": 0.5,
+                  "conflictMargin": CONFLICT_MARGIN_CELLS},
     }
     data_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     return _TEMPLATE.replace("__TITLE__", title).replace("__DATA__", data_json)
@@ -192,10 +193,26 @@ const layers = DATA.layers.map((L) => {
     const v = codes[r * L.cols + c];
     if (v === 3 || v === 2) walls.push(L.origin[0] + (c + 0.5) * L.resolution, L.origin[1] + (r + 0.5) * L.resolution);
   }
+  // deepFree: FREE cells >= conflictMargin 4-connected steps from any non-free cell
+  // (== scan_alignment_metrics.deep_free_mask, scipy binary_erosion with the cross
+  // element applied `margin` times). Conflict is only counted on these cells.
+  let deepFree = new Uint8Array(codes.length);
+  for (let i = 0; i < codes.length; i++) deepFree[i] = codes[i] === 1 ? 1 : 0;
+  for (let it = 0; it < G.conflictMargin; it++) {
+    const next = new Uint8Array(codes.length);
+    for (let r = 0; r < L.rows; r++) for (let c = 0; c < L.cols; c++) {
+      const i = r * L.cols + c;
+      if (!deepFree[i]) continue;
+      const up = r > 0 ? deepFree[i - L.cols] : 0, down = r < L.rows - 1 ? deepFree[i + L.cols] : 0;
+      const left = c > 0 ? deepFree[i - 1] : 0, right = c < L.cols - 1 ? deepFree[i + 1] : 0;
+      next[i] = (up && down && left && right) ? 1 : 0;
+    }
+    deepFree = next;
+  }
   const a = L.alignment;
   const al = { ox: a.offsetX, oz: a.offsetZ, yaw: a.yawRadians };
   return {
-    id: L.id, cols: L.cols, rows: L.rows, res: L.resolution, origin: L.origin, codes,
+    id: L.id, cols: L.cols, rows: L.rows, res: L.resolution, origin: L.origin, codes, deepFree,
     walls: new Float64Array(walls), visible: true,
     align: { ...al }, loaded: { ...al }, method: a.method, loadedMethod: a.method,
     approved: false, dirty: false, imgs: {},
@@ -330,7 +347,7 @@ function computeMetrics(L) {
       if (c < 0 || c >= o.cols || r < 0 || r >= o.rows) continue;
       const v = o.codes[r * o.cols + c];
       if (v !== 0) observed = true;
-      if (v === 1) conflict = true;
+      if (o.deepFree[r * o.cols + c]) conflict = true;
     }
     if (observed) { obs++; if (matched) inlObs++; if (conflict) conflictPts.push([x, y]); }
   }

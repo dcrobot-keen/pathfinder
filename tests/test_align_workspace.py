@@ -57,7 +57,16 @@ def test_truth_scores_well_and_wrong_pose_is_caught() -> None:
     bad = evaluate(SCAN_B, wrong, [(SCAN_A, ScanAlignment())])
     print(f"      wrong: {bad.to_json()}")
     check(bad.conflict > 0.10 or bad.inlier < 0.6, f"wrong pose fails a gate (inlier {bad.inlier:.2f}, conflict {bad.conflict:.2f})")
-    check(bad.conflict > good.conflict, "conflict rises when walls land on the other scan's floor")
+    check(bad.conflict >= good.conflict, "conflict never improves when walls land on the other scan's floor")
+
+    # conflict only counts deep inside the other scan's free floor: sliding B across the
+    # room (perpendicular to the shared walls) puts its long walls on A's open floor ->
+    # must register as conflict. (Sliding it along the walls would be unobservable here:
+    # the long walls stay collinear and the far wall leaves A's observed area.)
+    shifted = ScanAlignment(offsetX=TRUTH.offsetX, offsetZ=TRUTH.offsetZ + 0.6, yawRadians=TRUTH.yawRadians)
+    far_in = evaluate(SCAN_B, shifted, [(SCAN_A, ScanAlignment())])
+    print(f"      shifted 0.6 m across: {far_in.to_json()}")
+    check(far_in.conflict > 0.12, f"walls in the middle of the other room are a conflict ({far_in.conflict:.2f})")
 
 
 def test_no_overlap_locks_icp() -> None:
