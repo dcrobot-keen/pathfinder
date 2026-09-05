@@ -20,8 +20,9 @@ import Text from 'ol/style/Text.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
 import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, pcdSource, nodeLinkSource, importedObstacleSource, liveRobotPoseSource, activeProjectName, activeProjectFloorImage } from '../appShared.js';
-import { sendFleetOrder, subscribeFleetStream } from '../fleet/fleetApi.js';
+import { sendFleetOrder, subscribeFleetStream, sendFleetInstantAction } from '../fleet/fleetApi.js';
 import { createFleetBoard } from '../fleet/fleetBoard.js';
+import { createOperateSidePanel } from '../fleet/operateSidePanel.js';
 import { buildGridLayer } from '../grid2d.js';
 import { nodeLinkStyle } from '../nodeLinkStyle.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from '../importedObstacles.js';
@@ -99,7 +100,7 @@ function pointInRing(x, y, ring) {
  *   명령만 두고, 데모용 컨트롤과 시작/도착점 클릭은 숨긴다. 지도 클릭은 "목적지 클릭"
  *   모드에서만 살아 있다. (M1: 화면 재배치, doc/vda5050-rcs.md · 플릿 스튜디오 기획서)
  */
-export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } = {}) {
+export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', sideEl = null } = {}) {
   const config = MODE_CONFIG[mode];
   const isOperate = variant === 'operate';
   let fleetBoard = null;
@@ -820,7 +821,7 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
 
   const title = document.createElement('div');
   title.className = 'pathfinding-panel-title';
-  title.textContent = isOperate ? '운영 · 로봇 이동' : config.title;
+  title.textContent = isOperate ? '플릿 보드' : config.title;
   panelEl.appendChild(title);
 
   const robotSelect = document.createElement('select');
@@ -886,19 +887,36 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
   commandBtn.textContent = '목적지 클릭';
   const commandStatus = document.createElement('div');
   commandStatus.className = 'pathfinding-command-status';
-  commandBox.append(commandTitle, commandSelect, commandBtn, commandStatus);
-  panelEl.appendChild(commandBox);
+  // 운영 화면(플릿 스튜디오 디자인): 명령 UI는 지도 아래 액션 바(선택 로봇 · 목적지 지정 ·
+  // 일시정지 · 주문 취소 · 진행률)로 가고, 왼쪽 레일에는 플릿 보드만, 오른쪽(sideEl)에는
+  // 주문 목록/현장 요약 패널이 붙는다. 시뮬레이션 화면은 예전처럼 명령 박스를 패널에 둔다.
+  let actionBar = null;
+  let sidePanel = null;
   if (isOperate) {
-    // 플릿 보드가 명령 박스 위에 온다: 행을 누르면 그 로봇이 명령 대상이 된다.
+    commandBtn.textContent = '목적지 지정';
+    actionBar = buildActionBar();
+    mapEl.appendChild(actionBar.el);
     const boardEl = document.createElement('div');
-    panelEl.insertBefore(boardEl, commandBox);
+    panelEl.appendChild(boardEl);
+    // 플릿 보드는 선택된 로봇의 스트림 갱신마다 onSelect 를 다시 부른다 -- 선택이 실제로
+    // 바뀐 때만 상태 문구를 바꿔야 "경로 계산 중/전송/실패" 메시지가 덮이지 않는다.
+    let lastSelectedSerial = null;
     fleetBoard = createFleetBoard(boardEl, {
       onSelect: (r) => {
         if (r?.registry && commandRobotsById.has(r.registry.id)) commandSelect.value = r.registry.id;
-        commandStatus.textContent = r ? `${r.registry?.name ?? r.serialNumber} 선택됨` : '';
+        const serial = r?.serialNumber ?? null;
+        if (serial !== lastSelectedSerial) {
+          lastSelectedSerial = serial;
+          commandStatus.textContent = r ? `${r.registry?.name ?? r.serialNumber} 선택됨` : '';
+        }
+        updateActionBar();
       },
       onStatus: (text) => { commandStatus.textContent = text; },
     });
+    if (sideEl) sidePanel = createOperateSidePanel(sideEl);
+  } else {
+    commandBox.append(commandTitle, commandSelect, commandBtn, commandStatus);
+    panelEl.appendChild(commandBox);
   }
 
   let commandMode = false;
@@ -911,10 +929,126 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
     commandMode = on;
     if (isOperate) draw.setActive(on);
     commandBtn.classList.toggle('active', on);
-    commandBtn.textContent = on ? '지도를 클릭하세요 (취소)' : '목적지 클릭';
+    commandBtn.textContent = on ? '지도를 클릭하세요 (취소)' : isOperate ? '목적지 지정' : '목적지 클릭';
     if (on) commandStatus.textContent = '목적지를 지도에서 클릭하세요.';
   }
   commandBtn.addEventListener('click', () => setCommandMode(!commandMode));
+
+  // VDA5050 instantActions: 이 스택(robot-os-chromium Vda5050Node·플릿 보드)은 stopPause=일시정지,
+  // startPause=재개로 쓴다. 표준 명세(startPause=정지)와 이름이 반대라 실기 연동 때 양쪽을 함께
+  // 맞춰야 한다 -- doc/vda5050-rcs.md 남은 일.
+  const PAUSE_ACTION = 'stopPause';
+  const RESUME_ACTION = 'startPause';
+
+  function buildActionBar() {
+    const el = document.createElement('div');
+    el.className = 's2m-actionbar';
+    const who = document.createElement('div');
+    who.className = 's2m-actionbar__who';
+    const name = document.createElement('div');
+    name.className = 's2m-actionbar__name';
+    name.textContent = '로봇을 선택하세요';
+    const serial = document.createElement('div');
+    serial.className = 's2m-actionbar__serial';
+    serial.textContent = '왼쪽 목록에서 선택';
+    who.append(name, serial);
+    const pill = document.createElement('span');
+    pill.className = 's2m-pill s2m-pill--dim';
+    pill.textContent = '-';
+    const pauseBtn = document.createElement('button');
+    pauseBtn.className = 'pathfinding-button';
+    pauseBtn.textContent = '일시정지';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'pathfinding-button s2m-actionbar__danger';
+    cancelBtn.textContent = '주문 취소';
+    const spacer = document.createElement('div');
+    spacer.className = 's2m-actionbar__spacer';
+    const progress = document.createElement('div');
+    progress.className = 's2m-progress';
+    progress.hidden = true;
+    const progressBar = document.createElement('div');
+    progressBar.className = 's2m-progress__bar';
+    const progressFill = document.createElement('div');
+    progressFill.className = 's2m-progress__fill';
+    progressBar.appendChild(progressFill);
+    const progressText = document.createElement('span');
+    progress.append(progressBar, progressText);
+    commandSelect.classList.add('s2m-actionbar__select');
+    commandSelect.hidden = true; // 대상 로봇은 왼쪽 플릿 보드 행을 눌러 고른다(셀렉트는 로직용으로만 남김)
+    commandStatus.classList.add('s2m-actionbar__status');
+    el.append(who, pill, commandSelect, commandBtn, pauseBtn, cancelBtn, spacer, progress, commandStatus);
+
+    const selectedFleet = () => {
+      const robot = commandRobotsById.get(commandSelect.value);
+      return robot ? fleetBySerial.get(robot.vda5050Serial) : null;
+    };
+    async function instant(btn, type, label) {
+      const fleet = selectedFleet();
+      if (!fleet) {
+        commandStatus.textContent = '로봇을 먼저 선택하세요.';
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await sendFleetInstantAction(fleet.manufacturer, fleet.serialNumber, type);
+        commandStatus.textContent = `${fleet.serialNumber}: ${label} 전송`;
+      } catch (err) {
+        commandStatus.textContent = `${fleet.serialNumber}: ${label} 실패 — ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+    pauseBtn.addEventListener('click', () => {
+      const paused = selectedFleet()?.state?.paused;
+      instant(pauseBtn, paused ? RESUME_ACTION : PAUSE_ACTION, paused ? '재개' : '일시정지');
+    });
+    cancelBtn.addEventListener('click', () => instant(cancelBtn, 'cancelOrder', '주문 취소'));
+    commandSelect.addEventListener('change', () => updateActionBar());
+    return { el, name, serial, pill, pauseBtn, cancelBtn, progress, progressFill, progressText };
+  }
+
+  function updateActionBar() {
+    if (!actionBar) return;
+    const robot = commandRobotsById.get(commandSelect.value);
+    const fleet = robot ? fleetBySerial.get(robot.vda5050Serial) : null;
+    const s = fleet?.state;
+    const online = brokerConnected && fleet?.connectionState === 'ONLINE';
+    actionBar.name.textContent = robot?.name ?? '로봇을 선택하세요';
+    actionBar.serial.textContent = robot ? `${robot.vda5050Serial} · ${fleet?.manufacturer ?? robot.company ?? ''}` : '왼쪽 목록에서 선택';
+    let pillText = '-';
+    let pillClass = 's2m-pill--dim';
+    if (robot) {
+      if (!online) pillText = '오프라인';
+      else if ((s?.safetyState?.eStop ?? 'NONE') !== 'NONE') { pillText = 'E-STOP'; pillClass = 's2m-pill--danger'; }
+      else if (s?.paused) { pillText = '일시정지'; pillClass = 's2m-pill--warn'; }
+      else if (s?.driving) { pillText = '주행 중'; pillClass = 's2m-pill--success'; }
+      else { pillText = '유휴'; pillClass = 's2m-pill--accent'; }
+    }
+    actionBar.pill.textContent = pillText;
+    actionBar.pill.className = `s2m-pill ${pillClass}`;
+    actionBar.pauseBtn.textContent = s?.paused ? '재개' : '일시정지';
+    actionBar.pauseBtn.disabled = !online;
+    actionBar.cancelBtn.disabled = !online || !s?.orderId;
+    const total = fleet?.lastOrder?.waypoints ?? 0;
+    const left = s?.nodesLeft ?? 0;
+    if (online && s?.orderId && total > 0 && left > 0) {
+      const pct = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)));
+      actionBar.progress.hidden = false;
+      actionBar.progressFill.style.width = `${pct}%`;
+      actionBar.progressText.textContent = `주문 ${String(s.orderId).slice(0, 8)} · ${total - left}/${total} 노드 · ${pct}%`;
+    } else {
+      actionBar.progress.hidden = true;
+    }
+  }
+
+  // 오른쪽 사이드 패널 + 액션 바를 플릿 스트림의 현재 상태로 맞춘다.
+  function syncSide() {
+    updateActionBar();
+    if (!sidePanel) return;
+    const registryBySerial = new Map();
+    for (const r of commandRobotsById.values()) registryBySerial.set(r.vda5050Serial, r);
+    sidePanel.update({ robots: Array.from(fleetBySerial.values()), brokerConnected, registryBySerial });
+  }
 
   function refreshCommandOptions() {
     const prev = commandSelect.value;
@@ -945,6 +1079,7 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
       commandRobotsById.clear();
       for (const r of robots) if (r.vda5050Serial) commandRobotsById.set(r.id, r);
       refreshCommandOptions();
+      syncSide();
     } catch (err) {
       console.error('이동 명령 로봇 목록 조회 실패', err);
     }
@@ -956,11 +1091,14 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
       fleetBySerial.clear();
       for (const r of msg.robots) fleetBySerial.set(r.serialNumber, r);
       loadCommandRobots();
+      syncSide();
+      sidePanel?.loadHistory(msg.robots.map((r) => r.serialNumber));
     } else if (msg.type === 'robot') {
       const isNew = !fleetBySerial.has(msg.robot.serialNumber);
       fleetBySerial.set(msg.robot.serialNumber, msg.robot);
       if (isNew) setTimeout(loadCommandRobots, 800); // 서버 자동 등록 뒤 다시 읽기
       else refreshCommandOptions();
+      syncSide();
       // 주문을 다 끝냈으면(남은 노드 0, 주행 아님) 그려둔 계획 경로를 지운다.
       const st = msg.robot.state;
       if (st && st.nodesLeft === 0 && !st.driving && commandFeatures.has(msg.robot.serialNumber)) {
@@ -970,6 +1108,9 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
     } else if (msg.type === 'status') {
       brokerConnected = msg.status?.connected === true;
       refreshCommandOptions();
+      syncSide();
+    } else if ((msg.type === 'order' || msg.type === 'order_update') && msg.order) {
+      sidePanel?.upsertOrder(msg.order);
     }
   });
 
@@ -1002,6 +1143,10 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
     }
     return features;
   }
+
+  // 이동 명령의 계획 경로(주황 점선) -- M3 커밋(5e4f761)에서 정의가 실수로 지워져
+  // 경로 계산 뒤 ReferenceError 로 주문이 나가지 않던 것을 되살림.
+  const COMMAND_PATH_STYLE = new Style({ stroke: new Stroke({ color: '#ff9800', width: 3, lineDash: [8, 6] }) });
 
   async function sendMoveCommand(goalCoord) {
     const robot = commandRobotsById.get(commandSelect.value);

@@ -32,6 +32,8 @@ import {
 const SUBSCRIBED_NAMES = ['connection', 'state', 'visualization'];
 const RCS_SERIAL = 'pathfinder-rcs'; // serialNumber in the headers of what WE publish
 const SUPPORTED_INSTANT_ACTIONS = ['cancelOrder', 'stopPause', 'startPause'];
+// 노드가 비기 전후 이 시간 안에 FATAL 오류/cancelOrder 완료가 보이면 그 주문은 도착이 아니라 중단/취소다.
+const ABORT_WINDOW_MS = 5000;
 
 async function defaultConnect(brokerUrl, options) {
   const { default: mqtt } = await import('mqtt');
@@ -177,17 +179,43 @@ export async function createVda5050Bridge({
             const isNew = !prevErrors.some((p) => p.errorType === err.errorType && p.errorDescription === err.errorDescription);
             if (isNew) {
               pushEvent('ERROR', err.errorLevel ?? 'WARN', t.serialNumber, `[${err.errorType}] ${err.errorDescription ?? '-'}`);
+              // 로봇이 주문을 스스로 중단한 이유(pathDeviation, obstacleBlocked ...). 몇 초 안에
+              // 노드가 비면 그 주문은 FINISHED 가 아니라 ABORTED 로 기록한다(아래).
+              if (err.errorLevel === 'FATAL') r.lastFatal = { at: now, errorType: err.errorType, description: err.errorDescription ?? '' };
             }
           }
         }
         if (msg.orderId) {
-          updateOrderStatus(t.serialNumber, msg.orderId, {
-            lastNodeId: msg.lastNodeId,
-            nodesLeft: msg.nodeStates?.length ?? 0,
-            driving: msg.driving,
-            paused: msg.paused,
-            status: msg.nodeStates?.length === 0 ? 'FINISHED' : (msg.driving ? 'DRIVING' : (msg.paused ? 'PAUSED' : 'ACTIVE')),
-          });
+          const rec = (orderHistory.get(t.serialNumber) ?? []).find((o) => o.orderId === msg.orderId);
+          const left = msg.nodeStates?.length ?? 0;
+          const patch = { lastNodeId: msg.lastNodeId, driving: msg.driving, paused: msg.paused };
+          if (left > 0) {
+            patch.nodesLeft = left;
+            patch.status = msg.driving ? 'DRIVING' : msg.paused ? 'PAUSED' : 'ACTIVE';
+          } else if (rec && (rec.status === 'ABORTED' || rec.status === 'CANCELLED')) {
+            patch.status = rec.status; // 한 번 중단/취소로 판정한 주문은 그대로 둔다
+          } else {
+            // 노드가 다 비었다 = 정상 도착, 취소(cancelOrder 액션 완료), 또는 로봇의 자체 중단(FATAL 오류).
+            // 정상 도착도 nodesLeft 0 이라 셋을 구분해야 "중단된 주문이 109/109 완료"로 보이지 않는다.
+            const cancelled = (msg.actionStates ?? []).some((a) => a.actionType === 'cancelOrder' && a.actionStatus === 'FINISHED')
+              && rec?.status !== 'FINISHED';
+            const fatal = r.lastFatal && now - r.lastFatal.at < ABORT_WINDOW_MS ? r.lastFatal : null;
+            const wasFinished = rec?.status === 'FINISHED' && now - (rec.finishedAt ?? 0) > ABORT_WINDOW_MS;
+            if (!wasFinished && cancelled) {
+              patch.status = 'CANCELLED';
+              patch.nodesLeft = rec?.nodesLeft ?? 0;
+            } else if (!wasFinished && fatal) {
+              patch.status = 'ABORTED';
+              patch.nodesLeft = rec?.nodesLeft ?? 0;
+              patch.abortReason = fatal.errorType;
+              patch.abortDescription = fatal.description;
+            } else {
+              patch.status = 'FINISHED';
+              patch.nodesLeft = 0;
+              if (rec && !rec.finishedAt) patch.finishedAt = now;
+            }
+          }
+          updateOrderStatus(t.serialNumber, msg.orderId, patch);
         }
       }
     }

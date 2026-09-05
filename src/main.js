@@ -1,4 +1,5 @@
 import './style.css';
+import './theme-s2m.css'; // Fleet Studio 디자인(S2M 목업) 토큰 + 앱 셸, style.css 위에 덮어씀
 import Map from 'ol/Map.js';
 import View from 'ol/View.js';
 import WebGLVectorLayer from 'ol/layer/WebGLVector.js';
@@ -246,7 +247,31 @@ simBotBtns.forEach((btn) => {
   });
 });
 
+// 화면 헤더(crumb · 설명 · 상태 핀). 핀은 플릿 스트림이 채운다(아래 recountFleet).
+const SCREEN_META = {
+  maps: { label: '지도', desc: '2D/3D · 정합 스튜디오 · 스캔 지도 프로젝트' },
+  robots: { label: '로봇', desc: '기기 목록 · 모델 카탈로그 · VDA5050 연결' },
+  operate: { label: '운영', desc: '플릿 보드 · 지도 클릭 이동 · 주문/이벤트' },
+  simulation: { label: '시뮬레이션', desc: '회피 데모 · 시뮬레이터 뷰어' },
+  settings: { label: '설정', desc: '브로커 · 서비스 주소 · 좌표 규약' },
+};
+let currentTabKey = 'maps';
+const screenCrumbSite = document.getElementById('screen-crumb-site');
+const screenCrumbView = document.getElementById('screen-crumb-view');
+const screenDesc = document.getElementById('screen-desc');
+const navSiteTitle = document.getElementById('nav-site-title');
+if (screenCrumbSite) screenCrumbSite.textContent = activeProjectName;
+if (navSiteTitle) navSiteTitle.textContent = `현장 ${activeProjectName}`;
+function updateScreenHeader() {
+  const meta = SCREEN_META[currentTabKey] ?? SCREEN_META.maps;
+  if (screenCrumbView) screenCrumbView.textContent = meta.label;
+  if (screenDesc) screenDesc.textContent = meta.desc;
+}
+updateScreenHeader();
+
 function activateTab(tabKey) {
+  currentTabKey = tabKey;
+  updateScreenHeader();
   gnbTabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
 
   // 해당 워크스페이스의 Level 2 서브바만 활성화
@@ -262,7 +287,10 @@ function activateTab(tabKey) {
 
   if (tabKey === 'operate') {
     if (!operateTab) {
-      operateTab = createPathfindingTab(document.getElementById('operate'), document.getElementById('operate-panel'), 'obstacle', { variant: 'operate' });
+      operateTab = createPathfindingTab(document.getElementById('operate-map'), document.getElementById('operate-panel'), 'obstacle', {
+        variant: 'operate',
+        sideEl: document.getElementById('operate-side'),
+      });
       operateTab.fitToData();
     }
     operateTab.resize();
@@ -326,9 +354,13 @@ function updateMqttStatus(connected) {
   if (textEl) textEl.textContent = connected ? 'MQTT 온라인 (1883)' : 'MQTT 미연결';
 }
 
-function updateFleetOnlineCount(count) {
-  if (!gnbFleetCount) return;
-  gnbFleetCount.textContent = `${count}대 온라인`;
+const screenPill = document.getElementById('screen-pill');
+function updateFleetOnlineCount(count, total = count) {
+  if (gnbFleetCount) gnbFleetCount.textContent = `${count}대 온라인`;
+  if (screenPill) {
+    screenPill.textContent = total ? `로봇 ${total}대 · 온라인 ${count}` : '로봇 없음';
+    screenPill.className = `s2m-pill ${count > 0 ? 's2m-pill--accent' : total ? 's2m-pill--warn' : 's2m-pill--dim'}`;
+  }
 }
 
 getFleetConfig()
@@ -342,7 +374,8 @@ getFleetConfig()
 // 주의: 이 파일의 `Map`은 OpenLayers 지도 클래스라(import) JS Map 대신 일반 객체를 쓴다.
 const gnbRobots = {}; // key -> 플릿 레코드
 function recountFleet() {
-  updateFleetOnlineCount(Object.values(gnbRobots).filter((r) => r.connectionState === 'ONLINE').length);
+  const all = Object.values(gnbRobots);
+  updateFleetOnlineCount(all.filter((r) => r.connectionState === 'ONLINE').length, all.length);
 }
 subscribeFleetStream((msg) => {
   if (msg.type === 'status' && msg.status) {

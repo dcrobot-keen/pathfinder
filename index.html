@@ -11,46 +11,23 @@
       <div class="gnb-bar">
         <div class="gnb-left">
           <div class="brand-badge">
-            <span class="brand-icon">⚡</span>
+            <span class="s2m-shell__mark">FS</span>
             <div class="brand-text">
-              <span class="brand-name">FLEET STUDIO</span>
-              <span class="brand-sub">ROBOT RCS</span>
+              <span class="brand-name">플릿 스튜디오</span>
+              <span class="brand-sub">스캔 → 정합 → 지도 → VDA5050 관제</span>
             </div>
-            <span class="brand-ver">v0.8</span>
+            <span class="brand-ver">v0.9</span>
           </div>
 
           <div class="gnb-divider"></div>
 
           <!-- Level 0: Site (현장 / 지도 프로젝트) Selector -->
           <div class="site-selector-container">
-            <span class="site-label">📍 현장:</span>
+            <span class="site-label">현장</span>
             <div id="project-selector"></div>
           </div>
         </div>
 
-        <!-- Level 1: 5 Core Workspaces according to IA -->
-        <nav class="gnb-nav" aria-label="메인 워크스페이스 내비게이션">
-          <button id="tab-maps" class="gnb-tab active" data-tab="maps" title="지도 작성, 2D/3D 시각화, 슬라이스맵 정합">
-            <span class="gnb-tab-icon">🗺️</span>
-            <span class="gnb-tab-label">지도</span>
-          </button>
-          <button id="tab-robots" class="gnb-tab" data-tab="robots" title="로봇 기기 목록 및 하드웨어 모델 사양 카탈로그">
-            <span class="gnb-tab-icon">🤖</span>
-            <span class="gnb-tab-label">로봇</span>
-          </button>
-          <button id="tab-operate" class="gnb-tab" data-tab="operate" title="실시간 플릿 관제, 목적지 명령, VDA5050 주문 관리">
-            <span class="gnb-tab-icon">🧭</span>
-            <span class="gnb-tab-label">운영</span>
-          </button>
-          <button id="tab-simulation" class="gnb-tab" data-tab="simulation" title="알고리즘 동적 회피 시뮬레이션 및 3D 뷰어">
-            <span class="gnb-tab-icon">🧪</span>
-            <span class="gnb-tab-label">시뮬레이션</span>
-          </button>
-          <button id="tab-settings" class="gnb-tab" data-tab="settings" title="VDA5050 브로커, 외부 서비스 연동 및 좌표 규약 설정">
-            <span class="gnb-tab-icon">⚙️</span>
-            <span class="gnb-tab-label">설정</span>
-          </button>
-        </nav>
 
         <!-- Right: Telemetry Health Indicators -->
         <div class="gnb-right">
@@ -63,6 +40,17 @@
             <span id="gnb-fleet-count" class="fleet-count">0대 온라인</span>
           </div>
         </div>
+      </div>
+
+      <!-- 화면 헤더: 현장 › 화면 · 상태 핀 -->
+      <div id="screen-header" class="s2m-screen-header">
+        <div class="s2m-screen-header__crumb">
+          <span id="screen-crumb-site" class="s2m-screen-header__proj">현장</span>
+          <span class="s2m-screen-header__dim">›</span>
+          <span id="screen-crumb-view">지도</span>
+          <span id="screen-desc" class="s2m-screen-header__desc"></span>
+        </div>
+        <span id="screen-pill" class="s2m-pill s2m-pill--dim">…</span>
       </div>
 
       <!-- Level 2: Contextual Workspace Subnav -->
@@ -151,6 +139,15 @@
         </div>
       </div>
     </header>
+    <nav class="s2m-shell__nav" aria-label="워크스페이스">
+      <div id="nav-site-title" class="s2m-shell__nav-title">현장</div>
+      <button id="tab-maps" class="gnb-tab active" data-tab="maps" title="지도 작성, 2D/3D 시각화, 슬라이스맵 정합"><span class="gnb-tab-icon">▦</span><span class="gnb-tab-label">지도</span></button>
+      <button id="tab-robots" class="gnb-tab" data-tab="robots" title="로봇 기기 목록 및 하드웨어 모델 사양 카탈로그"><span class="gnb-tab-icon">◎</span><span class="gnb-tab-label">로봇</span></button>
+      <button id="tab-operate" class="gnb-tab" data-tab="operate" title="실시간 플릿 관제, 목적지 명령, VDA5050 주문 관리"><span class="gnb-tab-icon">▶</span><span class="gnb-tab-label">운영</span></button>
+      <button id="tab-simulation" class="gnb-tab" data-tab="simulation" title="알고리즘 동적 회피 시뮬레이션 및 3D 뷰어"><span class="gnb-tab-icon">⟳</span><span class="gnb-tab-label">시뮬레이션</span></button>
+      <button id="tab-settings" class="gnb-tab" data-tab="settings" title="VDA5050 브로커, 외부 서비스 연동 및 좌표 규약 설정"><span class="gnb-tab-icon">⚙</span><span class="gnb-tab-label">설정</span></button>
+      <div class="s2m-shell__nav-foot">Fleet Studio v0.9<br>pathfinder · ros-chromium · scan-to-map-studio</div>
+    </nav>
 
     <!-- Workspace Views -->
     <div id="map" class="view active" data-view="2d">
@@ -185,8 +182,11 @@
       </div>
     </div>
 
-    <div id="operate" class="view" data-view="operate">
+    <!-- 운영: 왼쪽 로봇 레일(플릿 보드) · 가운데 지도 + 액션 바 · 오른쪽 주문 목록/현장 요약 -->
+    <div id="operate" class="view view-operate" data-view="operate">
       <div id="operate-panel"></div>
+      <div id="operate-map"></div>
+      <aside id="operate-side" aria-label="주문 목록과 현장 요약"></aside>
     </div>
 
     <div id="simulation" class="view" data-view="simulation">
