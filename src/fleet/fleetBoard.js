@@ -87,9 +87,16 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
   const title = el('span', 'fleet-board-title', '로봇');
   const brokerDot = el('span', 'fleet-board-broker', '브로커 확인 중');
   header.append(title, brokerDot);
+
+  const globalActions = el('div', 'fleet-board-globals');
+  const stopAllBtn = el('button', 'robot-button robot-button-danger', '전체 정지');
+  const pauseAllBtn = el('button', 'robot-button', '전체 일시정지');
+  const resumeAllBtn = el('button', 'robot-button', '전체 재개');
+  globalActions.append(stopAllBtn, pauseAllBtn, resumeAllBtn);
+
   const list = el('div', 'fleet-board-list');
   const empty = el('div', 'fleet-board-empty', '수신한 로봇이 없습니다. 설정에서 브로커를 연결하세요.');
-  containerEl.append(header, list, empty);
+  containerEl.append(header, globalActions, list, empty);
 
   const robots = new Map(); // key -> record
   let registryBySerial = new Map();
@@ -127,7 +134,44 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     } finally {
       button.disabled = false;
     }
-  }
+  stopAllBtn.addEventListener('click', async () => {
+    stopAllBtn.disabled = true;
+    try {
+      const list = Array.from(robots.values()).filter((r) => r.connectionState === 'ONLINE');
+      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'cancelOrder').catch(() => {})));
+      onStatus(`전체 ${list.length}대 비상정지 완료`, false);
+    } catch (e) {
+      onStatus(`전체 정지 실패: ${e.message}`, true);
+    } finally {
+      stopAllBtn.disabled = false;
+    }
+  });
+
+  pauseAllBtn.addEventListener('click', async () => {
+    pauseAllBtn.disabled = true;
+    try {
+      const list = Array.from(robots.values()).filter((r) => r.connectionState === 'ONLINE');
+      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'stopPause').catch(() => {})));
+      onStatus(`전체 ${list.length}대 일시정지 전송`, false);
+    } catch (e) {
+      onStatus(`전체 일시정지 실패: ${e.message}`, true);
+    } finally {
+      pauseAllBtn.disabled = false;
+    }
+  });
+
+  resumeAllBtn.addEventListener('click', async () => {
+    resumeAllBtn.disabled = true;
+    try {
+      const list = Array.from(robots.values()).filter((r) => r.connectionState === 'ONLINE');
+      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'startPause').catch(() => {})));
+      onStatus(`전체 ${list.length}대 재개 전송`, false);
+    } catch (e) {
+      onStatus(`전체 재개 실패: ${e.message}`, true);
+    } finally {
+      resumeAllBtn.disabled = false;
+    }
+  });
 
   function render() {
     const now = Date.now();
@@ -135,7 +179,24 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     title.textContent = `로봇 ${rows.length}`;
     brokerDot.textContent = brokerStatus.connected ? '브로커 연결됨' : '브로커 끊김';
     brokerDot.classList.toggle('on', brokerStatus.connected);
+    globalActions.style.display = rows.length > 0 ? 'flex' : 'none';
     empty.hidden = rows.length > 0;
+
+    // 플릿 간 근접 감지 (거리 1.2m 이내면 경고 배지 표시)
+    const proximityWarnings = new Map();
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        const a = rows[i], b = rows[j];
+        if (a.position?.x != null && b.position?.x != null && a.connectionState === 'ONLINE' && b.connectionState === 'ONLINE') {
+          const dist = Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
+          if (dist < 1.2) {
+            proximityWarnings.set(a.serialNumber, `⚠️ 근접 (${dist.toFixed(2)}m ↔ ${b.serialNumber})`);
+            proximityWarnings.set(b.serialNumber, `⚠️ 근접 (${dist.toFixed(2)}m ↔ ${a.serialNumber})`);
+          }
+        }
+      }
+    }
+
     list.replaceChildren();
     for (const r of rows) {
       const reg = registryBySerial.get(r.serialNumber);
@@ -162,6 +223,12 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       const stateText = !online ? conn + (stale && r.connectionState === 'ONLINE' ? ' · 오래됨' : '') : !s ? '온라인' : s.paused ? '일시정지' : s.driving ? `주행 중 · 남은 노드 ${s.nodesLeft ?? '-'}` : s.nodesLeft ? '대기' : '유휴';
       sub.textContent = `${stateText} · ${fmtAge(age)}`;
       main.appendChild(sub);
+
+      const prox = proximityWarnings.get(r.serialNumber);
+      if (prox) {
+        main.appendChild(el('div', 'fleet-row-prox', prox));
+      }
+
       if (s?.errors?.length) {
         const e = s.errors[s.errors.length - 1];
         const err = el('div', 'fleet-row-error', `${e.errorType}${e.errorLevel === 'FATAL' ? ' (FATAL)' : ''}`);

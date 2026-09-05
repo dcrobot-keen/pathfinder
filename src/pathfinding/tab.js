@@ -978,7 +978,30 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
     commandFeatures.delete(serial);
   }
 
-  const COMMAND_PATH_STYLE = new Style({ stroke: new Stroke({ color: '#ff9800', width: 3, lineDash: [8, 6] }) });
+  // 다른 활성 플릿 로봇들의 현재 위치를 장애물 블록(kind: "block")으로 변환해
+  // 플래너에 함께 넘긴다. 로봇들이 서로를 겹치거나 통과해 지나가는 경로 생성을 방지.
+  function otherRobotObstacleFeatures(excludeSerial) {
+    const features = [];
+    for (const [serial, fleet] of fleetBySerial.entries()) {
+      if (serial === excludeSerial || !fleet.position || typeof fleet.position.x !== 'number') continue;
+      const otherReg = commandRobotsById.get(serial) ?? null;
+      const r = (otherReg?.sizeMeters ?? 0.35) * 0.7;
+      const x = fleet.position.x;
+      const y = fleet.position.y;
+      const ring = [
+        [x - r, y - r],
+        [x + r, y - r],
+        [x + r, y + r],
+        [x - r, y + r],
+        [x - r, y - r],
+      ];
+      const feat = new Feature({ geometry: new Polygon([ring]) });
+      feat.set('kind', 'block');
+      feat.set('name', `robot-${serial}`);
+      features.push(feat);
+    }
+    return features;
+  }
 
   async function sendMoveCommand(goalCoord) {
     const robot = commandRobotsById.get(commandSelect.value);
@@ -992,7 +1015,12 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo' } 
       return;
     }
     commandStatus.textContent = `${robot.name}: 경로 계산 중...`;
-    const featureCollection = geojsonFormat.writeFeaturesObject([...nodeLinkSource.getFeatures(), ...importedBlockFeatures()]);
+    const otherRobots = otherRobotObstacleFeatures(robot.vda5050Serial);
+    const featureCollection = geojsonFormat.writeFeaturesObject([
+      ...nodeLinkSource.getFeatures(),
+      ...importedBlockFeatures(),
+      ...otherRobots,
+    ]);
     const start = { x: fleet.position.x, y: fleet.position.y };
     const end = { x: goalCoord[0], y: goalCoord[1] };
     const algorithm = validAlgorithms.has(robot.algorithm) ? robot.algorithm : algorithmSelect.value;

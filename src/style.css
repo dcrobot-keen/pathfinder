@@ -909,6 +909,26 @@ body {
   color: #81c784;
 }
 
+.fleet-board-globals {
+  display: flex;
+  gap: 4px;
+  margin: 2px 0;
+}
+
+.fleet-board-globals .robot-button {
+  flex: 1;
+  padding: 3px 4px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.fleet-row-prox {
+  font-size: 10.5px;
+  font-weight: bold;
+  color: #ffb74d;
+  margin-top: 1px;
+}
+
 .fleet-board-list {
   display: flex;
   flex-direction: column;
