@@ -22,6 +22,59 @@ function fmtAge(ms) {
   return `${Math.round(ms / 60_000)}분 전`;
 }
 
+function detailItem(label, val, isAlert = false) {
+  const d = el('div', 'fleet-detail-item');
+  d.appendChild(el('span', 'fleet-detail-label', label));
+  const b = el('b', 'fleet-detail-val', val);
+  if (isAlert) b.style.color = '#e57373';
+  d.appendChild(b);
+  return d;
+}
+
+function renderRobotDetail(r, reg, s) {
+  const detail = el('div', 'fleet-row-detail');
+  const grid = el('div', 'fleet-detail-grid');
+
+  const x = r.position?.x != null ? `${r.position.x.toFixed(2)}m` : '-';
+  const y = r.position?.y != null ? `${r.position.y.toFixed(2)}m` : '-';
+  const deg = r.position?.theta != null ? `${((r.position.theta * 180) / Math.PI).toFixed(1)}°` : '-';
+  const posInit = r.position?.positionInitialized ? '초기화됨' : '미초기화';
+  grid.appendChild(detailItem('위치 (x, y, θ)', `${x}, ${y}, ${deg} (${posInit})`));
+  grid.appendChild(detailItem('좌표계 (mapId)', r.position?.mapId ?? 'default'));
+
+  const orderText = s?.orderId ? `${s.orderId} (노드 ${s.lastNodeId ?? '-'}, 잔여 ${s.nodesLeft ?? 0})` : '주문 없음';
+  grid.appendChild(detailItem('현재 주문', orderText));
+  grid.appendChild(detailItem('운용 모드', s?.operatingMode ?? 'AUTOMATIC'));
+
+  const eStop = s?.safetyState?.eStop ?? 'NONE';
+  const safeText = eStop !== 'NONE' ? `E-STOP (${eStop})` : s?.safetyState?.fieldViolation ? '영역 침범' : '정상';
+  grid.appendChild(detailItem('안전 상태', safeText, eStop !== 'NONE'));
+
+  const battVolt = s?.batteryVoltage != null ? `${s.batteryVoltage.toFixed(1)}V` : '';
+  const battCharge = s?.batteryCharge != null ? `${s.batteryCharge.toFixed(0)}%` : '';
+  const battCombined = [battCharge, battVolt].filter(Boolean).join(' · ') || '-';
+  grid.appendChild(detailItem('배터리', battCombined));
+
+  if (reg) {
+    grid.appendChild(detailItem('모델 / 속도', `${reg.company ?? r.manufacturer} · 최대 ${reg.speedMps ?? '-'}m/s`));
+    grid.appendChild(detailItem('알고리즘 / 반경', `${reg.algorithm ?? '-'} · 반경 ${reg.sizeMeters ?? '-'}m`));
+  }
+  detail.appendChild(grid);
+
+  if (s?.errors && s.errors.length > 0) {
+    const errBox = el('div', 'fleet-detail-errors');
+    errBox.appendChild(el('div', 'fleet-detail-errors-title', `오류 목록 (${s.errors.length}건)`));
+    for (const e of s.errors) {
+      const errItem = el('div', `fleet-detail-error-item ${e.errorLevel === 'FATAL' ? 'fatal' : 'warn'}`);
+      errItem.textContent = `[${e.errorLevel ?? 'WARN'}] ${e.errorType}: ${e.errorDescription ?? '-'}`;
+      errBox.appendChild(errItem);
+    }
+    detail.appendChild(errBox);
+  }
+
+  return detail;
+}
+
 /**
  * @param {HTMLElement} containerEl
  * @param {{ onSelect?: (robot|null) => void, onStatus?: (text, isError) => void }} opts
@@ -145,6 +198,7 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         cancelBtn.disabled = pauseBtn.disabled = !online;
         actions.append(cancelBtn, pauseBtn, forgetBtn);
         row.appendChild(actions);
+        row.appendChild(renderRobotDetail(r, reg, s));
       }
       list.appendChild(row);
     }

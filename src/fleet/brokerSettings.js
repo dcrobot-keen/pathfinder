@@ -82,17 +82,70 @@ export function createBrokerSettings(containerEl) {
   form.appendChild(formStatus);
   layout.appendChild(form);
 
-  // 오른쪽: 지금 환경의 나머지 주소들 -- M2에서 저장 필드로 승격한다.
+  // 오른쪽: M2 연결된 서비스 주소 설정 (localStorage 저장)
   const info = el('div', 'robot-form-panel settings-panel');
-  info.appendChild(el('div', 'robot-form-title', '연결된 서비스'));
-  const list = el('div', 'settings-services');
-  list.innerHTML = `
-    <div><b>브로커</b><span>ros-chromium compose <code>mosquitto</code> · 1883 (MQTT) / 9001 (WebSocket, 로봇 페이지용)</span></div>
-    <div><b>시뮬레이터</b><span><a href="http://localhost:8767" target="_blank" rel="noopener">뷰어 :8767</a> · 로봇 2: <a href="http://localhost:8777" target="_blank" rel="noopener">:8777</a></span></div>
-    <div><b>정합 워크스페이스</b><span><a href="http://localhost:8000/groups" target="_blank" rel="noopener">scan-to-map-studio :8000</a> — 저장하면 <code>&lt;group&gt;.slicemap.json/.floor.png</code>이 publish됨</span></div>
-    <div><b>로봇 두뇌 페이지</b><span><a href="http://localhost:5173/apps/dashboard/nav.html" target="_blank" rel="noopener">nav.html :5173</a> — "Connect VDA5050"으로 이 관제에 붙는다</span></div>
-    <div><b>VPS 서버</b><span>실기 전용. <code>DC_VPS_GROUP_ALIGNMENT</code>로 방별 좌표 변환을 응답에 붙인다 (M2에서 주소 저장 필드 추가)</span></div>`;
-  info.appendChild(list);
+  info.appendChild(el('div', 'robot-form-title', '연결된 서비스 (M2)'));
+
+  const DEFAULT_SERVICES = {
+    simViewer: 'http://localhost:8767',
+    studio: 'http://localhost:8000/groups',
+    navBrain: 'http://localhost:5173/apps/dashboard/nav.html',
+    vpsServer: 'http://localhost:8080',
+  };
+
+  let savedServices = { ...DEFAULT_SERVICES };
+  try {
+    const raw = localStorage.getItem('pathfinder_services_endpoints');
+    if (raw) savedServices = { ...DEFAULT_SERVICES, ...JSON.parse(raw) };
+  } catch {}
+
+  const simViewerInput = textInput(savedServices.simViewer, DEFAULT_SERVICES.simViewer);
+  const studioInput = textInput(savedServices.studio, DEFAULT_SERVICES.studio);
+  const navBrainInput = textInput(savedServices.navBrain, DEFAULT_SERVICES.navBrain);
+  const vpsServerInput = textInput(savedServices.vpsServer, DEFAULT_SERVICES.vpsServer);
+
+  function serviceRow(label, input, desc) {
+    const wrap = el('div', 'settings-service-row');
+    const header = el('div', 'settings-service-header');
+    header.appendChild(el('b', '', label));
+    const link = el('a', 'settings-service-link', '열기 ↗');
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.href = input.value || '#';
+    input.addEventListener('input', () => { link.href = input.value || '#'; });
+    header.appendChild(link);
+    wrap.append(header, input);
+    if (desc) wrap.appendChild(el('span', 'settings-service-desc', desc));
+    return wrap;
+  }
+
+  const sList = el('div', 'settings-services');
+  sList.appendChild(serviceRow('시뮬레이터 뷰어', simViewerInput, 'ros-chromium simulator (:8767)'));
+  sList.appendChild(serviceRow('정합 워크스페이스', studioInput, 'scan-to-map-studio (:8000) — slicemap & floor 발행'));
+  sList.appendChild(serviceRow('로봇 두뇌 (nav.html)', navBrainInput, 'ros-chromium nav.html (:5173)'));
+  sList.appendChild(serviceRow('VPS 서버 URL', vpsServerInput, 'vps-system FastAPI (/localize)'));
+
+  const saveServicesBtn = el('button', 'robot-button', '서비스 주소 저장');
+  const serviceStatus = el('div', 'robot-form-status');
+  saveServicesBtn.addEventListener('click', () => {
+    const data = {
+      simViewer: simViewerInput.value.trim() || DEFAULT_SERVICES.simViewer,
+      studio: studioInput.value.trim() || DEFAULT_SERVICES.studio,
+      navBrain: navBrainInput.value.trim() || DEFAULT_SERVICES.navBrain,
+      vpsServer: vpsServerInput.value.trim() || DEFAULT_SERVICES.vpsServer,
+    };
+    try {
+      localStorage.setItem('pathfinder_services_endpoints', JSON.stringify(data));
+      serviceStatus.textContent = '서비스 주소가 브라우저에 저장되었습니다.';
+      serviceStatus.style.color = '#2a7d2a';
+      setTimeout(() => { serviceStatus.textContent = ''; }, 3000);
+    } catch (e) {
+      serviceStatus.textContent = `저장 실패: ${e.message}`;
+      serviceStatus.style.color = '#c0392b';
+    }
+  });
+
+  info.append(sList, saveServicesBtn, serviceStatus);
   layout.appendChild(info);
 
   let config = null;

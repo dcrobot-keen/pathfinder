@@ -1020,6 +1020,69 @@ body {
   font-size: 11px;
 }
 
+/* M2: 플릿 보드 로봇 상세 카드 */
+.fleet-row-detail {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+}
+
+.fleet-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.fleet-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fleet-detail-label {
+  color: #888;
+  font-size: 10px;
+}
+
+.fleet-detail-val {
+  color: #ddd;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.fleet-detail-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(229, 115, 115, 0.1);
+  border-radius: 4px;
+  border-left: 2px solid #e57373;
+}
+
+.fleet-detail-errors-title {
+  font-weight: bold;
+  color: #ef9a9a;
+  font-size: 11px;
+}
+
+.fleet-detail-error-item {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: #ffcdd2;
+}
+
+.fleet-detail-error-item.fatal {
+  color: #ff8a80;
+  font-weight: bold;
+}
+
 /* ---- 설정 ---- */
 .settings-panel {
   position: static;
@@ -1047,3 +1110,31 @@ body {
   padding: 0 3px;
   border-radius: 3px;
 }
+
+.settings-service-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-service-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.settings-service-link {
+  font-size: 11px;
+  color: #4a90e2;
+  text-decoration: none;
+}
+
+.settings-service-link:hover {
+  text-decoration: underline;
+}
+
+.settings-service-desc {
+  font-size: 11px;
+  color: #888;
+}
+
