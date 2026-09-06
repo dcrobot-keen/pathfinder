@@ -3,10 +3,9 @@
 # (기본, GHCR 에서 pull) 이 이 이미지를 쓴다. 로컬에서 소스를 직접 고칠 때는 deploy/docker-compose.dev.yml
 # (형제 폴더 체크아웃 + dockerfile_inline) 을 대신 쓴다 -- deploy/Dockerfile 과 그 안의 정의가 갈라지면 같이 고칠 것.
 #
-# simulator 저장소가 private 이라 그 체크아웃에는 fleet-studio 저장소 시크릿 SIMULATOR_REPO_TOKEN 이 필요하다
-# (Settings > Secrets and variables > Actions, 값은 simulator 저장소에 대한 Contents: Read-only 권한의
-# fine-grained PAT, 또는 그 저장소가 속한 조직에 read 권한이 있는 classic PAT 의 repo scope). simulator 를
-# public 으로 바꾸면 이 시크릿 없이도 동작한다(그 checkout 스텝의 token 입력이 비어 있어도 public 저장소는 그냥 받아진다).
+# simulator 저장소는 public(2026-09-06부터)이라 별도 시크릿 없이 체크아웃된다. 다시 private 으로 바꾸면
+# fleet-studio 저장소 시크릿 SIMULATOR_REPO_TOKEN(그 저장소에 대한 Contents: Read-only 권한의 fine-grained PAT)이
+# 필요하다 -- 아래 checkout 스텝이 이미 그 시크릿을 찾아 쓰게 돼 있다(없으면 기본 토큰으로 조용히 대체).
 #
 # 첫 push 후에는 GitHub 조직 Packages 에서 fleet-studio-stack 패키지를 Public 으로 바꿔야
 # 다른 머신에서 로그인 없이 `docker compose pull` 이 된다 (Package settings > Change visibility).
@@ -57,6 +56,9 @@ jobs:
           ref: ${{ github.event.inputs.simulator_ref || 'master' }}
           path: simulator
           token: ${{ secrets.SIMULATOR_REPO_TOKEN || github.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
