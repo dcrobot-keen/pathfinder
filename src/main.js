@@ -18,7 +18,7 @@ import VectorLayer from 'ol/layer/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom, activeProjectFloorImage } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom, activeProjectFloorImage, activeProjectSlicemap } from './appShared.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
 import { loadImportedObstacles } from './importedObstaclesApi.js';
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
@@ -31,6 +31,9 @@ import { openScanWizardModal, initScanWizardModal } from './scanStudio/scanWizar
 import { createAlignWorkspace } from './scanStudio/alignWorkspace.js';
 import { createImportDialog, attachDropTarget } from './imports/importDialog.js';
 import { importSlicemapFiles } from './imports/importSlicemap.js';
+import { importRobotMapFiles } from './imports/importRobotMap.js';
+import { importFloorImageFile } from './imports/importFloorImage.js';
+import { createSite3D } from './site3d/site3dView.js';
 
 createProjectSelector(document.getElementById('project-selector'));
 initScanWizardModal();
@@ -219,29 +222,43 @@ function activateMapsSub(sub) {
     if (link) link.href = studioUrl;
     return;
   }
-  // 3D: 포인트클라우드가 있으면 그 뷰, 없으면 현장 3D(iframe)
+  // 3D: 현장 3D(네이티브 three.js) 또는 포인트클라우드
   if (view3dMode === 'points') {
     if (!view3d) {
       view3d = createView3D(view3dEl);
       if (currentPoints.length) view3d.setPoints(currentPoints);
     }
     requestAnimationFrame(() => view3d.resize());
+  } else {
+    if (!site3d) {
+      site3d = createSite3D(document.getElementById('site3d'), {
+        obstacleSource: importedObstacleSource,
+        floorImage: activeProjectFloorImage,
+        slicemap: activeProjectSlicemap,
+        sizeX: MAP_SIZE_X,
+        sizeY: MAP_SIZE_Y,
+        scanFileUrl: (scan, file) => `/scan-files/${encodeURIComponent(scan)}/${file}`,
+      });
+    }
+    requestAnimationFrame(() => site3d.resize());
   }
 }
+let site3d = null;
 
 // 지도 › 3D 토글: 현장 3D / 포인트클라우드
 let view3dMode = 'site';
 function setView3dMode(mode) {
   view3dMode = mode;
   for (const b of document.querySelectorAll('[data-view3d]')) b.classList.toggle('active', b.dataset.view3d === mode);
-  const frame = document.getElementById('site3d-frame');
-  if (frame) frame.hidden = mode !== 'site';
+  const siteEl = document.getElementById('site3d');
+  if (siteEl) siteEl.hidden = mode !== 'site';
   if (view3dEl) view3dEl.hidden = mode !== 'points';
   const note = document.getElementById('view3d-note');
-  if (note) note.textContent = mode === 'site' ? '벽 · 바닥 이미지 · 스캔 메시 · 실시간 로봇 (시뮬레이터 월드 기준)' : `가져온 포인트클라우드 ${currentPoints.length.toLocaleString()}개`;
+  if (note) note.textContent = mode === 'site' ? '벽 · 바닥 이미지 · 스캔 메시 · 플릿 로봇(실기·시뮬)' : `가져온 포인트클라우드 ${currentPoints.length.toLocaleString()}개`;
   if (mode === 'points' && mapsSub === '3d') activateMapsSub('3d');
 }
 for (const b of document.querySelectorAll('[data-view3d]')) b.addEventListener('click', () => { if (!b.disabled) setView3dMode(b.dataset.view3d); });
+setView3dMode('site'); // 초기: 현장 3D 컨테이너를 보이게 (HTML 은 hidden 으로 시작)
 
 // 스튜디오 프로젝트 새로고침 버튼
 const studioRefreshBtn = document.getElementById('btn-studio-refresh');
@@ -373,6 +390,20 @@ const importDialog = createImportDialog({
     location.href = url.toString();
   },
   onPcd: (file) => loadPcdFile(file),
+  onRobotMap: async (files) => {
+    const { project, stats, warnings } = await importRobotMapFiles(files);
+    showFleetToast(`로봇 지도 → 현장 ${project.name}: ${stats.cols}×${stats.rows}, 점유 ${stats.occupied.toLocaleString()}셀${warnings.length ? ` · ${warnings.join(' · ')}` : ''}`);
+    const url = new URL(location.href);
+    url.searchParams.set('project', project.id);
+    setTimeout(() => { location.href = url.toString(); }, 1200);
+  },
+  onImage: async (file, metersPerPixel) => {
+    const { project, sizeX, sizeY } = await importFloorImageFile(file, { metersPerPixel });
+    showFleetToast(`도면 → 현장 ${project.name}: ${sizeX.toFixed(1)} × ${sizeY.toFixed(1)} m`);
+    const url = new URL(location.href);
+    url.searchParams.set('project', project.id);
+    setTimeout(() => { location.href = url.toString(); }, 1200);
+  },
   onToast: showFleetToast,
 });
 document.getElementById('btn-import')?.addEventListener('click', () => importDialog.open());

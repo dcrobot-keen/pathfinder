@@ -5,7 +5,7 @@
 // 처리가 필요한 종류(iPhone 스캔)만 스캔 위저드로 넘긴다. 아직 못 받는 형식은 숨기지 않고 "지원 예정"으로 보여 준다.
 //
 // 종류: scan(.zip/.usdz) · slicemap(.slicemap.json + .floor.png/.json) · pcd(.pcd) ·
-//       pointcloud-other(.ply/.las/.laz, 예정) · robotmap(.pgm+.yaml, 예정) · image(.png/.jpg, 예정) · unknown
+//       pointcloud-other(.ply/.las/.laz, 예정) · robotmap(.pgm+.yaml → 현장) · image(.png/.jpg + 축척 → 바닥만 있는 현장) · unknown
 
 const KIND_LABEL = {
   scan: 'iPhone 스캔',
@@ -59,11 +59,12 @@ export function detectSources(fileList) {
   const yaml = take((n) => n.endsWith('.yaml') || n.endsWith('.yml'));
   if (pgm.length || yaml.length) {
     [...pgm, ...yaml].forEach((f) => used.add(f));
-    out.push({ kind: 'robotmap', files: [...pgm, ...yaml], label: `${KIND_LABEL.robotmap} · ${[...pgm, ...yaml].map((f) => f.name).join(', ')}`, supported: false, note: '지원 예정 -- 지금은 스캔 위저드 2단계에서 정합용으로만 쓸 수 있다' });
+    const complete = pgm.length > 0 && yaml.length > 0;
+    out.push({ kind: 'robotmap', files: [...pgm, ...yaml], label: `${KIND_LABEL.robotmap} · ${[...pgm, ...yaml].map((f) => f.name).join(', ')}`, supported: complete, note: complete ? 'ROS map_server 지도 → 점유 셀을 벽으로 한 현장 프로젝트 (origin yaw 는 무시)' : '.pgm 과 .yaml 을 함께 골라야 한다' });
   }
   for (const f of take((n) => /\.(png|jpe?g|webp)$/.test(n))) {
     used.add(f);
-    out.push({ kind: 'image', files: [f], label: `${KIND_LABEL.image} · ${f.name}`, supported: false, note: '지원 예정 -- 축척(m/px)과 원점을 받아 배경 도면으로' });
+    out.push({ kind: 'image', files: [f], label: `${KIND_LABEL.image} · ${f.name}`, supported: true, needsScale: true, metersPerPixel: 0.05, note: '축척을 입력하면 바닥 이미지만 있는 현장을 만든다 (원점 = 이미지 왼쪽 아래)' });
   }
   // 나머지 .json 은 이름이 다른 슬라이스맵일 수 있다 (내용은 가져올 때 검증)
   for (const f of take((n) => n.endsWith('.json'))) {
@@ -80,9 +81,10 @@ const ICON_IMPORT = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none"
 
 /**
  * 가져오기 대화상자. open(files?) 로 열고, 지원되는 항목을 순서대로 처리한다.
- * @param {{ onScan: (file: File) => void|Promise<void>, onSlicemap: (files: File[]) => Promise<unknown>, onPcd: (file: File) => Promise<unknown>, onToast?: (msg: string) => void }} handlers
+ * @param {{ onScan: (file: File) => void|Promise<void>, onSlicemap: (files: File[]) => Promise<unknown>, onPcd: (file: File) => Promise<unknown>,
+ *           onRobotMap?: (files: File[]) => Promise<unknown>, onImage?: (file: File, metersPerPixel: number) => Promise<unknown>, onToast?: (msg: string) => void }} handlers
  */
-export function createImportDialog({ onScan, onSlicemap, onPcd, onToast = () => {} }) {
+export function createImportDialog({ onScan, onSlicemap, onPcd, onRobotMap, onImage, onToast = () => {} }) {
   const overlay = document.createElement('div');
   overlay.className = 'import-overlay';
   overlay.hidden = true;
@@ -94,7 +96,7 @@ export function createImportDialog({ onScan, onSlicemap, onPcd, onToast = () => 
       </div>
       <div class="import-drop" tabindex="0">
         <span class="import-drop__icon">${ICON_IMPORT}</span>
-        <div><b>여기에 파일을 놓거나 클릭해서 선택</b><div class="import-drop__hint">iPhone 스캔 .zip/.usdz · 슬라이스맵 .slicemap.json (+ .floor.png/.json) · 포인트클라우드 .pcd</div></div>
+        <div><b>여기에 파일을 놓거나 클릭해서 선택</b><div class="import-drop__hint">iPhone 스캔 .zip/.usdz · 슬라이스맵 .slicemap.json (+ .floor.png/.json) · 포인트클라우드 .pcd · 로봇 지도 .pgm+.yaml · 도면 .png/.jpg</div></div>
         <input type="file" multiple hidden accept=".zip,.usdz,.json,.png,.jpg,.jpeg,.pcd,.ply,.las,.laz,.pgm,.yaml,.yml">
       </div>
       <div class="import-list"></div>
@@ -119,6 +121,13 @@ export function createImportDialog({ onScan, onSlicemap, onPcd, onToast = () => 
       const row = document.createElement('div');
       row.className = `import-item${s.supported ? '' : ' import-item--unsupported'}`;
       row.innerHTML = `<span class="import-item__kind">${s.supported ? '가져옴' : '지원 예정'}</span><div><div class="import-item__label">${s.label}</div>${s.note ? `<div class="import-item__note">${s.note}</div>` : ''}</div>`;
+      if (s.needsScale) {
+        const scale = document.createElement('label');
+        scale.className = 'import-item__scale';
+        scale.innerHTML = `축척 <input type="number" min="0.001" step="0.005" value="${s.metersPerPixel}"> m/px`;
+        scale.querySelector('input').addEventListener('input', (e) => { s.metersPerPixel = Number(/** @type {HTMLInputElement} */ (e.target).value); });
+        row.querySelector('div').appendChild(scale);
+      }
       listEl.appendChild(row);
     }
     runBtn.disabled = !sources.some((s) => s.supported);
@@ -156,6 +165,8 @@ export function createImportDialog({ onScan, onSlicemap, onPcd, onToast = () => 
         if (s.kind === 'scan') { close(); await onScan(s.files[0]); return; } // 위저드가 이어받는다
         if (s.kind === 'slicemap') await onSlicemap(s.files);
         if (s.kind === 'pcd') await onPcd(s.files[0]);
+        if (s.kind === 'robotmap' && onRobotMap) await onRobotMap(s.files);
+        if (s.kind === 'image' && onImage) await onImage(s.files[0], s.metersPerPixel);
         done++;
       }
       onToast(`${done}개 가져왔습니다`);

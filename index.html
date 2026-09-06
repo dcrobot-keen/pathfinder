@@ -147,19 +147,18 @@
       </aside>
     </div>
 
-    <!-- 지도 › 3D: 현장 모델(시뮬레이터 뷰어의 3D 장면을 mode=site 로 재사용 -- 벽·바닥·텍스처 메시·실시간 로봇)
-         / 포인트클라우드(가져온 PCD 를 three.js 로). "현장의 3D 는 하나" -- 시뮬레이션 화면은 같은 장면에 시뮬 오버레이만 더한다 -->
+    <!-- 지도 › 3D: 현장 3D(src/site3d/site3dView.js -- 이 앱의 장애물·바닥·슬라이스맵 소스와 플릿 스트림을 직접 그림)
+         / 포인트클라우드(가져온 PCD 를 three.js 로). "현장의 3D 는 하나" -- 시뮬레이션 화면은 시뮬레이터 뷰어(GT·LIDAR 오버레이) -->
     <div id="view3d" class="view view-3d" data-view="3d">
       <div class="sim-mainbar">
         <div class="sim-mainbar__tabs" role="tablist">
           <button class="sim-view-btn active" data-view3d="site">현장 3D</button>
           <button class="sim-view-btn" data-view3d="points" id="btn-view3d-points" disabled title="PCD 를 가져오면 켜집니다">포인트클라우드</button>
         </div>
-        <span id="view3d-note" class="sim-mainbar__label">벽 · 바닥 이미지 · 스캔 메시 · 실시간 로봇 (시뮬레이터 월드 기준)</span>
+        <span id="view3d-note" class="sim-mainbar__label">벽 · 바닥 이미지 · 스캔 메시 · 플릿 로봇(실기·시뮬)</span>
         <span class="sim-mainbar__spacer"></span>
-        <a id="link-site3d-external" class="settings-service-link" href="http://localhost:8767/?view=3d&amp;mode=site" target="_blank" rel="noopener">새 창 ↗</a>
       </div>
-      <iframe id="site3d-frame" src="http://localhost:8767/?view=3d&amp;embed=1&amp;mode=site" title="현장 3D (simulator viewer.html, mode=site)"></iframe>
+      <div id="site3d" hidden></div>
       <div id="view3d-points" hidden>
         <div id="mesh-panel">
           <div class="mesh-buttons">

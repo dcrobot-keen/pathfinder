@@ -42,6 +42,8 @@ export const activeProjectName = activeProject.name;
 export const activeProjectImportedRoom = activeProject.importedRoom ?? null;
 // 정합 워크스페이스가 합성한 바닥 이미지(앱 floorplan) -- { url, extent:[minX,minY,maxX,maxY] } (프로젝트 평면).
 export const activeProjectFloorImage = activeProject.floorImage ?? null;
+// from-slicemap 프로젝트의 슬라이스맵 헤더 { resolution, cols, rows, origin, z, sources } -- 현장 3D 가 스캔 메시 배치에 쓴다.
+export const activeProjectSlicemap = activeProject.slicemap ?? null;
 
 // 실내 지도용 평면 좌표계: 0,0을 기점으로 m 단위, 활성 프로젝트가 정한 크기.
 export const MAP_SIZE_X = activeProject.sizeX;

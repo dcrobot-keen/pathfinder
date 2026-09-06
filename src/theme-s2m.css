@@ -520,3 +520,16 @@ button.s2m-alert { cursor: pointer; } button.s2m-alert:hover { filter: brightnes
 .view-3d > #site3d-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--panel-3); }
 .view-3d > #view3d-points { flex: 1; position: relative; min-height: 0; }
 .view-3d > [hidden] { display: none !important; }
+
+/* ---- 현장 3D (네이티브) ---- */
+.view-3d > #site3d { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.site3d__bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel); font-size: 12px; color: var(--text-dim); }
+.site3d__bar .robot-button { padding: 5px 10px; font-size: 12px; }
+.site3d__bar .robot-button.active { background: rgba(79, 209, 197, .14); color: var(--accent); border-color: rgba(79, 209, 197, .4); }
+.site3d__bar input[type=range] { width: 110px; accent-color: var(--accent); }
+.site3d__spacer { flex: 1; }
+.site3d__label, .site3d__stat { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.site3d__canvas { flex: 1; min-height: 0; width: 100%; display: block; background: var(--panel-3); touch-action: none; }
+.import-item__scale { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--text-dim); }
+.import-item__scale input { width: 84px; background: var(--panel-3); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 6px; font-family: var(--font-mono); font-size: 12px; }
+.site3d__bar .robot-button { flex: none; width: auto; }
