@@ -17,6 +17,16 @@ import PointerInteraction from 'ol/interaction/Pointer.js';
 import Projection from 'ol/proj/Projection.js';
 import { defaults as defaultControls } from 'ol/control.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
+import VectorLayer from 'ol/layer/Vector.js';
+import VectorSource from 'ol/source/Vector.js';
+import Feature from 'ol/Feature.js';
+import Point from 'ol/geom/Point.js';
+import LineString from 'ol/geom/LineString.js';
+import Style from 'ol/style/Style.js';
+import CircleStyle from 'ol/style/Circle.js';
+import Fill from 'ol/style/Fill.js';
+import Stroke from 'ol/style/Stroke.js';
+import Text from 'ol/style/Text.js';
 import {
   listGroups, prepareGroup, getGroupWorkspace, postGroupMetrics, postGroupIcp, putGroupAlignment,
   groupFileUrl, getGroupMergedSlicemap, getGroupMergedFloorMeta,
@@ -92,6 +102,12 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
           <button id="aw-revert" class="robot-button">되돌리기</button>
         </div>
         <div id="aw-icp-note" class="align-ws__note"></div>
+        <div class="align-ws__row">
+          <button id="aw-pin" class="robot-button" title="선택 스캔의 한 점을 찍고, 다른 스캔에서 같은 물리적 지점을 찍는다 (벽에 자동 스냅). 2쌍 이상이면 회전·이동을 한 번에 맞춘다">핀 찍기</button>
+          <button id="aw-pin-fit" class="robot-button" disabled title="핀 쌍으로 2-D 강체 정합 (Kabsch)">핀으로 정합</button>
+          <button id="aw-pin-clear" class="robot-button" hidden>핀 지우기</button>
+        </div>
+        <div id="aw-pins" class="align-ws__note"></div>
         <label class="align-ws__check"><input type="checkbox" id="aw-approve"> 이 스캔의 정합을 승인</label>
       </section>
       <section class="align-ws__section">
@@ -102,6 +118,7 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
       <section class="align-ws__section">
         <div class="align-ws__title">저장 · 합성</div>
         <button id="aw-save" class="robot-button robot-button-primary" disabled>서버에 저장 → 합성 슬라이스맵 반영</button>
+        <label class="align-ws__check" title="같은 이름의 현장 프로젝트가 있으면 저장 직후 새 합성 지도로 갱신한다 (id·노드링크 유지)"><input type="checkbox" id="aw-auto-project" checked> 저장 시 현장 프로젝트 자동 갱신</label>
         <div id="aw-save-result" class="align-ws__note"></div>
         <img id="aw-merged" class="align-ws__merged" alt="" hidden>
         <button id="aw-project" class="robot-button" hidden>이 합성 지도로 현장 프로젝트 만들기 / 갱신</button>
@@ -120,6 +137,9 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
   let showFloor = true;
   let floorAlpha = 0.9;
   let icpUndo = null;
+  let pinMode = false;
+  /** @type {{ src: number[], ref: number[] | null, srcSnapped?: boolean, refSnapped?: boolean }[]} src = 선택 스캔 로컬 좌표, ref = 평면(기준) 좌표 */
+  let pins = [];
   let metricsTimer = null;
   let metricsSeq = 0;
 
@@ -131,6 +151,46 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     view: new View({ projection: alignProjection, center: [0, 0], zoom: 4, minZoom: 0, maxZoom: 12 }),
     controls: defaultControls({ rotate: false }).extend([new ScaleLine({ units: 'metric' })]),
   });
+
+  // 핀(대응점) 레이어: 선택 스캔의 점(주황, 현재 정합으로 변환) · 상대 스캔의 점(민트) · 잇는 선
+  const pinSource = new VectorSource();
+  const pinStyle = (feature) => {
+    const kind = feature.get('kind');
+    if (kind === 'link') return new Style({ stroke: new Stroke({ color: 'rgba(231,236,243,.8)', width: 1.5, lineDash: [4, 4] }) });
+    const color = kind === 'src' ? '#f5a623' : '#4fd1c5';
+    return new Style({
+      image: new CircleStyle({ radius: 6, fill: new Fill({ color }), stroke: new Stroke({ color: '#0b0e13', width: 2 }) }),
+      text: new Text({ text: String(feature.get('n')), offsetX: 10, offsetY: -10, font: '600 11px ui-monospace, monospace', fill: new Fill({ color: '#e7ecf3' }), stroke: new Stroke({ color: '#0b0e13', width: 3 }) }),
+    });
+  };
+  map.addLayer(new VectorLayer({ source: pinSource, style: pinStyle, zIndex: 50 }));
+  function refreshPins() {
+    pinSource.clear();
+    pins.forEach((pin, i) => {
+      const a = selected ? applyXY(selected.align, pin.src[0], pin.src[1]) : null;
+      if (a) { const f = new Feature(new Point(a)); f.set('kind', 'src'); f.set('n', i + 1); pinSource.addFeature(f); }
+      if (pin.ref) { const f = new Feature(new Point(pin.ref)); f.set('kind', 'ref'); f.set('n', i + 1); pinSource.addFeature(f); }
+      if (a && pin.ref) { const f = new Feature(new LineString([a, pin.ref])); f.set('kind', 'link'); pinSource.addFeature(f); }
+    });
+    const box = $('aw-pins');
+    box.replaceChildren();
+    for (const [i, pin] of pins.entries()) {
+      let res = '';
+      if (pin.ref && selected) { const [x, y] = applyXY(selected.align, pin.src[0], pin.src[1]); res = ` · 잔차 ${Math.hypot(x - pin.ref[0], y - pin.ref[1]).toFixed(3)} m`; }
+      const snapNote = pin.ref ? ` (${pin.srcSnapped ? '벽' : '자유점'} → ${pin.refSnapped ? '벽' : '자유점'})` : pin.srcSnapped ? ' (벽에 스냅)' : ' (자유점)';
+      box.appendChild(el('div', null, `핀 ${i + 1}${snapNote}${pin.ref ? res : ' — 다른 스캔에서 같은 지점을 클릭'}`));
+    }
+    const complete = pins.filter((p) => p.ref).length;
+    $('aw-pin-fit').disabled = complete < 2 || !selected || selected.isRef;
+    $('aw-pin-clear').hidden = pins.length === 0;
+    if (pinMode) box.appendChild(el('div', 'align-ws__note--warn', complete === pins.length ? '핀 모드: 선택 스캔 위의 점을 클릭하세요 (Esc 종료)' : '핀 모드: 다른 스캔에서 같은 지점을 클릭하세요'));
+  }
+  function setPinMode(on) {
+    pinMode = on;
+    $('aw-pin').classList.toggle('active', on);
+    mapEl.classList.toggle('align-ws__map--pin', on);
+    refreshPins();
+  }
 
   function layerImage(L, role) {
     if (L.imgs[role]) return L.imgs[role];
@@ -221,6 +281,11 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     if (col < 0 || row < 0 || col >= L.cols || row >= L.rows) return false;
     return L.codes[row * L.cols + col] !== 0;
   }
+  function inverseXY(a, x, y) {
+    const c = Math.cos(a.yaw), s = Math.sin(a.yaw);
+    const dx = x - a.ox, dy = y + a.oz;
+    return [c * dx + s * dy, -s * dx + c * dy];
+  }
   function nearestWall(L, x, y, maxD) {
     let best = null, bd = maxD;
     for (let i = 0; i < L.walls.length; i += 2) {
@@ -245,6 +310,7 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     refreshLayer(selected);
     updatePanel();
     renderLayerList();
+    refreshPins();
     scheduleMetrics();
   }
   function rotateSelected(dyaw) { // 벽 무게중심을 축으로 회전 (스캔이 멀리 날아가지 않게)
@@ -264,7 +330,7 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
 
   class DragScan extends PointerInteraction {
     handleDownEvent(evt) {
-      if (!selected || selected.isRef || !selected.visible) return false;
+      if (pinMode || !selected || selected.isRef || !selected.visible) return false;
       const [x, y] = evt.coordinate;
       const tol = Math.max(0.35, map.getView().getResolution() * 10);
       if (!insideScan(selected, x, y) && !nearestWall(selected, x, y, tol)) return false;
@@ -281,6 +347,46 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     handleUpEvent() { renderLayerList(); scheduleMetrics(); return false; }
   }
   map.addInteraction(new DragScan());
+  map.on('singleclick', (evt) => {
+    if (!pinMode || !selected || selected.isRef) return;
+    const [x, y] = evt.coordinate;
+    const snapTol = Math.max(0.25, map.getView().getResolution() * 8);
+    const cur = pins[pins.length - 1];
+    if (!cur || cur.ref) {
+      // 새 쌍: 첫 클릭 = 선택 스캔 위의 점 (벽에 스냅)
+      const snap = nearestWall(selected, x, y, snapTol);
+      const pt = snap ?? [x, y];
+      pins.push({ src: inverseXY(selected.align, pt[0], pt[1]), ref: null, srcSnapped: Boolean(snap), refSnapped: false });
+    } else {
+      // 둘째 클릭 = 다른 스캔의 같은 물리적 지점 (그 스캔 벽에 스냅)
+      let snap = null;
+      for (const o of layers) { if (o === selected || !o.visible) continue; const sn = nearestWall(o, x, y, snapTol); if (sn) { snap = sn; break; } }
+      cur.ref = snap ?? [x, y];
+      cur.refSnapped = Boolean(snap);
+    }
+    refreshPins();
+  });
+  $('aw-pin').addEventListener('click', () => { if (selected && !selected.isRef) setPinMode(!pinMode); });
+  $('aw-pin-clear').addEventListener('click', () => { pins = []; refreshPins(); });
+  $('aw-pin-fit').addEventListener('click', () => {
+    // == scan_alignment_metrics.pin_fit: 2-D Kabsch 닫힌 해 (src 로컬 -> ref 평면)
+    const pairs = pins.filter((pin) => pin.ref);
+    if (pairs.length < 2 || !selected || selected.isRef) return;
+    let sx = 0, sy = 0, tx = 0, ty = 0;
+    for (const pin of pairs) { sx += pin.src[0]; sy += pin.src[1]; tx += pin.ref[0]; ty += pin.ref[1]; }
+    sx /= pairs.length; sy /= pairs.length; tx /= pairs.length; ty /= pairs.length;
+    let num = 0, den = 0;
+    for (const pin of pairs) {
+      const ax = pin.src[0] - sx, ay = pin.src[1] - sy, bx = pin.ref[0] - tx, by = pin.ref[1] - ty;
+      num += ax * by - ay * bx; den += ax * bx + ay * by;
+    }
+    const yaw = Math.atan2(num, den), c = Math.cos(yaw), sn = Math.sin(yaw);
+    const ox = tx - (c * sx - sn * sy), oy = ty - (sn * sx + c * sy);
+    selected.align = { ox, oz: -oy, yaw };
+    markDirty('pins');
+    setPinMode(false);
+    afterMove();
+  });
   mapEl.addEventListener('wheel', (e) => {
     if (!e.altKey || !selected) return;
     e.preventDefault(); e.stopPropagation();
@@ -291,6 +397,7 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     const tag = /** @type {HTMLElement|null} */ (e.target)?.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (e.key === 'f' || e.key === 'F') { fitAll(); return; }
+    if (e.key === 'Escape' && pinMode) { setPinMode(false); return; }
     if (!selected) return;
     const step = e.shiftKey ? 0.1 : 0.01, rot = (e.shiftKey ? 5 : 0.5) * Math.PI / 180;
     if (e.key === 'ArrowLeft') nudge(-step, 0); else if (e.key === 'ArrowRight') nudge(step, 0);
@@ -324,6 +431,7 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     selected.align = { ...selected.loaded }; selected.method = selected.loadedMethod;
     selected.dirty = false; selected.approved = false; icpUndo = null;
     $('aw-icp-undo').hidden = true; $('aw-icp-note').textContent = '';
+    pins = [];
     afterMove();
   });
 
@@ -418,6 +526,9 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
   }
   function select(L) {
     selected = L;
+    if (pinMode) setPinMode(false);
+    pins = [];
+    refreshPins();
     restack();
     refreshAll();
     renderLayerList();
@@ -492,17 +603,25 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
       img.hidden = false;
       $('aw-project').hidden = false;
       onToast(`'${groupName}' 정합 저장 · 합성 슬라이스맵 갱신${res.published ? ' · 시뮬레이터 월드 반영' : ''}`);
+      if ($('aw-auto-project').checked) await applyMergedToProject({ onlyIfExists: true });
     } catch (err) {
       $('aw-save-result').textContent = `저장 실패: ${err.message}`;
       btn.disabled = false;
     }
   });
-  $('aw-project').addEventListener('click', async () => {
+  /** 합성 슬라이스맵(+바닥 이미지)으로 같은 이름의 현장 프로젝트를 만들거나 갱신
+   * @param {{ onlyIfExists?: boolean }} [opts] */
+  async function applyMergedToProject({ onlyIfExists = false } = {}) {
     if (!ws) return;
     const btn = $('aw-project');
     btn.disabled = true;
     $('aw-project-note').textContent = '합성 슬라이스맵과 바닥 이미지를 읽는 중…';
     try {
+      const existing = (await listProjects()).find((p) => p.name === groupName);
+      if (!existing && onlyIfExists) {
+        $('aw-project-note').textContent = `'${groupName}' 이름의 현장 프로젝트가 없습니다. 아래 버튼으로 만들 수 있습니다.`;
+        return;
+      }
       const slicemap = await getGroupMergedSlicemap(groupName);
       let floor;
       try {
@@ -511,20 +630,22 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
         const png = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob); });
         floor = { png, meta };
       } catch { /* 바닥 이미지 없는 그룹 */ }
-      const existing = (await listProjects()).find((p) => p.name === groupName);
       const project = existing
         ? await updateProjectFromSlicemap(existing.id, { name: groupName, slicemap, floor })
         : await createProjectFromSlicemap({ name: groupName, slicemap, floor });
       const url = new URL(location.href);
       url.searchParams.set('project', project.id);
       $('aw-project-note').innerHTML = `${existing ? '현장 프로젝트를 갱신했습니다' : '현장 프로젝트를 만들었습니다'}: <b>${project.name}</b> (장애물 ${project.featureCount ?? '-'}개) · <a href="${url.toString()}">열기 ↗</a>`;
-      onToast(`${project.name}: ${existing ? '프로젝트 갱신' : '프로젝트 생성'} 완료`);
+      onToast(`${project.name}: ${existing ? '현장 프로젝트 갱신' : '현장 프로젝트 생성'} 완료`);
     } catch (err) {
       $('aw-project-note').textContent = `프로젝트 반영 실패: ${err.message}`;
     } finally {
       btn.disabled = false;
     }
-  });
+  }
+  $('aw-project').addEventListener('click', () => applyMergedToProject());
+  try { $('aw-auto-project').checked = localStorage.getItem('alignAutoProject') !== '0'; } catch {}
+  $('aw-auto-project').addEventListener('change', (e) => { try { localStorage.setItem('alignAutoProject', e.target.checked ? '1' : '0'); } catch {} });
 
   // ---- loading ------------------------------------------------------------
   function buildLayers(payload) {
@@ -615,6 +736,9 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     }
   }
   $('aw-load').addEventListener('click', () => { if ($('aw-group').value) loadGroup($('aw-group').value); });
+
+  // devtools 진단용 (rootEl.__alignWorkspace)
+  Object.defineProperty(rootEl, '__alignWorkspace', { value: { get layers() { return layers; }, get selected() { return selected; }, get pins() { return pins; }, nearestWall, map }, configurable: true });
 
   let started = false;
   return {

@@ -468,3 +468,6 @@ body.no-ribbon .view { top: var(--topbar-h); }
 .s2m-alert--warn { border-color: rgba(245, 166, 35, .4); background: rgba(245, 166, 35, .1); } .s2m-alert--warn::before { background: var(--warn); }
 .s2m-alert--info { border-color: rgba(34, 211, 238, .3); } .s2m-alert--info::before { background: var(--accent-2); }
 button.s2m-alert { cursor: pointer; } button.s2m-alert:hover { filter: brightness(1.12); }
+
+.align-ws__map--pin, .align-ws__map--pin .ol-viewport { cursor: crosshair; }
+.align-ws .robot-button.active { background: var(--accent); border-color: var(--accent); color: #03191a; }
