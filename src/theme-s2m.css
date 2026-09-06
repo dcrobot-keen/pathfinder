@@ -417,3 +417,19 @@ body.no-ribbon .view { top: var(--topbar-h); }
 .subnav-tab > span:last-child { line-height: 1; }
 .fleet-board-broker { display: none; } /* 연결 상태는 상단 바 배지 한 곳 */
 .subnav-actions .subnav-action-btn { display: inline-flex; align-items: center; }
+
+/* ---- 2D 지도 도크: 레이어 · 편집 · 스캔 장애물 (플로팅 -> 오른쪽 고정) ---- */
+.view-map.active { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+#map-canvas { position: relative; min-width: 0; background: var(--panel-3); }
+#map-dock {
+  background: var(--panel); border-left: 1px solid var(--border); overflow-y: auto; min-width: 0;
+  padding: 12px; display: flex; flex-direction: column; gap: 12px;
+}
+#map-dock .slice-panel, #map-dock .edit-panel, #map-dock .imported-panel {
+  position: static; top: auto; left: auto; right: auto; bottom: auto; z-index: auto;
+  width: 100%; max-width: none; min-width: 0; box-sizing: border-box; box-shadow: none;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+#map-dock .slice-panel:empty, #map-dock .edit-panel:empty, #map-dock .imported-panel:empty { display: none; }
+/* 운영·시뮬레이션의 지도에는 범례(레이어)만 띄운다 -- 스캔 장애물 편집은 지도 화면의 일 */
+.view-operate .imported-panel, #simulation .imported-panel { display: none; }

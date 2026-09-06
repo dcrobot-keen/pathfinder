@@ -139,10 +139,14 @@
     </nav>
 
     <!-- Workspace Views -->
-    <div id="map" class="view active" data-view="2d">
-      <div id="slice-panel"></div>
-      <div id="edit-panel"></div>
-      <div id="imported-obstacles-panel"></div>
+    <!-- 2D 지도: 지도 캔버스 + 오른쪽 도크(레이어 · 편집 · 스캔 장애물). 플로팅 패널 세 개를 한 도크로 (IA 점검 3단계) -->
+    <div id="map" class="view view-map active" data-view="2d">
+      <div id="map-canvas"></div>
+      <aside id="map-dock" aria-label="지도 도구">
+        <div id="slice-panel"></div>
+        <div id="edit-panel"></div>
+        <div id="imported-obstacles-panel"></div>
+      </aside>
     </div>
 
     <div id="view3d" class="view" data-view="3d">

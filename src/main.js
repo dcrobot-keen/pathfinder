@@ -81,7 +81,7 @@ const liveRobotPoseLayer = new VectorLayer({ source: liveRobotPoseSource, zIndex
 startLiveRobotPoseTracking(liveRobotPoseSource);
 
 const map = new Map({
-  target: 'map',
+  target: 'map-canvas', // #map 은 [캔버스 | 도크] 그리드, OL 은 캔버스 칸에만
   layers: [blueprintLayer, gridLayer, importedObstacleLayer, liveRobotPoseLayer],
   view: new View({
     projection: indoorProjection,
