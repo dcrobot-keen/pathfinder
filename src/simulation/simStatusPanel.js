@@ -31,7 +31,7 @@ export function createSimStatusPanel(containerEl) {
     const sims = Array.from(fleet.values()).filter((r) => isSim(r.serialNumber, registryBySerial.get(r.serialNumber)));
     robotsHead.querySelector('.s2m-side__count').textContent = String(sims.length);
     robotsList.replaceChildren();
-    if (!sims.length) { robotsList.appendChild(el('div', 's2m-side__empty', '시뮬 로봇이 브로커에 없습니다. ros-chromium compose (profile nav·fleet) 가 떠 있는지 확인하세요.')); return; }
+    if (!sims.length) { robotsList.appendChild(el('div', 's2m-side__empty', '시뮬 로봇이 브로커에 없습니다. 컨테이너 스택(npm run stack:up)이 떠 있는지 확인하세요.')); return; }
     for (const r of sims) {
       const st = r.state;
       const card = el('div', 's2m-order');
