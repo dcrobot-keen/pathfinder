@@ -91,9 +91,9 @@ iPhone 앱의 프로젝트 zip(스캔 여러 개 + `group_alignment.json`)을 �
 `worlds/`로 내보내진다. 세부 설계는 전략 문서(아티팩트 "스캔 정합 워크스페이스") 참고.
 
 ```powershell
-# 그룹 폴더(zip을 푼 곳)와 내보낼 곳(ros-chromium 시뮬레이터 worlds/)을 지정해 서버 실행
+# 그룹 폴더(zip을 푼 곳)와 내보낼 곳(deploy/worlds/, fleet-studio 컨테이너 스택이 마운트)을 지정해 서버 실행
 $env:STUDIO_GROUPS_DIR = 'D:\code\robot-project\vps-system\data'
-$env:STUDIO_PUBLISH_DIR = 'D:\code\robot-project\ros-chromium\simulator\worlds'
+$env:STUDIO_PUBLISH_DIR = 'D:\code\robot-project\pathfinder\deploy\worlds'
 .venv\Scripts\python.exe -m uvicorn server.app:app --port 8000
 ```
 

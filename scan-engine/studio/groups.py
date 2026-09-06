@@ -15,7 +15,7 @@ can point them anywhere:
 
     STUDIO_GROUPS_DIR   where groups live      (default <repo>/groups)
     STUDIO_PUBLISH_DIR  where merged slicemaps are copied on save, e.g. the
-                        ros-chromium simulator's worlds/ folder (optional)
+                        fleet-studio container stack's deploy/worlds/ folder (optional)
     STUDIO_SLICE_Z      robot LiDAR height for slices, metres (default 0.18)
 
 This module has no FastAPI dependency; server/groups_api.py is the HTTP face.

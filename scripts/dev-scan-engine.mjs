@@ -4,7 +4,7 @@
 //
 //   scan-engine/.env (없으면 .env.example 참고):
 //     STUDIO_GROUPS_DIR   앱이 내보낸 다중 스캔 그룹 폴더 (예: ../vps-system/data)
-//     STUDIO_PUBLISH_DIR  정합 저장 시 합성 slicemap 을 복사할 곳 (예: ../ros-chromium/simulator/worlds)
+//     STUDIO_PUBLISH_DIR  정합 저장 시 합성 slicemap 을 복사할 곳 (기본: ../deploy/worlds, fleet-studio 컨테이너 스택이 마운트)
 //     SCAN_ENGINE_PORT    기본 8000 (Vite 프록시 /api/scan-studio, /scan-files 가 이 포트를 본다)
 //
 // 가상환경이 없으면 만드는 방법을 알려주고 끝난다(다른 프로세스는 계속 뜬다).

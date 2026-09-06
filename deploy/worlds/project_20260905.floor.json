@@ -1,0 +1,11 @@
+{
+  "format": "floor-image-v1",
+  "resolution": 0.05,
+  "origin": [
+    -9.171907979206082,
+    -9.041012858515337
+  ],
+  "width_px": 340,
+  "height_px": 340,
+  "row0": "max y (image top)"
+}

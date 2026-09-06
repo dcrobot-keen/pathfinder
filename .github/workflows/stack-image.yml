@@ -1,0 +1,78 @@
+# 컨테이너 스택 이미지(mosquitto 제외 나머지 전부: simulator, dashboard, signaling, sim-driver)를
+# robot-os-chromium + simulator 두 저장소로부터 빌드해 GHCR 에 push 한다. deploy/docker-compose.yml
+# (기본, GHCR 에서 pull) 이 이 이미지를 쓴다. 로컬에서 소스를 직접 고칠 때는 deploy/docker-compose.dev.yml
+# (형제 폴더 체크아웃 + dockerfile_inline) 을 대신 쓴다 -- deploy/Dockerfile 과 그 안의 정의가 갈라지면 같이 고칠 것.
+#
+# simulator 저장소가 private 이라 그 체크아웃에는 fleet-studio 저장소 시크릿 SIMULATOR_REPO_TOKEN 이 필요하다
+# (Settings > Secrets and variables > Actions, 값은 simulator 저장소에 대한 Contents: Read-only 권한의
+# fine-grained PAT, 또는 그 저장소가 속한 조직에 read 권한이 있는 classic PAT 의 repo scope). simulator 를
+# public 으로 바꾸면 이 시크릿 없이도 동작한다(그 checkout 스텝의 token 입력이 비어 있어도 public 저장소는 그냥 받아진다).
+#
+# 첫 push 후에는 GitHub 조직 Packages 에서 fleet-studio-stack 패키지를 Public 으로 바꿔야
+# 다른 머신에서 로그인 없이 `docker compose pull` 이 된다 (Package settings > Change visibility).
+name: stack-image
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "deploy/Dockerfile"
+      - ".github/workflows/stack-image.yml"
+  workflow_dispatch:
+    inputs:
+      simulator_ref:
+        description: "simulator 저장소 ref (브랜치/태그/SHA)"
+        default: master
+      robot_os_chromium_ref:
+        description: "robot-os-chromium 저장소 ref"
+        default: master
+  schedule:
+    - cron: "17 3 * * 1" # 매주 월요일: 두 저장소가 조용히 앞서가도 이미지가 뒤처지지 않게
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fleet-studio (Dockerfile)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            deploy/Dockerfile
+
+      - name: Checkout robot-os-chromium
+        uses: actions/checkout@v4
+        with:
+          repository: dcrobot-keen/robot-os-chromium
+          ref: ${{ github.event.inputs.robot_os_chromium_ref || 'master' }}
+          path: robot-os-chromium
+
+      - name: Checkout simulator
+        uses: actions/checkout@v4
+        with:
+          repository: dcrobot-keen/simulator
+          ref: ${{ github.event.inputs.simulator_ref || 'master' }}
+          path: simulator
+          token: ${{ secrets.SIMULATOR_REPO_TOKEN || github.token }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/dcrobot-keen/fleet-studio-stack:latest
+            ghcr.io/dcrobot-keen/fleet-studio-stack:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
