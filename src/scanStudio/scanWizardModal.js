@@ -298,9 +298,9 @@ function bindEvents() {
   });
   overlay.querySelector('#btn-complete-to-studio').addEventListener('click', () => {
     closeScanWizardModal();
-    const studioBtn = document.querySelector('#subnav-maps button[data-sub="studio"]');
+    const studioBtn = /** @type {HTMLElement|null} */ (document.querySelector('#subnav-maps button[data-sub="studio"]'));
     if (studioBtn) studioBtn.click();
-    const mapsTabBtn = document.querySelector('.gnb-tab[data-tab="maps"]');
+    const mapsTabBtn = /** @type {HTMLElement|null} */ (document.querySelector('.gnb-tab[data-tab="maps"]'));
     if (mapsTabBtn) mapsTabBtn.click();
   });
   overlay.querySelector('#btn-complete-close').addEventListener('click', closeScanWizardModal);
@@ -576,9 +576,9 @@ function handleGroupRegistrationSuccess(res) {
     btnCreate.textContent = '🔄 정합 스튜디오에서 다중 스캔 확인/합성';
     btnCreate.onclick = () => {
       closeScanWizardModal();
-      const studioBtn = document.querySelector('#subnav-maps button[data-sub="studio"]');
+      const studioBtn = /** @type {HTMLElement|null} */ (document.querySelector('#subnav-maps button[data-sub="studio"]'));
       if (studioBtn) studioBtn.click();
-      const mapsTabBtn = document.querySelector('.gnb-tab[data-tab="maps"]');
+      const mapsTabBtn = /** @type {HTMLElement|null} */ (document.querySelector('.gnb-tab[data-tab="maps"]'));
       if (mapsTabBtn) mapsTabBtn.click();
     };
   }

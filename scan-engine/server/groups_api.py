@@ -23,6 +23,7 @@ from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from studio import groups
+from server import schemas
 
 router = APIRouter()
 
@@ -31,12 +32,12 @@ def _404(exc: Exception) -> HTTPException:
     return HTTPException(status_code=404, detail=str(exc))
 
 
-@router.get("/api/groups")
+@router.get("/api/groups", response_model=list[schemas.GroupStatus])
 def api_list_groups() -> list[dict]:
     return [g.to_json() for g in groups.list_groups()]
 
 
-@router.get("/api/groups/{name}")
+@router.get("/api/groups/{name}", response_model=schemas.GroupStatus)
 def api_group(name: str) -> dict:
     try:
         return groups.group_status(name).to_json()
@@ -44,7 +45,7 @@ def api_group(name: str) -> dict:
         raise _404(exc)
 
 
-@router.post("/api/groups/{name}/prepare")
+@router.post("/api/groups/{name}/prepare", response_model=schemas.GroupStatus)
 def api_prepare(name: str) -> dict:
     try:
         return groups.prepare(name).to_json()
@@ -52,7 +53,7 @@ def api_prepare(name: str) -> dict:
         raise _404(exc)
 
 
-@router.post("/api/groups/upload")
+@router.post("/api/groups/upload", response_model=schemas.GroupUploadResult)
 async def api_upload_group(file: UploadFile = File(...), name: str | None = Form(None)) -> dict:
     filename = file.filename or "group.zip"
     group_name = (name or Path(filename).stem).strip()
@@ -102,7 +103,7 @@ async def api_upload_group(file: UploadFile = File(...), name: str | None = Form
         raise HTTPException(status_code=400, detail=f"Bad zip file: {exc}") from exc
 
 
-@router.get("/api/groups/{name}/workspace")
+@router.get("/api/groups/{name}/workspace", response_model=schemas.WorkspacePayload)
 def api_workspace(name: str) -> dict:
     """Slices + alignment + metrics + floor images as JSON (Fleet Studio native workspace)."""
     try:
@@ -111,17 +112,18 @@ def api_workspace(name: str) -> dict:
         raise _404(exc)
 
 
-@router.post("/api/groups/{name}/metrics")
-def api_metrics(name: str, body: dict = Body(...)) -> dict:
+@router.post("/api/groups/{name}/metrics", response_model=schemas.AlignmentMetrics)
+def api_metrics(name: str, body: schemas.PoseRequest) -> dict:
     try:
-        return groups.metrics_for(name, body["scan"], body["alignment"], body.get("others"))
+        others = {k: v.model_dump() for k, v in body.others.items()} if body.others else None
+        return groups.metrics_for(name, body.scan, body.alignment.model_dump(), others)
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except FileNotFoundError as exc:
         raise _404(exc)
 
 
-@router.get("/api/groups/{name}/merged.slicemap.json")
+@router.get("/api/groups/{name}/merged.slicemap.json", responses={200: {"model": schemas.SlicemapV1}})
 def api_merged_slicemap(name: str) -> FileResponse:
     p = groups.groups_root() / name / f"{groups.MERGED_STEM}.slicemap.json"
     if not p.exists():
@@ -129,7 +131,7 @@ def api_merged_slicemap(name: str) -> FileResponse:
     return FileResponse(str(p), media_type="application/json")
 
 
-@router.get("/api/groups/{name}/merged.floor.json")
+@router.get("/api/groups/{name}/merged.floor.json", responses={200: {"model": schemas.FloorMeta}})
 def api_merged_floor_json(name: str) -> FileResponse:
     p = groups.groups_root() / name / f"{groups.MERGED_STEM}.floor.json"
     if not p.exists():
@@ -137,7 +139,7 @@ def api_merged_floor_json(name: str) -> FileResponse:
     return FileResponse(str(p), media_type="application/json")
 
 
-@router.get("/api/groups/{name}/alignment")
+@router.get("/api/groups/{name}/alignment", response_model=schemas.GroupAlignmentDoc)
 def api_get_alignment(name: str) -> dict:
     f = groups.groups_root() / name / groups.ALIGNMENT_FILE
     if not f.exists():
@@ -147,20 +149,21 @@ def api_get_alignment(name: str) -> dict:
     return json.loads(f.read_text(encoding="utf-8"))
 
 
-@router.put("/api/groups/{name}/alignment")
-def api_put_alignment(name: str, doc: dict = Body(...)) -> dict:
+@router.put("/api/groups/{name}/alignment", response_model=schemas.SaveAlignmentResult)
+def api_put_alignment(name: str, doc: schemas.GroupAlignmentDoc) -> dict:
     try:
-        return groups.save_alignment(name, doc)
+        return groups.save_alignment(name, doc.model_dump(exclude_none=True))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except FileNotFoundError as exc:
         raise _404(exc)
 
 
-@router.post("/api/groups/{name}/icp")
-def api_icp(name: str, body: dict = Body(...)) -> dict:
+@router.post("/api/groups/{name}/icp", response_model=schemas.IcpResult)
+def api_icp(name: str, body: schemas.PoseRequest) -> dict:
     try:
-        return groups.icp_refine(name, body["scan"], body["alignment"], body.get("others"))
+        others = {k: v.model_dump() for k, v in body.others.items()} if body.others else None
+        return groups.icp_refine(name, body.scan, body.alignment.model_dump(), others)
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except FileNotFoundError as exc:

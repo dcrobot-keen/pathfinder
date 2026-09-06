@@ -334,6 +334,54 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Alignment
+         * @description Pose of one scan in the group's slice plane: CCW yaw, then translate (offsetX, -offsetZ).
+         */
+        Alignment: {
+            /** Offsetx */
+            offsetX: number;
+            /** Offsetz */
+            offsetZ: number;
+            /** Yawradians */
+            yawRadians: number;
+            /** Method */
+            method?: string | null;
+        };
+        /** AlignmentEntry */
+        AlignmentEntry: {
+            /** Offsetx */
+            offsetX: number;
+            /** Offsetz */
+            offsetZ: number;
+            /** Yawradians */
+            yawRadians: number;
+            /** Method */
+            method?: string | null;
+            metrics?: components["schemas"]["SavedMetrics"] | null;
+            /** Approved */
+            approved?: boolean | null;
+            /** Approved At */
+            approved_at?: string | null;
+        };
+        /**
+         * AlignmentMetrics
+         * @description == studio.scan_alignment_metrics.AlignmentMetrics.to_json()
+         */
+        AlignmentMetrics: {
+            /** N Source */
+            n_source: number;
+            /** N Observed */
+            n_observed: number;
+            /** Overlap M */
+            overlap_m: number;
+            /** Inlier */
+            inlier: number;
+            /** Conflict */
+            conflict: number;
+            /** Rmse M */
+            rmse_m?: number | null;
+        };
         /** Body_api_align_geojson_api_projects__name__align_geojson_post */
         Body_api_align_geojson_api_projects__name__align_geojson_post: {
             /** Geojson */
@@ -384,10 +432,356 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /**
+         * FloorMeta
+         * @description merged.floor.json (== studio.floorplan.floor_meta).
+         */
+        FloorMeta: {
+            /** Format */
+            format: string;
+            /** Resolution */
+            resolution: number;
+            /** Origin */
+            origin: number[];
+            /** Width Px */
+            width_px: number;
+            /** Height Px */
+            height_px: number;
+            /** Row0 */
+            row0?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FloorPayload
+         * @description App floorplan.png as a data URL + where it sits (== studio.floorplan.FloorPlan.payload()).
+         */
+        FloorPayload: {
+            /** Dataurl */
+            dataUrl: string;
+            /** Originx */
+            originX: number;
+            /** Origintopz */
+            originTopZ: number;
+            /** Resolution */
+            resolution: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
+        /**
+         * GroupAlignmentDoc
+         * @description group_alignment.json (scan-group-alignment-v1).
+         */
+        GroupAlignmentDoc: {
+            /**
+             * Format
+             * @default scan-group-alignment-v1
+             */
+            format: string;
+            /** Group */
+            group?: string | null;
+            /** Reference */
+            reference: string;
+            /** Up Axis Convention */
+            up_axis_convention?: string | null;
+            /** Alignments */
+            alignments: {
+                [key: string]: components["schemas"]["AlignmentEntry"];
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /** GroupStatus */
+        GroupStatus: {
+            /** Name */
+            name: string;
+            /** Dir */
+            dir: string;
+            /** Reference */
+            reference: string | null;
+            /** Scans */
+            scans: components["schemas"]["ScanStatus"][];
+            /** Has Alignment */
+            has_alignment: boolean;
+            /** Has Merged */
+            has_merged: boolean;
+            /** Ready */
+            ready: boolean;
+            /**
+             * Has Floor
+             * @default false
+             */
+            has_floor: boolean;
+        };
+        /** GroupUploadResult */
+        GroupUploadResult: {
+            /** Status */
+            status: string;
+            /** Group */
+            group: string;
+            /** Url */
+            url: string;
+            /** Scans */
+            scans: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IcpResult */
+        IcpResult: {
+            /** Scan */
+            scan: string;
+            alignment: components["schemas"]["Alignment"];
+            before: components["schemas"]["AlignmentMetrics"];
+            after: components["schemas"]["AlignmentMetrics"];
+            /** Steps */
+            steps: components["schemas"]["IcpStep"][];
+            /** Moved M */
+            moved_m: number;
+            /** Rotated Deg */
+            rotated_deg: number;
+        };
+        /** IcpStep */
+        IcpStep: {
+            /** Radius */
+            radius: number;
+            /** Rmse */
+            rmse: number;
+            /** Iterations */
+            iterations: number;
+        };
+        /**
+         * LayerPayload
+         * @description One scan in the workspace: slice cells (base64 uint8 codes, row 0 = min y) + pose + metrics.
+         */
+        LayerPayload: {
+            /** Id */
+            id: string;
+            /** Cols */
+            cols: number;
+            /** Rows */
+            rows: number;
+            /** Resolution */
+            resolution: number;
+            /** Origin */
+            origin: number[];
+            /** Z */
+            z: number;
+            /** Data */
+            data: string;
+            alignment: components["schemas"]["Alignment"];
+            metrics?: components["schemas"]["AlignmentMetrics"] | null;
+            floor?: components["schemas"]["FloorPayload"] | null;
+        };
+        /** MergedCells */
+        MergedCells: {
+            /** Cols */
+            cols: number;
+            /** Rows */
+            rows: number;
+        };
+        /**
+         * PoseRequest
+         * @description Body of POST .../metrics and .../icp: one scan at a candidate pose, other scans' current poses.
+         */
+        PoseRequest: {
+            /** Scan */
+            scan: string;
+            alignment: components["schemas"]["Alignment"];
+            /** Others */
+            others?: {
+                [key: string]: components["schemas"]["Alignment"];
+            } | null;
+        };
+        /**
+         * ProcessStarted
+         * @description POST /api/projects/{name}/process: a single scan starts the pipeline; a multi-scan zip becomes a group.
+         */
+        ProcessStarted: {
+            /** Status */
+            status: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "single" | "group";
+            /** Name */
+            name?: string | null;
+            /** Has Floorplan */
+            has_floorplan?: boolean | null;
+            /** Group */
+            group?: string | null;
+            /** Group Url */
+            group_url?: string | null;
+            /** Message */
+            message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProjectCreated */
+        ProjectCreated: {
+            /** Name */
+            name: string;
+        };
+        /**
+         * ProjectEntry
+         * @description GET /api/projects item (== studio.project.list_projects).
+         */
+        ProjectEntry: {
+            /** Name */
+            name: string;
+            /** Phase */
+            phase: string;
+            /**
+             * Steps
+             * @default {}
+             */
+            steps: {
+                [key: string]: string;
+            };
+            /** Error */
+            error?: string | null;
+            /** Mtime */
+            mtime: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProjectStatus
+         * @description status.json (== studio.status.read_status); phase None = never processed.
+         */
+        ProjectStatus: {
+            /** Phase */
+            phase?: string | null;
+            /**
+             * Steps
+             * @default {}
+             */
+            steps: {
+                [key: string]: "pending" | "active" | "done" | "skip" | "error";
+            };
+            /**
+             * Log
+             * @default []
+             */
+            log: string[];
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SaveAlignmentResult
+         * @description PUT /api/groups/{name}/alignment -> merged slicemap rebuilt (+ published).
+         */
+        SaveAlignmentResult: {
+            /** Group */
+            group: string;
+            /** Alignment File */
+            alignment_file: string;
+            /** Merged */
+            merged: string;
+            /** Merged Summary */
+            merged_summary: string;
+            cells: components["schemas"]["MergedCells"];
+            /** Scans */
+            scans: number;
+            /** Approved */
+            approved: string[];
+            /** Pending */
+            pending: string[];
+            /** Published */
+            published?: string | null;
+            /** Floor */
+            floor?: string | null;
+            /**
+             * Floor Scans
+             * @default []
+             */
+            floor_scans: string[];
+            /** Published Floor */
+            published_floor?: string | null;
+        };
+        /**
+         * SavedMetrics
+         * @description What the page writes into group_alignment.json per scan (rounded subset).
+         */
+        SavedMetrics: {
+            /** Overlap M */
+            overlap_m?: number | null;
+            /** Inlier */
+            inlier?: number | null;
+            /** Conflict */
+            conflict?: number | null;
+            /** Rmse M */
+            rmse_m?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ScanStatus */
+        ScanStatus: {
+            /** Id */
+            id: string;
+            /** Has Folder */
+            has_folder: boolean;
+            /** Has Usdz */
+            has_usdz: boolean;
+            /** Has Project */
+            has_project: boolean;
+            /** Has Slice */
+            has_slice: boolean;
+            /** Method */
+            method: string;
+        };
+        /** SlicemapSource */
+        SlicemapSource: {
+            /** Scan */
+            scan: string;
+            /** Offsetx */
+            offsetX?: number | null;
+            /** Offsetz */
+            offsetZ?: number | null;
+            /** Yawradians */
+            yawRadians?: number | null;
+            /** Method */
+            method?: string | null;
+            /** Cells */
+            cells?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SlicemapV1
+         * @description slicemap-v1 file (merged.slicemap.json): base64 uint8 codes 0 unknown / 1 free / 2 furniture / 3 wall.
+         */
+        SlicemapV1: {
+            /**
+             * Format
+             * @constant
+             */
+            format: "slicemap-v1";
+            /** Z */
+            z: number;
+            /** Band */
+            band: number;
+            /** Resolution */
+            resolution: number;
+            /** Origin */
+            origin: number[];
+            /** Cols */
+            cols: number;
+            /** Rows */
+            rows: number;
+            /** Data */
+            data: string;
+            /** Sources */
+            sources?: components["schemas"]["SlicemapSource"][] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ValidationError */
         ValidationError: {
@@ -401,6 +795,50 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, unknown>;
+        };
+        /** WorkspaceApi */
+        WorkspaceApi: {
+            /** Save */
+            save: string;
+            /** Icp */
+            icp: string;
+            /** Metrics */
+            metrics?: string | null;
+            /** Merged */
+            merged: string;
+            /** Status */
+            status: string;
+        };
+        /** WorkspaceGates */
+        WorkspaceGates: {
+            /** Overlaplockm */
+            overlapLockM: number;
+            /** Inliermin */
+            inlierMin: number;
+            /** Conflictmax */
+            conflictMax: number;
+            /** Corrdist */
+            corrDist: number;
+            /** Coarsedist */
+            coarseDist: number;
+            /** Conflictmargin */
+            conflictMargin: number;
+        };
+        /**
+         * WorkspacePayload
+         * @description GET /api/groups/{name}/workspace (== studio.align_workspace_html.workspace_payload).
+         */
+        WorkspacePayload: {
+            /** Title */
+            title: string;
+            /** Group */
+            group: string | null;
+            /** Reference */
+            reference: string;
+            /** Layers */
+            layers: components["schemas"]["LayerPayload"][];
+            gates: components["schemas"]["WorkspaceGates"];
+            api?: components["schemas"]["WorkspaceApi"] | null;
         };
     };
     responses: never;
@@ -426,9 +864,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["GroupStatus"][];
                 };
             };
         };
@@ -450,9 +886,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GroupStatus"];
                 };
             };
             /** @description Validation Error */
@@ -483,9 +917,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GroupStatus"];
                 };
             };
             /** @description Validation Error */
@@ -518,9 +950,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GroupUploadResult"];
                 };
             };
             /** @description Validation Error */
@@ -551,9 +981,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorkspacePayload"];
                 };
             };
             /** @description Validation Error */
@@ -578,9 +1006,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["PoseRequest"];
             };
         };
         responses: {
@@ -590,9 +1016,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AlignmentMetrics"];
                 };
             };
             /** @description Validation Error */
@@ -623,7 +1047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SlicemapV1"];
                 };
             };
             /** @description Validation Error */
@@ -654,7 +1078,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FloorMeta"];
                 };
             };
             /** @description Validation Error */
@@ -685,9 +1109,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GroupAlignmentDoc"];
                 };
             };
             /** @description Validation Error */
@@ -712,9 +1134,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["GroupAlignmentDoc"];
             };
         };
         responses: {
@@ -724,9 +1144,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SaveAlignmentResult"];
                 };
             };
             /** @description Validation Error */
@@ -751,9 +1169,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["PoseRequest"];
             };
         };
         responses: {
@@ -763,9 +1179,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["IcpResult"];
                 };
             };
             /** @description Validation Error */
@@ -907,9 +1321,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ProjectEntry"][];
                 };
             };
         };
@@ -933,9 +1345,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ProjectCreated"];
                 };
             };
             /** @description Validation Error */
@@ -970,9 +1380,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ProcessStarted"];
                 };
             };
             /** @description Validation Error */
@@ -1003,9 +1411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ProjectStatus"];
                 };
             };
             /** @description Validation Error */

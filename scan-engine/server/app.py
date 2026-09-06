@@ -27,6 +27,7 @@ from studio.project import PROJECTS_ROOT, create_project, list_projects
 from studio.status import read_status, write_status
 from server.align import align_geojson, align_image
 from server.groups_api import router as groups_router
+from server import schemas
 from server.jobs import is_running, start_process_job
 
 app = FastAPI(title="scan-to-map-studio API")
@@ -63,12 +64,12 @@ def _reconcile_stale_jobs() -> None:
             )
 
 
-@app.get("/api/projects")
+@app.get("/api/projects", response_model=list[schemas.ProjectEntry])
 def api_list_projects() -> list[dict]:
     return list_projects()
 
 
-@app.post("/api/projects")
+@app.post("/api/projects", response_model=schemas.ProjectCreated)
 def api_create_project(name: str = Form(...)) -> dict:
     try:
         create_project(name)
@@ -77,7 +78,7 @@ def api_create_project(name: str = Form(...)) -> dict:
     return {"name": name}
 
 
-@app.post("/api/projects/{name}/process", status_code=202)
+@app.post("/api/projects/{name}/process", status_code=202, response_model=schemas.ProcessStarted)
 async def api_process_project(
     name: str,
     usdz: UploadFile | None = File(None),
@@ -229,7 +230,7 @@ async def api_process_project(
     }
 
 
-@app.get("/api/projects/{name}/status")
+@app.get("/api/projects/{name}/status", response_model=schemas.ProjectStatus)
 def api_get_status(name: str) -> dict:
     project_dir = PROJECTS_ROOT / name
     if not project_dir.exists():

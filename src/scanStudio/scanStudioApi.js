@@ -4,14 +4,15 @@
 // 경로·메서드·경로 파라미터·요청 본문이 엔진과 어긋나면 `npm run check:api`(tsc, checkJs)에서 잡힌다.
 // 엔진 라우트를 바꾸면 `npm run gen:scan-engine-api` 로 타입을 다시 만든다.
 //
-// 응답은 엔진이 `-> dict` 로 선언해 스키마가 자유 객체라 여기서는 any 로 풀어 넘긴다(호출부는 예전과
-// 같은 모양). 응답 모델(pydantic)을 붙이면 그때부터 응답도 타입이 붙는다.
+// 응답도 타입이 붙는다: 엔진의 pydantic 응답 모델(scan-engine/server/schemas.py)이 스키마에 들어 있어
+// 호출부(scanWizardModal.js, alignWorkspace.js)까지 tsconfig.scan-engine.json 으로 검사한다.
 //
 // 주소: Vite dev 프록시 `/scan-engine/*` -> http://localhost:8000/* (vite.config.js). 프록시가 없는
 // 환경(빌드 정적 서빙 등)에서 네트워크 오류가 나면 직접 주소로 한 번 갈아탄다.
 import createClient from 'openapi-fetch';
 
 /** @typedef {import('./scanEngine.gen').paths} Paths */
+/** @typedef {import('./scanEngine.gen').components['schemas']} Schemas */
 
 const PROXY_BASE = '/scan-engine';
 const DIRECT_BASE = 'http://localhost:8000';
@@ -25,32 +26,33 @@ let activeBase = PROXY_BASE;
 
 /**
  * openapi-fetch 결과 -> data (오류면 [status] detail 로 throw)
- * @param {{ data?: unknown, error?: unknown, response: Response }} result
- * @returns {any}
+ * @template T
+ * @param {{ data?: T, error?: unknown, response: Response }} result
+ * @returns {T}
  */
 function unwrap({ data, error, response }) {
   if (!response.ok || (error !== undefined && error !== null)) {
     const detail = typeof error === 'string' ? error : error ? JSON.stringify(error) : response.statusText;
     throw new Error(`[${response.status}] ${detail}`);
   }
-  return data;
+  return /** @type {T} */ (data);
 }
 
 /**
  * 프록시로 시도하고, 프록시 자체가 없어서(네트워크 오류) 실패하면 직접 주소로 재시도.
  * @template T
- * @param {(client: import('openapi-fetch').Client<Paths>) => Promise<T>} op
- * @returns {Promise<any>}
+ * @param {(client: import('openapi-fetch').Client<Paths>) => Promise<{ data?: T, error?: unknown, response: Response }>} op
+ * @returns {Promise<T>}
  */
 async function call(op) {
   try {
-    return unwrap(/** @type {any} */ (await op(active)));
+    return unwrap(await op(active));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (active === proxyClient && /Failed to fetch|NetworkError|ECONNREFUSED/.test(msg)) {
       active = directClient;
       activeBase = DIRECT_BASE;
-      return unwrap(/** @type {any} */ (await op(active)));
+      return unwrap(await op(active));
     }
     throw err;
   }
@@ -125,15 +127,29 @@ export function getGroupWorkspace(name) {
   return call((c) => c.GET('/api/groups/{name}/workspace', { params: { path: { name } } }));
 }
 
+/**
+ * 후보 자세의 정합 지표 (overlap/inlier/conflict/RMSE)
+ * @param {string} name
+ * @param {Schemas['PoseRequest']} body
+ */
 export function postGroupMetrics(name, body) {
   return call((c) => c.POST('/api/groups/{name}/metrics', { params: { path: { name } }, body }));
 }
 
+/**
+ * 현재 자세에서 다른 스캔 벽에 ICP 미세 정합
+ * @param {string} name
+ * @param {Schemas['PoseRequest']} body
+ */
 export function postGroupIcp(name, body) {
   return call((c) => c.POST('/api/groups/{name}/icp', { params: { path: { name } }, body }));
 }
 
-/** 저장: 서버가 group_alignment.json 을 쓰고 합성 슬라이스맵을 다시 만들어 publish 한다 */
+/**
+ * 저장: 서버가 group_alignment.json 을 쓰고 합성 슬라이스맵을 다시 만들어 publish 한다
+ * @param {string} name
+ * @param {Schemas['GroupAlignmentDoc']} doc
+ */
 export function putGroupAlignment(name, doc) {
   return call((c) => c.PUT('/api/groups/{name}/alignment', { params: { path: { name } }, body: doc }));
 }

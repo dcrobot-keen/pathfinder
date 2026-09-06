@@ -16,8 +16,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/GroupStatus"
                   },
                   "type": "array",
                   "title": "Response Api List Groups Api Groups Get"
@@ -49,9 +48,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Group Api Groups  Name  Get"
+                  "$ref": "#/components/schemas/GroupStatus"
                 }
               }
             }
@@ -90,9 +87,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Prepare Api Groups  Name  Prepare Post"
+                  "$ref": "#/components/schemas/GroupStatus"
                 }
               }
             }
@@ -130,9 +125,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Api Upload Group Api Groups Upload Post"
+                  "$ref": "#/components/schemas/GroupUploadResult"
                 }
               }
             }
@@ -172,9 +165,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Workspace Api Groups  Name  Workspace Get"
+                  "$ref": "#/components/schemas/WorkspacePayload"
                 }
               }
             }
@@ -212,9 +203,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true,
-                "title": "Body"
+                "$ref": "#/components/schemas/PoseRequest"
               }
             }
           }
@@ -225,9 +214,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Metrics Api Groups  Name  Metrics Post"
+                  "$ref": "#/components/schemas/AlignmentMetrics"
                 }
               }
             }
@@ -265,7 +252,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SlicemapV1"
+                }
               }
             }
           },
@@ -302,7 +291,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/FloorMeta"
+                }
               }
             }
           },
@@ -340,9 +331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Get Alignment Api Groups  Name  Alignment Get"
+                  "$ref": "#/components/schemas/GroupAlignmentDoc"
                 }
               }
             }
@@ -378,9 +367,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true,
-                "title": "Doc"
+                "$ref": "#/components/schemas/GroupAlignmentDoc"
               }
             }
           }
@@ -391,9 +378,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Put Alignment Api Groups  Name  Alignment Put"
+                  "$ref": "#/components/schemas/SaveAlignmentResult"
                 }
               }
             }
@@ -431,9 +416,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true,
-                "title": "Body"
+                "$ref": "#/components/schemas/PoseRequest"
               }
             }
           }
@@ -444,9 +427,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Icp Api Groups  Name  Icp Post"
+                  "$ref": "#/components/schemas/IcpResult"
                 }
               }
             }
@@ -606,8 +587,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/ProjectEntry"
                   },
                   "type": "array",
                   "title": "Response Api List Projects Api Projects Get"
@@ -636,9 +616,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Api Create Project Api Projects Post"
+                  "$ref": "#/components/schemas/ProjectCreated"
                 }
               }
             }
@@ -686,9 +664,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Process Project Api Projects  Name  Process Post"
+                  "$ref": "#/components/schemas/ProcessStarted"
                 }
               }
             }
@@ -727,9 +703,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Api Get Status Api Projects  Name  Status Get"
+                  "$ref": "#/components/schemas/ProjectStatus"
                 }
               }
             }
@@ -852,6 +826,152 @@
   },
   "components": {
     "schemas": {
+      "Alignment": {
+        "properties": {
+          "offsetX": {
+            "type": "number",
+            "title": "Offsetx"
+          },
+          "offsetZ": {
+            "type": "number",
+            "title": "Offsetz"
+          },
+          "yawRadians": {
+            "type": "number",
+            "title": "Yawradians"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          }
+        },
+        "type": "object",
+        "required": [
+          "offsetX",
+          "offsetZ",
+          "yawRadians"
+        ],
+        "title": "Alignment",
+        "description": "Pose of one scan in the group's slice plane: CCW yaw, then translate (offsetX, -offsetZ)."
+      },
+      "AlignmentEntry": {
+        "properties": {
+          "offsetX": {
+            "type": "number",
+            "title": "Offsetx"
+          },
+          "offsetZ": {
+            "type": "number",
+            "title": "Offsetz"
+          },
+          "yawRadians": {
+            "type": "number",
+            "title": "Yawradians"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavedMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "offsetX",
+          "offsetZ",
+          "yawRadians"
+        ],
+        "title": "AlignmentEntry"
+      },
+      "AlignmentMetrics": {
+        "properties": {
+          "n_source": {
+            "type": "integer",
+            "title": "N Source"
+          },
+          "n_observed": {
+            "type": "integer",
+            "title": "N Observed"
+          },
+          "overlap_m": {
+            "type": "number",
+            "title": "Overlap M"
+          },
+          "inlier": {
+            "type": "number",
+            "title": "Inlier"
+          },
+          "conflict": {
+            "type": "number",
+            "title": "Conflict"
+          },
+          "rmse_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rmse M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_source",
+          "n_observed",
+          "overlap_m",
+          "inlier",
+          "conflict"
+        ],
+        "title": "AlignmentMetrics",
+        "description": "== studio.scan_alignment_metrics.AlignmentMetrics.to_json()"
+      },
       "Body_api_align_geojson_api_projects__name__align_geojson_post": {
         "properties": {
           "geojson": {
@@ -999,6 +1119,232 @@
         ],
         "title": "Body_api_upload_group_api_groups_upload_post"
       },
+      "FloorMeta": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "resolution": {
+            "type": "number",
+            "title": "Resolution"
+          },
+          "origin": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Origin"
+          },
+          "width_px": {
+            "type": "integer",
+            "title": "Width Px"
+          },
+          "height_px": {
+            "type": "integer",
+            "title": "Height Px"
+          },
+          "row0": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row0"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "format",
+          "resolution",
+          "origin",
+          "width_px",
+          "height_px"
+        ],
+        "title": "FloorMeta",
+        "description": "merged.floor.json (== studio.floorplan.floor_meta)."
+      },
+      "FloorPayload": {
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "title": "Dataurl"
+          },
+          "originX": {
+            "type": "number",
+            "title": "Originx"
+          },
+          "originTopZ": {
+            "type": "number",
+            "title": "Origintopz"
+          },
+          "resolution": {
+            "type": "number",
+            "title": "Resolution"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataUrl",
+          "originX",
+          "originTopZ",
+          "resolution",
+          "width",
+          "height"
+        ],
+        "title": "FloorPayload",
+        "description": "App floorplan.png as a data URL + where it sits (== studio.floorplan.FloorPlan.payload())."
+      },
+      "GroupAlignmentDoc": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "title": "Format",
+            "default": "scan-group-alignment-v1"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "up_axis_convention": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up Axis Convention"
+          },
+          "alignments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AlignmentEntry"
+            },
+            "type": "object",
+            "title": "Alignments"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "reference",
+          "alignments"
+        ],
+        "title": "GroupAlignmentDoc",
+        "description": "group_alignment.json (scan-group-alignment-v1)."
+      },
+      "GroupStatus": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dir": {
+            "type": "string",
+            "title": "Dir"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "scans": {
+            "items": {
+              "$ref": "#/components/schemas/ScanStatus"
+            },
+            "type": "array",
+            "title": "Scans"
+          },
+          "has_alignment": {
+            "type": "boolean",
+            "title": "Has Alignment"
+          },
+          "has_merged": {
+            "type": "boolean",
+            "title": "Has Merged"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "has_floor": {
+            "type": "boolean",
+            "title": "Has Floor",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "dir",
+          "reference",
+          "scans",
+          "has_alignment",
+          "has_merged",
+          "ready"
+        ],
+        "title": "GroupStatus"
+      },
+      "GroupUploadResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "scans": {
+            "type": "integer",
+            "title": "Scans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "group",
+          "url",
+          "scans"
+        ],
+        "title": "GroupUploadResult"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1011,6 +1357,708 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "IcpResult": {
+        "properties": {
+          "scan": {
+            "type": "string",
+            "title": "Scan"
+          },
+          "alignment": {
+            "$ref": "#/components/schemas/Alignment"
+          },
+          "before": {
+            "$ref": "#/components/schemas/AlignmentMetrics"
+          },
+          "after": {
+            "$ref": "#/components/schemas/AlignmentMetrics"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/IcpStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "moved_m": {
+            "type": "number",
+            "title": "Moved M"
+          },
+          "rotated_deg": {
+            "type": "number",
+            "title": "Rotated Deg"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scan",
+          "alignment",
+          "before",
+          "after",
+          "steps",
+          "moved_m",
+          "rotated_deg"
+        ],
+        "title": "IcpResult"
+      },
+      "IcpStep": {
+        "properties": {
+          "radius": {
+            "type": "number",
+            "title": "Radius"
+          },
+          "rmse": {
+            "type": "number",
+            "title": "Rmse"
+          },
+          "iterations": {
+            "type": "integer",
+            "title": "Iterations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "radius",
+          "rmse",
+          "iterations"
+        ],
+        "title": "IcpStep"
+      },
+      "LayerPayload": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cols": {
+            "type": "integer",
+            "title": "Cols"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "resolution": {
+            "type": "number",
+            "title": "Resolution"
+          },
+          "origin": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Origin"
+          },
+          "z": {
+            "type": "number",
+            "title": "Z"
+          },
+          "data": {
+            "type": "string",
+            "title": "Data"
+          },
+          "alignment": {
+            "$ref": "#/components/schemas/Alignment"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlignmentMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FloorPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cols",
+          "rows",
+          "resolution",
+          "origin",
+          "z",
+          "data",
+          "alignment"
+        ],
+        "title": "LayerPayload",
+        "description": "One scan in the workspace: slice cells (base64 uint8 codes, row 0 = min y) + pose + metrics."
+      },
+      "MergedCells": {
+        "properties": {
+          "cols": {
+            "type": "integer",
+            "title": "Cols"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cols",
+          "rows"
+        ],
+        "title": "MergedCells"
+      },
+      "PoseRequest": {
+        "properties": {
+          "scan": {
+            "type": "string",
+            "title": "Scan"
+          },
+          "alignment": {
+            "$ref": "#/components/schemas/Alignment"
+          },
+          "others": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Alignment"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Others"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scan",
+          "alignment"
+        ],
+        "title": "PoseRequest",
+        "description": "Body of POST .../metrics and .../icp: one scan at a candidate pose, other scans' current poses."
+      },
+      "ProcessStarted": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "single",
+              "group"
+            ],
+            "title": "Type"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "has_floorplan": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Floorplan"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "group_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Url"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status",
+          "type"
+        ],
+        "title": "ProcessStarted",
+        "description": "POST /api/projects/{name}/process: a single scan starts the pipeline; a multi-scan zip becomes a group."
+      },
+      "ProjectCreated": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ProjectCreated"
+      },
+      "ProjectEntry": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "steps": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Steps",
+            "default": {}
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "mtime": {
+            "type": "number",
+            "title": "Mtime"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "phase",
+          "mtime"
+        ],
+        "title": "ProjectEntry",
+        "description": "GET /api/projects item (== studio.project.list_projects)."
+      },
+      "ProjectStatus": {
+        "properties": {
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "steps": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "active",
+                "done",
+                "skip",
+                "error"
+              ]
+            },
+            "type": "object",
+            "title": "Steps",
+            "default": {}
+          },
+          "log": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Log",
+            "default": []
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ProjectStatus",
+        "description": "status.json (== studio.status.read_status); phase None = never processed."
+      },
+      "SaveAlignmentResult": {
+        "properties": {
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "alignment_file": {
+            "type": "string",
+            "title": "Alignment File"
+          },
+          "merged": {
+            "type": "string",
+            "title": "Merged"
+          },
+          "merged_summary": {
+            "type": "string",
+            "title": "Merged Summary"
+          },
+          "cells": {
+            "$ref": "#/components/schemas/MergedCells"
+          },
+          "scans": {
+            "type": "integer",
+            "title": "Scans"
+          },
+          "approved": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Approved"
+          },
+          "pending": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pending"
+          },
+          "published": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "floor_scans": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Floor Scans",
+            "default": []
+          },
+          "published_floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Floor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group",
+          "alignment_file",
+          "merged",
+          "merged_summary",
+          "cells",
+          "scans",
+          "approved",
+          "pending"
+        ],
+        "title": "SaveAlignmentResult",
+        "description": "PUT /api/groups/{name}/alignment -> merged slicemap rebuilt (+ published)."
+      },
+      "SavedMetrics": {
+        "properties": {
+          "overlap_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlap M"
+          },
+          "inlier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inlier"
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict"
+          },
+          "rmse_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rmse M"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "SavedMetrics",
+        "description": "What the page writes into group_alignment.json per scan (rounded subset)."
+      },
+      "ScanStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "has_folder": {
+            "type": "boolean",
+            "title": "Has Folder"
+          },
+          "has_usdz": {
+            "type": "boolean",
+            "title": "Has Usdz"
+          },
+          "has_project": {
+            "type": "boolean",
+            "title": "Has Project"
+          },
+          "has_slice": {
+            "type": "boolean",
+            "title": "Has Slice"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "has_folder",
+          "has_usdz",
+          "has_project",
+          "has_slice",
+          "method"
+        ],
+        "title": "ScanStatus"
+      },
+      "SlicemapSource": {
+        "properties": {
+          "scan": {
+            "type": "string",
+            "title": "Scan"
+          },
+          "offsetX": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offsetx"
+          },
+          "offsetZ": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offsetz"
+          },
+          "yawRadians": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yawradians"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "cells": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cells"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "scan"
+        ],
+        "title": "SlicemapSource"
+      },
+      "SlicemapV1": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "slicemap-v1",
+            "title": "Format"
+          },
+          "z": {
+            "type": "number",
+            "title": "Z"
+          },
+          "band": {
+            "type": "number",
+            "title": "Band"
+          },
+          "resolution": {
+            "type": "number",
+            "title": "Resolution"
+          },
+          "origin": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Origin"
+          },
+          "cols": {
+            "type": "integer",
+            "title": "Cols"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "data": {
+            "type": "string",
+            "title": "Data"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SlicemapSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "format",
+          "z",
+          "band",
+          "resolution",
+          "origin",
+          "cols",
+          "rows",
+          "data"
+        ],
+        "title": "SlicemapV1",
+        "description": "slicemap-v1 file (merged.slicemap.json): base64 uint8 codes 0 unknown / 1 free / 2 furniture / 3 wall."
       },
       "ValidationError": {
         "properties": {
@@ -1051,6 +2099,136 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorkspaceApi": {
+        "properties": {
+          "save": {
+            "type": "string",
+            "title": "Save"
+          },
+          "icp": {
+            "type": "string",
+            "title": "Icp"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "merged": {
+            "type": "string",
+            "title": "Merged"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "save",
+          "icp",
+          "merged",
+          "status"
+        ],
+        "title": "WorkspaceApi"
+      },
+      "WorkspaceGates": {
+        "properties": {
+          "overlapLockM": {
+            "type": "number",
+            "title": "Overlaplockm"
+          },
+          "inlierMin": {
+            "type": "number",
+            "title": "Inliermin"
+          },
+          "conflictMax": {
+            "type": "number",
+            "title": "Conflictmax"
+          },
+          "corrDist": {
+            "type": "number",
+            "title": "Corrdist"
+          },
+          "coarseDist": {
+            "type": "number",
+            "title": "Coarsedist"
+          },
+          "conflictMargin": {
+            "type": "integer",
+            "title": "Conflictmargin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overlapLockM",
+          "inlierMin",
+          "conflictMax",
+          "corrDist",
+          "coarseDist",
+          "conflictMargin"
+        ],
+        "title": "WorkspaceGates"
+      },
+      "WorkspacePayload": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerPayload"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "gates": {
+            "$ref": "#/components/schemas/WorkspaceGates"
+          },
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceApi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "group",
+          "reference",
+          "layers",
+          "gates"
+        ],
+        "title": "WorkspacePayload",
+        "description": "GET /api/groups/{name}/workspace (== studio.align_workspace_html.workspace_payload)."
       }
     }
   }

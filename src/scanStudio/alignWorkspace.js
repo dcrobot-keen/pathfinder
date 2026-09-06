@@ -23,6 +23,8 @@ import {
 } from './scanStudioApi.js';
 import { listProjects, createProjectFromSlicemap, updateProjectFromSlicemap } from '../projects/projectApi.js';
 
+/** @typedef {import('./scanEngine.gen').components['schemas']} Schemas */
+
 const COLORS = { ref: [79, 209, 197], sel: [245, 166, 35], other: [139, 150, 168] };
 const alignProjection = new Projection({ code: 'scan-align-plane', units: 'm', extent: [-500, -500, 500, 500] });
 
@@ -41,7 +43,11 @@ function applyXY(a, x, y) {
   return [c * x - s * y + a.ox, s * x + c * y - a.oz];
 }
 
-export function createAlignWorkspace(rootEl, { onToast = () => {} } = {}) {
+/**
+ * @param {HTMLElement} rootEl
+ * @param {{ onToast?: (message: string) => void }} [opts]
+ */
+export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}) {
   rootEl.classList.add('align-ws');
   rootEl.innerHTML = `
     <aside class="align-ws__rail">
@@ -102,6 +108,8 @@ export function createAlignWorkspace(rootEl, { onToast = () => {} } = {}) {
         <div id="aw-project-note" class="align-ws__note"></div>
       </section>
     </aside>`;
+  /** 워크스페이스 안의 요소 (id). DOM 프로퍼티를 자유롭게 쓰도록 any 로 둔다.
+   * @type {(id: string) => any} */
   const $ = (id) => rootEl.querySelector(`#${id}`);
 
   // ---- state -------------------------------------------------------------
@@ -280,7 +288,8 @@ export function createAlignWorkspace(rootEl, { onToast = () => {} } = {}) {
   }, { capture: true, passive: false });
   document.addEventListener('keydown', (e) => {
     if (rootEl.offsetParent === null) return; // 이 화면이 보일 때만
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
+    const tag = /** @type {HTMLElement|null} */ (e.target)?.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (e.key === 'f' || e.key === 'F') { fitAll(); return; }
     if (!selected) return;
     const step = e.shiftKey ? 0.1 : 0.01, rot = (e.shiftKey ? 5 : 0.5) * Math.PI / 180;
@@ -289,7 +298,7 @@ export function createAlignWorkspace(rootEl, { onToast = () => {} } = {}) {
     else if (e.key === '[') rotateSelected(rot); else if (e.key === ']') rotateSelected(-rot); else return;
     e.preventDefault();
   });
-  for (const btn of rootEl.querySelectorAll('[data-rot]')) {
+  for (const btn of /** @type {NodeListOf<HTMLButtonElement>} */ (rootEl.querySelectorAll('[data-rot]'))) {
     btn.addEventListener('click', () => rotateSelected(-Number(btn.dataset.rot) * Math.PI / 180));
   }
   for (const [id, k] of [['aw-in-x', 'ox'], ['aw-in-z', 'oz'], ['aw-in-yaw', 'yaw']]) {
@@ -319,7 +328,10 @@ export function createAlignWorkspace(rootEl, { onToast = () => {} } = {}) {
   });
 
   // ---- metrics (server) ---------------------------------------------------
+  /** 다른 스캔들의 현재 자세 (metrics/icp 요청의 `others`)
+   * @returns {Record<string, Schemas['Alignment']>} */
   function othersOf(L) {
+    /** @type {Record<string, Schemas['Alignment']>} */
     const others = {};
     for (const o of layers) if (o !== L) others[o.id] = { offsetX: o.align.ox, offsetZ: o.align.oz, yawRadians: o.align.yaw };
     return others;
@@ -373,7 +385,7 @@ export function createAlignWorkspace(rootEl, { onToast = () => {} } = {}) {
     const L = selected;
     $('aw-sel-name').textContent = L ? `${L.id}${L.isRef ? ' · 기준 (고정)' : ''}` : '–';
     for (const id of ['aw-in-x', 'aw-in-z', 'aw-in-yaw']) $(id).disabled = !L || L.isRef;
-    for (const b of rootEl.querySelectorAll('[data-rot]')) b.disabled = !L || L.isRef;
+    for (const b of /** @type {NodeListOf<HTMLButtonElement>} */ (rootEl.querySelectorAll('[data-rot]'))) b.disabled = !L || L.isRef;
     $('aw-icp').disabled = !L || L.isRef;
     $('aw-revert').disabled = !L || L.isRef;
     $('aw-approve').disabled = !L || L.isRef;

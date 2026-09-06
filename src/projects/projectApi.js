@@ -32,7 +32,11 @@ export async function createProject({ name, sizeX, sizeY }) {
  * (server/projects.mjs POST /api/projects/from-slicemap). 평면 크기는 격자 크기,
  * 좌표는 시뮬레이터 월드와 동일(격자 왼쪽-아래 = 0,0).
  */
-/** 정합을 다시 저장했을 때 같은 프로젝트(id·nodelink 유지)를 새 slicemap/floor 로 갱신 */
+/**
+ * 정합을 다시 저장했을 때 같은 프로젝트(id·nodelink 유지)를 새 slicemap/floor 로 갱신
+ * @param {string} id
+ * @param {{ name?: string, slicemap: object, room?: object, floor?: { png: string, meta: object } }} payload
+ */
 export async function updateProjectFromSlicemap(id, { name, slicemap, room, floor }) {
   const res = await fetch(`${API_URL}/${encodeURIComponent(id)}/from-slicemap`, {
     method: 'PUT',
@@ -46,6 +50,10 @@ export async function updateProjectFromSlicemap(id, { name, slicemap, room, floo
   return data;
 }
 
+/**
+ * 슬라이스맵(+ 앱 바닥 이미지)으로 새 프로젝트를 만든다 -- 서버가 장애물 블록을 함께 생성
+ * @param {{ name: string, slicemap: object, room?: object, floor?: { png: string, meta: object } }} payload
+ */
 export async function createProjectFromSlicemap({ name, slicemap, room, floor }) {
   const res = await fetch(`${API_URL}/from-slicemap`, {
     method: 'POST',
