@@ -268,6 +268,18 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     }
   });
 
+  // 로봇이 주행 중이면 위치/state 메시지가 초당 여러 번 들어와서, 메시지마다 바로 render()(list.replaceChildren())를
+  // 부르면 카드 DOM이 그만큼 자주 통째로 새로 만들어진다 -- 사용자가 카드를 클릭한 그 순간에 하필 다시 그려지면
+  // 클릭이 옛 DOM 노드에 떨어져 씹힌다("카드를 눌러도 선택이 안 됨"). 화면 프레임당 한 번으로 묶는다.
+  let renderScheduled = false;
+  function scheduleRender() {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    requestAnimationFrame(() => {
+      renderScheduled = false;
+      render();
+    });
+  }
   function render() {
     const now = Date.now();
     const rows = Array.from(robots.values()).sort((a, b) => a.serialNumber.localeCompare(b.serialNumber));
@@ -377,11 +389,11 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         fleetEvents.splice(0, fleetEvents.length, ...msg.events);
         renderEvents();
       }
-      loadRegistry().then(render);
+      loadRegistry().then(scheduleRender);
     } else if (msg.type === 'robot') {
       const isNew = !robots.has(msg.robot.key);
       robots.set(msg.robot.key, msg.robot);
-      if (isNew) setTimeout(() => loadRegistry().then(render), 800); // 서버 자동 등록 뒤
+      if (isNew) setTimeout(() => loadRegistry().then(scheduleRender), 800); // 서버 자동 등록 뒤
       if (msg.robot.serialNumber === selectedSerial) onSelect(decorate(msg.robot));
     } else if (msg.type === 'event' && msg.event) {
       fleetEvents.unshift(msg.event);
@@ -392,9 +404,9 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     } else if (msg.type === 'forget') {
       robots.delete(msg.key);
     }
-    render();
+    scheduleRender();
   });
-  const ageTimer = setInterval(render, 2000);
+  const ageTimer = setInterval(scheduleRender, 2000);
 
   return {
     select,

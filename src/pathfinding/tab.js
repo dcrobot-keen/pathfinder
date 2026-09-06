@@ -1119,6 +1119,18 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
     if (items.length > 6) alertsEl.appendChild(Object.assign(document.createElement('span'), { className: 's2m-alert s2m-alert--info', textContent: `+${items.length - 6}` }));
   }
 
+  // 주행 중인 로봇은 위치/state 메시지가 초당 여러 번 들어온다 -- 메시지마다 바로 syncSide()(알림 배너
+  // replaceChildren 포함)를 부르면 배너 높이가 그만큼 자주 바뀌어 아래 플릿 보드가 들썩이고, 그 순간 카드를
+  // 누르면 클릭이 다른 자리로 간다. 화면 프레임당 한 번으로 묶는다.
+  let syncSideScheduled = false;
+  function scheduleSyncSide() {
+    if (syncSideScheduled) return;
+    syncSideScheduled = true;
+    requestAnimationFrame(() => {
+      syncSideScheduled = false;
+      syncSide();
+    });
+  }
   function syncSide() {
     updateActionBar();
     renderAlerts();
@@ -1169,14 +1181,14 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
       fleetBySerial.clear();
       for (const r of msg.robots) fleetBySerial.set(r.serialNumber, r);
       loadCommandRobots();
-      syncSide();
+      scheduleSyncSide();
       sidePanel?.loadHistory(msg.robots.map((r) => r.serialNumber));
     } else if (msg.type === 'robot') {
       const isNew = !fleetBySerial.has(msg.robot.serialNumber);
       fleetBySerial.set(msg.robot.serialNumber, msg.robot);
       if (isNew) setTimeout(loadCommandRobots, 800); // 서버 자동 등록 뒤 다시 읽기
       else refreshCommandOptions();
-      syncSide();
+      scheduleSyncSide();
       // 주문을 다 끝냈으면(남은 노드 0, 주행 아님) 그려둔 계획 경로를 지운다.
       const st = msg.robot.state;
       if (st && st.nodesLeft === 0 && !st.driving && commandFeatures.has(msg.robot.serialNumber)) {
@@ -1186,7 +1198,7 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
     } else if (msg.type === 'status') {
       brokerConnected = msg.status?.connected === true;
       refreshCommandOptions();
-      syncSide();
+      scheduleSyncSide();
     } else if ((msg.type === 'order' || msg.type === 'order_update') && msg.order) {
       sidePanel?.upsertOrder(msg.order);
     }
