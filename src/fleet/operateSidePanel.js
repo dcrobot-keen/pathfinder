@@ -45,7 +45,7 @@ export function createOperateSidePanel(containerEl) {
   // --- 현장 요약 ---
   const statsSec = el('section', 's2m-side__section');
   const statsHead = el('div', 's2m-side__title');
-  statsHead.append(el('span', null, '현장 요약'), el('span', 's2m-side__count s2m-side__broker', '브로커 확인 중'));
+  statsHead.append(el('span', null, '현장 요약'));
   const statGrid = el('div', 's2m-stats');
   statsSec.append(statsHead, statGrid);
 
@@ -86,11 +86,7 @@ export function createOperateSidePanel(containerEl) {
       stat('일시정지', paused, paused ? 'warn' : null),
       stat('오류 / E-STOP', `${errors} / ${estop}`, errors || estop ? 'danger' : null),
       stat('평균 배터리', battAvg),
-      stat('브로커', brokerConnected ? '연결' : '끊김', brokerConnected ? 'success' : 'danger'),
-    );
-    const brokerTag = statsHead.querySelector('.s2m-side__broker');
-    brokerTag.textContent = brokerConnected ? 'MQTT 연결됨' : 'MQTT 끊김';
-    brokerTag.classList.toggle('on', brokerConnected);
+    ); // 브로커 연결 상태는 상단 바 배지 한 곳에서만 보인다
   }
 
   function renderOrders() {

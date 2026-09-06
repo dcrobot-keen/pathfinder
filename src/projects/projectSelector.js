@@ -4,7 +4,6 @@
 // 이유는 appShared.js 헤더 주석 참고.
 import { allProjects, activeProjectId } from '../appShared.js';
 import { createProject, createProjectFromSlicemap } from './projectApi.js';
-import { openScanWizardModal } from '../scanStudio/scanWizardModal.js';
 
 function navigateToProject(id) {
   const url = new URL(location.href);
@@ -151,14 +150,7 @@ export function createProjectSelector(container) {
     }
   });
 
-  const wizardBtn = document.createElement('button');
-  wizardBtn.type = 'button';
-  wizardBtn.className = 'project-new-button project-wizard-button';
-  wizardBtn.textContent = '⚡ 스캔 파이프라인';
-  wizardBtn.title = 'iPhone LiDAR 스캔(.usdz) 업로드 및 베이스맵/장애물 자동 생성 마법사';
-  wizardBtn.addEventListener('click', () => {
-    openScanWizardModal();
-  });
-
-  container.append(select, newBtn, scanBtn, wizardBtn, scanInput, scanStatus);
+  // 스캔 위저드 버튼은 지도 리본("스캔 가져오기")에 하나만 둔다. scanBtn 은 main.js 가 지도 리본으로 옮긴다.
+  scanBtn.textContent = '슬라이스맵 파일';
+  container.append(select, newBtn, scanBtn, scanInput, scanStatus);
 }

@@ -78,9 +78,9 @@ export function createRobotRegistryTab(containerEl) {
   // --- 상단 서브 탭 네비게이션 ---
   const navBar = el('div', 'robot-nav-bar');
   const btnDevices = el('button', 'robot-nav-btn active');
-  btnDevices.innerHTML = `<span>🤖 등록된 로봇 기기 (Fleet)</span><span class="robot-nav-badge" id="badge-devices-cnt">0</span>`;
+  btnDevices.innerHTML = `<span>기기</span><span class="robot-nav-badge" id="badge-devices-cnt">0</span>`;
   const btnModels = el('button', 'robot-nav-btn');
-  btnModels.innerHTML = `<span>📐 로봇 모델 사양 (Catalog)</span><span class="robot-nav-badge" id="badge-models-cnt">0</span>`;
+  btnModels.innerHTML = `<span>모델</span><span class="robot-nav-badge" id="badge-models-cnt">0</span>`;
   navBar.append(btnDevices, btnModels);
   containerEl.appendChild(navBar);
 

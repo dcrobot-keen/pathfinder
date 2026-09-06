@@ -285,8 +285,8 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         if (a.position?.x != null && b.position?.x != null && a.connectionState === 'ONLINE' && b.connectionState === 'ONLINE') {
           const dist = Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
           if (dist < 1.2) {
-            proximityWarnings.set(a.serialNumber, `⚠️ 근접 (${dist.toFixed(2)}m ↔ ${b.serialNumber})`);
-            proximityWarnings.set(b.serialNumber, `⚠️ 근접 (${dist.toFixed(2)}m ↔ ${a.serialNumber})`);
+            proximityWarnings.set(a.serialNumber, `근접 ${dist.toFixed(2)} m · ${b.serialNumber}`);
+            proximityWarnings.set(b.serialNumber, `근접 ${dist.toFixed(2)} m · ${a.serialNumber}`);
           }
         }
       }
@@ -345,7 +345,8 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         const cancelBtn = el('button', 'robot-button robot-button-danger', '취소');
         cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, 'cancelOrder', cancelBtn); });
         const pauseBtn = el('button', 'robot-button', s?.paused ? '재개' : '일시정지');
-        pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, s?.paused ? 'stopPause' : 'startPause', pauseBtn); // VDA5050: startPause=일시정지, stopPause=재개 });
+        // VDA5050: startPause = 일시정지, stopPause = 재개
+        pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, s?.paused ? 'stopPause' : 'startPause', pauseBtn); });
         const forgetBtn = el('button', 'robot-button', '목록에서 제거');
         forgetBtn.addEventListener('click', async (e) => {
           e.stopPropagation();

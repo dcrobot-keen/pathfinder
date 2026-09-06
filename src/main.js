@@ -31,6 +31,16 @@ import { openScanWizardModal, initScanWizardModal } from './scanStudio/scanWizar
 import { createAlignWorkspace } from './scanStudio/alignWorkspace.js';
 
 createProjectSelector(document.getElementById('project-selector'));
+// "슬라이스맵 파일로 현장 만들기"는 지도를 만드는 일이라 지도 리본의 액션으로 옮긴다(상단 바는 현장 스코프만).
+{
+  const importBtn = document.querySelector('#project-selector .project-scan-button');
+  const actions = document.querySelector('#subnav-maps .subnav-actions');
+  if (importBtn && actions) {
+    importBtn.className = 'subnav-action-btn';
+    importBtn.textContent = '슬라이스맵 파일';
+    actions.appendChild(importBtn);
+  }
+}
 initScanWizardModal();
 document.title = `Pathfinder — ${activeProjectName}`;
 
@@ -48,7 +58,7 @@ const BLUEPRINT_HEIGHT_M = 25.923;
 const BLUEPRINT_URL = new URL('../data/blueprint_9108.jpg', import.meta.url).href;
 // 스캔 지도로 만든 프로젝트(from-slicemap + floor)는 앱의 바닥 이미지를 배경으로 깐다 --
 // 정합 워크스페이스가 같은 격자로 합성해 publish 한 <group>.floor.png. 없으면 예전 샘플 도면.
-const BLUEPRINT_LABEL = activeProjectFloorImage ? '바닥 이미지 (앱 스캔)' : '배경 도면';
+const BLUEPRINT_LABEL = activeProjectFloorImage ? '바닥 이미지' : '배경 도면';
 const blueprintLayer = new ImageLayer({
   source: new ImageStatic(
     activeProjectFloorImage
@@ -153,9 +163,9 @@ if (activeProjectImportedRoom) {
 // (배경 도면 / 노드·링크·블록만 — 높이 슬라이스·원본 PCD는 업로드 후에 채워짐).
 renderSlicePanel(document.getElementById('slice-panel'), [], [], [
   { layer: blueprintLayer, label: BLUEPRINT_LABEL },
-  { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
+  { layer: importedObstacleLayer, label: '스캔 장애물' },
   { layer: editLayerApi.layer, label: '노드/링크/블록' },
-  { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
+  { layer: liveRobotPoseLayer, label: '실시간 로봇 위치' },
 ]);
 
 // 탭 전환: GNB 5대 워크스페이스(지도·로봇·운영·시뮬레이션·설정) + Level 2 서브바 연동
@@ -281,6 +291,8 @@ updateScreenHeader();
 function activateTab(tabKey) {
   currentTabKey = tabKey;
   updateScreenHeader();
+  // 리본(서브탭 줄)은 서브뷰가 둘 이상인 지도·로봇에만. 나머지 화면은 본문이 상단 바 바로 아래에 붙는다.
+  document.body.classList.toggle('no-ribbon', tabKey !== 'maps' && tabKey !== 'robots');
   gnbTabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
 
   // 해당 워크스페이스의 Level 2 서브바만 활성화
@@ -355,7 +367,7 @@ function showFleetToast(message, duration = 4500) {
 
   const toast = document.createElement('div');
   toast.className = 'fleet-toast';
-  toast.innerHTML = `<span>⚡</span> <span>${message}</span>`;
+  toast.innerHTML = `<span class="fleet-toast-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span> <span>${message}</span>`;
   document.body.appendChild(toast);
 
   setTimeout(() => {
@@ -465,8 +477,8 @@ function applyPoints(points, label) {
   renderSlicePanel(document.getElementById('slice-panel'), bands, sliceLayers, [
     { layer: blueprintLayer, label: BLUEPRINT_LABEL },
     { layer: editLayerApi.layer, label: '노드/링크/블록' },
-    { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
-    { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
+    { layer: importedObstacleLayer, label: '스캔 장애물' },
+    { layer: liveRobotPoseLayer, label: '실시간 로봇 위치' },
     { layer: pcdLayer, label: `전체 (비분류) — ${label}`, checked: false },
   ]);
 

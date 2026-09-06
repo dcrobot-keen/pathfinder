@@ -38,7 +38,7 @@ export function createImportedObstaclesPanel(panelEl, geojsonFormat, map) {
 
   const title = document.createElement('div');
   title.className = 'edit-panel-title';
-  title.textContent = '스캔 장애물 (scan-to-map-studio)';
+  title.textContent = '스캔 장애물';
   panelEl.appendChild(title);
 
   const select = document.createElement('select');

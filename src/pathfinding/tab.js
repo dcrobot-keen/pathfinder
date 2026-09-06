@@ -172,11 +172,11 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
   const layersPanelEl = document.createElement('div');
   mapEl.appendChild(layersPanelEl);
   renderSlicePanel(layersPanelEl, [], [], [
-    ...(floorImageLayer ? [{ layer: floorImageLayer, label: '바닥 이미지 (앱 스캔)' }] : []),
+    ...(floorImageLayer ? [{ layer: floorImageLayer, label: '바닥 이미지' }] : []),
     { layer: floorLayer, label: '바닥 PCD (0.5m)' },
     { layer: graphLayer, label: '노드/링크/블록' },
-    { layer: importedObstacleLayer, label: '스캔 장애물 (scan-to-map-studio)' },
-    { layer: liveRobotPoseLayer, label: '실시간 로봇 위치 (vps-system)' },
+    { layer: importedObstacleLayer, label: '스캔 장애물' },
+    { layer: liveRobotPoseLayer, label: '실시간 로봇 위치' },
   ]);
 
   const geojsonFormat = new GeoJSON({

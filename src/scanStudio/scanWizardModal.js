@@ -52,7 +52,7 @@ export function initScanWizardModal() {
     <div class="scan-wizard-modal" role="dialog" aria-labelledby="wizard-title">
       <div class="wizard-header">
         <div class="wizard-header-title">
-          <span class="wizard-header-icon">⚡</span>
+          <span class="wizard-header-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg></span>
           <div>
             <h3 id="wizard-title">스캔 데이터 파이프라인 마법사</h3>
             <p class="wizard-header-sub">iPhone 스캔 패키지 (.zip) 또는 LiDAR 메시 (.usdz) → 2D 베이스맵 & 장애물 자동 추출</p>
@@ -118,7 +118,7 @@ export function initScanWizardModal() {
           </div>
           
           <div id="file-pill-pgm" class="file-pill" style="display: none;">
-            <span class="file-pill-icon">▦</span>
+            <span class="file-pill-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
             <span class="file-pill-name" id="pill-pgm-name">robot_map.pgm</span>
             <span class="file-pill-size" id="pill-pgm-size">0 KB</span>
             <button type="button" class="file-pill-remove" id="btn-remove-pgm" title="제거">&times;</button>
@@ -191,14 +191,14 @@ export function initScanWizardModal() {
           </div>
 
           <div id="pipeline-completion-box" class="pipeline-completion-box" style="display: none;">
-            <div class="completion-title">🎉 스캔 파이프라인 처리가 완료되었습니다!</div>
+            <div class="completion-title">스캔 처리가 끝났습니다</div>
             <div class="completion-desc" id="pipeline-completion-desc">베이스맵 생성 및 GeoJSON 장애물 추출이 성공적으로 완료되었습니다.</div>
             <div class="completion-actions">
               <button type="button" id="btn-complete-create-project" class="wizard-btn wizard-btn-primary">
-                📐 새 현장으로 생성 (스캔 지도 적용)
+                이 스캔으로 현장 만들기
               </button>
               <button type="button" id="btn-complete-to-studio" class="wizard-btn wizard-btn-secondary">
-                🔄 정합 스튜디오(:8000)에서 확인
+                정합에서 확인
               </button>
               <button type="button" id="btn-complete-close" class="wizard-btn wizard-btn-secondary">
                 닫기
@@ -298,7 +298,7 @@ function bindEvents() {
   });
   overlay.querySelector('#btn-complete-to-studio').addEventListener('click', () => {
     closeScanWizardModal();
-    const studioBtn = /** @type {HTMLElement|null} */ (document.querySelector('#subnav-maps button[data-sub="studio"]'));
+    const studioBtn = /** @type {HTMLElement|null} */ (document.querySelector('#subnav-maps button[data-sub="align"]'));
     if (studioBtn) studioBtn.click();
     const mapsTabBtn = /** @type {HTMLElement|null} */ (document.querySelector('.gnb-tab[data-tab="maps"]'));
     if (mapsTabBtn) mapsTabBtn.click();
@@ -573,10 +573,10 @@ function handleGroupRegistrationSuccess(res) {
   // For groups, hide single-scan project creation button or redirect to studio
   const btnCreate = modalEl.querySelector('#btn-complete-create-project');
   if (btnCreate) {
-    btnCreate.textContent = '🔄 정합 스튜디오에서 다중 스캔 확인/합성';
+    btnCreate.textContent = '정합에서 다중 스캔 확인·합성';
     btnCreate.onclick = () => {
       closeScanWizardModal();
-      const studioBtn = /** @type {HTMLElement|null} */ (document.querySelector('#subnav-maps button[data-sub="studio"]'));
+      const studioBtn = /** @type {HTMLElement|null} */ (document.querySelector('#subnav-maps button[data-sub="align"]'));
       if (studioBtn) studioBtn.click();
       const mapsTabBtn = /** @type {HTMLElement|null} */ (document.querySelector('.gnb-tab[data-tab="maps"]'));
       if (mapsTabBtn) mapsTabBtn.click();
