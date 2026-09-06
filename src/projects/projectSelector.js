@@ -3,7 +3,7 @@
 // 지도/뷰 인스턴스를 그 자리에서 다시 만드는 게 아니라 새로고침으로 전환하는
 // 이유는 appShared.js 헤더 주석 참고.
 import { allProjects, activeProjectId } from '../appShared.js';
-import { createProject, createProjectFromSlicemap } from './projectApi.js';
+import { createProject } from './projectApi.js';
 
 function navigateToProject(id) {
   const url = new URL(location.href);
@@ -101,56 +101,6 @@ export function createProjectSelector(container) {
   newBtn.title = '새로운 빈 현장 프로젝트를 생성합니다.';
   newBtn.addEventListener('click', () => openCreateForm(container));
 
-  // 스캔 지도(slicemap-v1 .json -- 정합 워크스페이스가 시뮬레이터 worlds/ 에 publish한
-  // 파일)로 프로젝트를 만든다. 평면 크기와 장애물이 그 격자에서 나오고, 같은 파일을
-  // 시뮬레이터가 월드로 쓰므로 로봇 좌표가 그대로 맞는다(doc/vda5050-rcs.md).
-  const scanInput = document.createElement('input');
-  scanInput.type = 'file';
-  scanInput.accept = '.json,.png,application/json,image/png';
-  scanInput.multiple = true; // <group>.slicemap.json + (선택) <group>.floor.png + <group>.floor.json
-  scanInput.hidden = true;
-  const scanBtn = document.createElement('button');
-  scanBtn.type = 'button';
-  scanBtn.className = 'project-new-button project-scan-button';
-  scanBtn.textContent = '+ 스캔 지도';
-  scanBtn.title = 'slicemap-v1 파일(예: project_20260905.slicemap.json)로 프로젝트 + 장애물 생성. 같은 이름의 .floor.png/.floor.json 을 함께 고르면 바닥 이미지도 배경으로 깐다';
-  scanBtn.addEventListener('click', () => scanInput.click());
-  const scanStatus = document.createElement('span');
-  scanStatus.className = 'project-create-status';
-  scanInput.addEventListener('change', async () => {
-    const files = Array.from(scanInput.files ?? []);
-    if (files.length === 0) return;
-    scanBtn.disabled = true;
-    scanStatus.textContent = '만드는 중...';
-    try {
-      const floorPng = files.find((f) => /\.floor\.png$/i.test(f.name));
-      const floorJson = files.find((f) => /\.floor\.json$/i.test(f.name));
-      const file = files.find((f) => /\.slicemap\.json$/i.test(f.name)) ?? files.find((f) => /\.json$/i.test(f.name) && f !== floorJson);
-      if (!file) throw new Error('slicemap-v1 .json 파일이 없습니다.');
-      const slicemap = JSON.parse(await file.text());
-      const name = file.name.replace(/\.slicemap\.json$|\.json$/i, '');
-      let floor;
-      if (floorPng && floorJson) {
-        const png = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(floorPng);
-        });
-        floor = { png, meta: JSON.parse(await floorJson.text()) };
-      } else if (floorPng || floorJson) {
-        throw new Error('.floor.png 와 .floor.json 은 둘 다 골라야 합니다.');
-      }
-      const project = await createProjectFromSlicemap({ name, slicemap, floor });
-      navigateToProject(project.id);
-    } catch (err) {
-      scanStatus.textContent = `실패: ${err.message}`;
-      scanBtn.disabled = false;
-      scanInput.value = '';
-    }
-  });
-
-  // 스캔 위저드 버튼은 지도 리본("스캔 가져오기")에 하나만 둔다. scanBtn 은 main.js 가 지도 리본으로 옮긴다.
-  scanBtn.textContent = '슬라이스맵 파일';
-  container.append(select, newBtn, scanBtn, scanInput, scanStatus);
+  // 슬라이스맵 파일 · 스캔 · PCD 는 지도 리본의 "가져오기"(src/imports) 하나로 들어온다.
+  container.append(select, newBtn);
 }

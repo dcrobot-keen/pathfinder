@@ -858,7 +858,7 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
 
   const title = document.createElement('div');
   title.className = 'pathfinding-panel-title';
-  title.textContent = isOperate ? '플릿 보드' : config.title;
+  title.textContent = isOperate ? '플릿 보드' : `시나리오 · ${config.title}`;
   panelEl.appendChild(title);
 
   const robotSelect = document.createElement('select');
@@ -952,8 +952,9 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
     });
     if (sideEl) sidePanel = createOperateSidePanel(sideEl);
   } else {
+    // 시뮬레이션(데모) 화면에는 실제 로봇 명령 박스를 두지 않는다 -- 운영 화면의 일이다(중복 제거).
+    // 요소는 만들어 두되 붙이지 않아 아래 명령 로직(commandSelect 등)은 그대로 동작한다.
     commandBox.append(commandTitle, commandSelect, commandBtn, commandStatus);
-    panelEl.appendChild(commandBox);
   }
 
   let commandMode = false;

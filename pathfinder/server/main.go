@@ -291,6 +291,11 @@ func withPost(handler http.HandlerFunc) http.HandlerFunc {
 
 func main() {
 	mux := http.NewServeMux()
+	// Fleet Studio 내비 하단 상태 점이 10초마다 두드린다 -- GET 로 200 만 돌려주면 된다.
+	mux.HandleFunc("/api/path/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"service":"pathfinder-planner"}`))
+	})
 	mux.HandleFunc("/api/path/nodelink", withPost(handleNodeLinkPath))
 	mux.HandleFunc("/api/path/obstacle", withPost(handleObstaclePath))
 

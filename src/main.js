@@ -29,18 +29,10 @@ import { createProjectSelector } from './projects/projectSelector.js';
 import { subscribeFleetStream, getFleetConfig } from './fleet/fleetApi.js';
 import { openScanWizardModal, initScanWizardModal } from './scanStudio/scanWizardModal.js';
 import { createAlignWorkspace } from './scanStudio/alignWorkspace.js';
+import { createImportDialog, attachDropTarget } from './imports/importDialog.js';
+import { importSlicemapFiles } from './imports/importSlicemap.js';
 
 createProjectSelector(document.getElementById('project-selector'));
-// "슬라이스맵 파일로 현장 만들기"는 지도를 만드는 일이라 지도 리본의 액션으로 옮긴다(상단 바는 현장 스코프만).
-{
-  const importBtn = document.querySelector('#project-selector .project-scan-button');
-  const actions = document.querySelector('#subnav-maps .subnav-actions');
-  if (importBtn && actions) {
-    importBtn.className = 'subnav-action-btn';
-    importBtn.textContent = '슬라이스맵 파일';
-    actions.appendChild(importBtn);
-  }
-}
 initScanWizardModal();
 document.title = `Pathfinder — ${activeProjectName}`;
 
@@ -171,7 +163,7 @@ renderSlicePanel(document.getElementById('slice-panel'), [], [], [
 // 탭 전환: GNB 5대 워크스페이스(지도·로봇·운영·시뮬레이션·설정) + Level 2 서브바 연동
 const gnbTabButtons = document.querySelectorAll('.gnb-tab');
 const viewEls = document.querySelectorAll('.view');
-const view3dEl = document.getElementById('view3d');
+const view3dEl = document.getElementById('view3d-points'); // three.js 포인트클라우드 뷰의 컨테이너 (현장 3D 는 iframe)
 
 // 워크스페이스 맥락별 Level 2 서브바
 const subnavPanes = {
@@ -227,14 +219,29 @@ function activateMapsSub(sub) {
     if (link) link.href = studioUrl;
     return;
   }
-  if (!view3d) {
-    view3d = createView3D(view3dEl);
-    if (currentPoints.length) {
-      view3d.setPoints(currentPoints);
+  // 3D: 포인트클라우드가 있으면 그 뷰, 없으면 현장 3D(iframe)
+  if (view3dMode === 'points') {
+    if (!view3d) {
+      view3d = createView3D(view3dEl);
+      if (currentPoints.length) view3d.setPoints(currentPoints);
     }
+    requestAnimationFrame(() => view3d.resize());
   }
-  view3d.resize();
 }
+
+// 지도 › 3D 토글: 현장 3D / 포인트클라우드
+let view3dMode = 'site';
+function setView3dMode(mode) {
+  view3dMode = mode;
+  for (const b of document.querySelectorAll('[data-view3d]')) b.classList.toggle('active', b.dataset.view3d === mode);
+  const frame = document.getElementById('site3d-frame');
+  if (frame) frame.hidden = mode !== 'site';
+  if (view3dEl) view3dEl.hidden = mode !== 'points';
+  const note = document.getElementById('view3d-note');
+  if (note) note.textContent = mode === 'site' ? '벽 · 바닥 이미지 · 스캔 메시 · 실시간 로봇 (시뮬레이터 월드 기준)' : `가져온 포인트클라우드 ${currentPoints.length.toLocaleString()}개`;
+  if (mode === 'points' && mapsSub === '3d') activateMapsSub('3d');
+}
+for (const b of document.querySelectorAll('[data-view3d]')) b.addEventListener('click', () => { if (!b.disabled) setView3dMode(b.dataset.view3d); });
 
 // 스튜디오 프로젝트 새로고침 버튼
 const studioRefreshBtn = document.getElementById('btn-studio-refresh');
@@ -355,10 +362,23 @@ function activateTab(tabKey) {
 gnbTabButtons.forEach((btn) => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
 mapSubnavTabs.forEach((btn) => btn.addEventListener('click', () => activateMapsSub(btn.dataset.sub)));
 
-// 스캔 데이터 파이프라인 마법사 모달 열기 버튼 연동
-const btnOpenScanWizard = document.getElementById('btn-open-scan-wizard');
-if (btnOpenScanWizard) {
-  btnOpenScanWizard.addEventListener('click', () => openScanWizardModal());
+// 지도 › 가져오기: 진입점 하나(버튼 + 지도 위 드롭). 종류별 처리는 src/imports.
+const importDialog = createImportDialog({
+  onScan: (file) => openScanWizardModal({ file }),
+  onSlicemap: async (files) => {
+    const project = await importSlicemapFiles(files);
+    showFleetToast(`현장 프로젝트 생성: ${project.name}`);
+    const url = new URL(location.href);
+    url.searchParams.set('project', project.id);
+    location.href = url.toString();
+  },
+  onPcd: (file) => loadPcdFile(file),
+  onToast: showFleetToast,
+});
+document.getElementById('btn-import')?.addEventListener('click', () => importDialog.open());
+for (const id of ['map', 'view3d', 'view-align']) {
+  const el = document.getElementById(id);
+  if (el) attachDropTarget(el, importDialog, { isActive: () => currentTabKey === 'maps' });
 }
 
 // scan-to-map-studio 정합 워크스페이스(iframe)에서 정합 저장 완료 시 부모 창 통지 수신
@@ -461,6 +481,9 @@ subscribeFleetStream((msg) => {
  */
 function applyPoints(points, label) {
   currentPoints = points;
+  const pointsBtn = document.getElementById('btn-view3d-points');
+  if (pointsBtn) { pointsBtn.disabled = false; pointsBtn.title = `${points.length.toLocaleString()}개 포인트`; }
+  setView3dMode('points');
 
   // 2D: 원본 포인트 레이어 갱신
   pcdSource.clear();
@@ -506,27 +529,20 @@ function applyPoints(points, label) {
 
 // 상단 공용 PCD 업로드: 파일이 바뀌면 2D/3D 뷰가 함께 갱신된다.
 // 기본값으로 자동 로드되는 PCD는 없음 — 업로드 전까지는 빈 지도 상태를 유지한다.
-const pcdFileInput = document.getElementById('pcd-file-input');
-const pcdStatusEl = document.getElementById('pcd-status');
-
 function setPcdStatus(text) {
-  pcdStatusEl.textContent = text;
+  // 리본의 상태 문구는 없어졌다(가져오기 대화상자/토스트가 대신한다). 콘솔에만 남긴다.
+  console.log('[PCD]', text);
 }
-setPcdStatus('PCD를 업로드하세요.');
 
-pcdFileInput.addEventListener('change', async () => {
-  const file = pcdFileInput.files[0];
-  if (!file) return;
+/** 가져오기 대화상자의 'pcd' 분기: 파일 하나를 읽어 3D 포인트 + 높이 슬라이스 레이어로 */
+async function loadPcdFile(file) {
   setPcdStatus(`${file.name} 로딩 중...`);
-  try {
-    const buffer = await file.arrayBuffer();
-    const { points } = parsePcd(buffer);
-    applyPoints(points, file.name);
-  } catch (err) {
-    console.error(err);
-    setPcdStatus(`로드 실패: ${err.message}`);
-  }
-});
+  const buffer = await file.arrayBuffer();
+  const { points } = parsePcd(buffer);
+  applyPoints(points, file.name);
+  showFleetToast(`${file.name}: 포인트 ${points.length.toLocaleString()}개`);
+  activateMapsSub('3d');
+}
 
 // 3D 뷰 패널: 포인트 / 메쉬 표시 전환
 const btnViewPoints = document.getElementById('btn-view-points');
@@ -585,7 +601,7 @@ btnViewMesh.addEventListener('click', () => {
   if (healthEl) {
     const services = [
       { key: 'api', label: 'API', url: '/api/projects' },
-      { key: 'planner', label: '플래너', url: '/api/path/obstacle' }, // GET 은 405 -- 응답이 오면 살아 있는 것
+      { key: 'planner', label: '플래너', url: '/api/path/health' },
       { key: 'engine', label: 'scan-engine', url: '/scan-engine/api/groups' },
       { key: 'mqtt', label: 'MQTT' },
     ];

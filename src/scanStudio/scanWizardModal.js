@@ -627,7 +627,8 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function openScanWizardModal() {
+/** @param {{ file?: File | null }} [opts] 가져오기 대화상자가 고른 스캔 파일을 미리 넣어 연다 */
+export function openScanWizardModal({ file = null } = {}) {
   initScanWizardModal();
 
   // Reset form
@@ -653,6 +654,7 @@ export function openScanWizardModal() {
 
   goToStep(1);
   modalEl.style.display = 'flex';
+  if (file) setUsdzFile(file);
 }
 
 export function closeScanWizardModal() {

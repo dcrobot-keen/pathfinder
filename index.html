@@ -61,14 +61,9 @@
             </button>
           </div>
           <div class="subnav-actions">
-            <button id="btn-open-scan-wizard" class="subnav-action-btn wizard-launch-btn" title="새 스캔 데이터 파이프라인 마법사 실행">
-              <span class="subnav-action-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg></span><span>스캔 가져오기</span>
+            <button id="btn-import" class="subnav-action-btn wizard-launch-btn" title="iPhone 스캔(.zip/.usdz) · 슬라이스맵(.slicemap.json + 바닥 이미지) · 포인트클라우드(.pcd) -- 종류는 자동 판별. 지도 위에 파일을 놓아도 됩니다">
+              <span class="subnav-action-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg></span><span>가져오기</span>
             </button>
-            <label class="subnav-action-btn pcd-upload-btn" title="3D LiDAR PCD 파일 가져오기">
-              <span class="subnav-action-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v3h16v-3"/></svg></span><span>PCD 업로드</span>
-              <input id="pcd-file-input" type="file" accept=".pcd" />
-            </label>
-            <div id="pcd-status" class="pcd-status"></div>
           </div>
         </div>
 
@@ -107,7 +102,7 @@
         <div id="subnav-simulation" class="subnav-pane" style="display: none;">
           <div class="subnav-tabs">
             <button class="subnav-tab active">
-                            <span>다중 로봇 동적 회피 시뮬레이션</span>
+                            <span>시나리오 · 다중 로봇 회피 데모</span>
             </button>
           </div>
           <div class="subnav-actions">
@@ -152,13 +147,27 @@
       </aside>
     </div>
 
-    <div id="view3d" class="view" data-view="3d">
-      <div id="mesh-panel">
-        <div class="mesh-buttons">
-          <button id="btn-view-points" class="mesh-button active">포인트</button>
-          <button id="btn-view-mesh" class="mesh-button">메쉬로 변환</button>
+    <!-- 지도 › 3D: 현장 모델(시뮬레이터 뷰어의 3D 장면을 mode=site 로 재사용 -- 벽·바닥·텍스처 메시·실시간 로봇)
+         / 포인트클라우드(가져온 PCD 를 three.js 로). "현장의 3D 는 하나" -- 시뮬레이션 화면은 같은 장면에 시뮬 오버레이만 더한다 -->
+    <div id="view3d" class="view view-3d" data-view="3d">
+      <div class="sim-mainbar">
+        <div class="sim-mainbar__tabs" role="tablist">
+          <button class="sim-view-btn active" data-view3d="site">현장 3D</button>
+          <button class="sim-view-btn" data-view3d="points" id="btn-view3d-points" disabled title="PCD 를 가져오면 켜집니다">포인트클라우드</button>
         </div>
-        <div id="mesh-status" class="mesh-status"></div>
+        <span id="view3d-note" class="sim-mainbar__label">벽 · 바닥 이미지 · 스캔 메시 · 실시간 로봇 (시뮬레이터 월드 기준)</span>
+        <span class="sim-mainbar__spacer"></span>
+        <a id="link-site3d-external" class="settings-service-link" href="http://localhost:8767/?view=3d&amp;mode=site" target="_blank" rel="noopener">새 창 ↗</a>
+      </div>
+      <iframe id="site3d-frame" src="http://localhost:8767/?view=3d&amp;embed=1&amp;mode=site" title="현장 3D (simulator viewer.html, mode=site)"></iframe>
+      <div id="view3d-points" hidden>
+        <div id="mesh-panel">
+          <div class="mesh-buttons">
+            <button id="btn-view-points" class="mesh-button active">포인트</button>
+            <button id="btn-view-mesh" class="mesh-button">메쉬로 변환</button>
+          </div>
+          <div id="mesh-status" class="mesh-status"></div>
+        </div>
       </div>
     </div>
 
