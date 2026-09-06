@@ -299,6 +299,34 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       render();
     }, 50);
   }
+  // 행 DOM을 로봇 serialNumber 로 유지한다(키드 패치) -- 예전에는 render() 마다 list.replaceChildren() 로
+  // 전부 새로 만들었는데, 그러면 "지금 이 카드"라는 개념 자체가 렌더 사이클마다 사라진다. 실제 사용자 클릭으로
+  // 재현됨: mousedown 시점의 카드가 mouseup 전에 완전히 제거되면 일부 브라우저는 click 이벤트 자체를 안 낸다
+  // (위임 리스너를 list 에 달아도 소용없음 -- click 이 아예 안 뜨니까). 그래서 데이터가 안 바뀐 로봇은 같은
+  // DOM 노드를 계속 재사용하고, 내용만 바꾼다.
+  const rowEntries = new Map(); // serialNumber -> { el, icon, name, sub, side: {pill, batt}, main }
+  function ensureRowEntry(serial) {
+    let entry = rowEntries.get(serial);
+    if (entry) return entry;
+    const row = el('div', 'fleet-row');
+    row.dataset.serial = serial;
+    row.tabIndex = 0;
+    const icon = document.createElement('img');
+    icon.className = 'fleet-row-icon';
+    const main = el('div', 'fleet-row-main');
+    const name = el('div', 'fleet-row-name');
+    const sub = el('div', 'fleet-row-sub');
+    main.append(name, sub);
+    const side = el('div', 'fleet-row-side');
+    const pill = el('span', 'fleet-pill');
+    const batt = el('span', 'fleet-row-batt');
+    side.append(pill, batt);
+    row.append(icon, main, side);
+    entry = { row, icon, main, name, sub, pill, batt, prox: null, err: null, extra: null };
+    rowEntries.set(serial, entry);
+    return entry;
+  }
+
   function render() {
     const now = Date.now();
     const rows = Array.from(robots.values()).sort((a, b) => a.serialNumber.localeCompare(b.serialNumber));
@@ -323,54 +351,61 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       }
     }
 
-    list.replaceChildren();
+    // 사라진 로봇의 행만 지운다 -- 남아있는 로봇의 행은 절대 떼어내지 않는다(클릭 중일 수 있으므로).
+    const currentSerials = new Set(rows.map((r) => r.serialNumber));
+    for (const [serial, entry] of rowEntries) {
+      if (!currentSerials.has(serial)) {
+        entry.row.remove();
+        rowEntries.delete(serial);
+      }
+    }
+
     for (const r of rows) {
       const reg = registryBySerial.get(r.serialNumber);
       const s = r.state;
       const age = r.lastSeen ? now - r.lastSeen : null;
       const stale = age != null && age > staleAfterMs;
       const online = brokerStatus.connected && r.connectionState === 'ONLINE' && !stale;
+      const entry = ensureRowEntry(r.serialNumber);
+      const { row, icon, main, name, sub, pill, batt } = entry;
 
-      const row = el('div', 'fleet-row');
-      row.dataset.serial = r.serialNumber;
       row.classList.toggle('selected', r.serialNumber === selectedSerial);
       row.classList.toggle('offline', !online);
-      row.tabIndex = 0;
 
-      const icon = document.createElement('img');
-      icon.className = 'fleet-row-icon';
-      if (reg?.icon) icon.src = reg.icon; else icon.hidden = true;
+      if (reg?.icon) { if (icon.src !== reg.icon) icon.src = reg.icon; icon.hidden = false; } else { icon.hidden = true; icon.removeAttribute('src'); }
 
-      const main = el('div', 'fleet-row-main');
-      main.appendChild(el('div', 'fleet-row-name', reg?.name ?? r.serialNumber));
-      const sub = el('div', 'fleet-row-sub');
+      name.textContent = reg?.name ?? r.serialNumber;
       const conn = CONNECTION_LABEL[r.connectionState] ?? CONNECTION_LABEL.UNKNOWN;
       const stateText = !online ? conn + (stale && r.connectionState === 'ONLINE' ? ' · 오래됨' : '') : !s ? '온라인' : s.paused ? '일시정지' : s.driving ? `주행 중 · 남은 노드 ${s.nodesLeft ?? '-'}` : s.nodesLeft ? '대기' : '유휴';
       sub.textContent = `${stateText} · ${fmtAge(age)}`;
-      main.appendChild(sub);
 
-      const prox = proximityWarnings.get(r.serialNumber);
+      const prox = proximityWarnings.get(r.serialNumber) ?? null;
       if (prox) {
-        main.appendChild(el('div', 'fleet-row-prox', prox));
+        if (!entry.prox) { entry.prox = el('div', 'fleet-row-prox'); main.appendChild(entry.prox); }
+        entry.prox.textContent = prox;
+      } else if (entry.prox) {
+        entry.prox.remove();
+        entry.prox = null;
       }
 
-      if (s?.errors?.length) {
-        const e = s.errors[s.errors.length - 1];
-        const err = el('div', 'fleet-row-error', `${e.errorType}${e.errorLevel === 'FATAL' ? ' (FATAL)' : ''}`);
-        err.title = e.errorDescription ?? '';
-        main.appendChild(err);
+      const lastErr = s?.errors?.length ? s.errors[s.errors.length - 1] : null;
+      if (lastErr) {
+        if (!entry.err) { entry.err = el('div', 'fleet-row-error'); main.appendChild(entry.err); }
+        entry.err.textContent = `${lastErr.errorType}${lastErr.errorLevel === 'FATAL' ? ' (FATAL)' : ''}`;
+        entry.err.title = lastErr.errorDescription ?? '';
+      } else if (entry.err) {
+        entry.err.remove();
+        entry.err = null;
       }
 
-      const side = el('div', 'fleet-row-side');
-      const pill = el('span', 'fleet-pill');
-      pill.classList.add(!online ? 'off' : s?.paused ? 'paused' : s?.driving ? 'driving' : 'idle');
+      pill.className = `fleet-pill ${!online ? 'off' : s?.paused ? 'paused' : s?.driving ? 'driving' : 'idle'}`;
       pill.textContent = !online ? '●' : s?.paused ? '∥' : s?.driving ? '▶' : '●';
-      side.appendChild(pill);
-      side.appendChild(el('span', 'fleet-row-batt', s?.batteryCharge != null ? `${s.batteryCharge.toFixed(0)}%` : ''));
+      batt.textContent = s?.batteryCharge != null ? `${s.batteryCharge.toFixed(0)}%` : '';
 
-      row.append(icon, main, side);
-
+      // 선택된 행에만 붙는 취소/일시정지/제거 버튼 + 상세 -- 선택된 로봇 하나만 값이 자주 바뀌므로
+      // (다른 두 행의 본체는 그대로) 이 부분만 매번 다시 만들어도 클릭 대상 자체엔 영향이 없다.
       if (r.serialNumber === selectedSerial) {
+        if (entry.extra) entry.extra.remove();
         const actions = el('div', 'fleet-row-actions');
         const cancelBtn = el('button', 'robot-button robot-button-danger', '취소');
         cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, 'cancelOrder', cancelBtn); });
@@ -390,9 +425,15 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         });
         cancelBtn.disabled = pauseBtn.disabled = !online;
         actions.append(cancelBtn, pauseBtn, forgetBtn);
-        row.appendChild(actions);
-        row.appendChild(renderRobotDetail(r, reg, s));
+        const detail = renderRobotDetail(r, reg, s);
+        row.append(actions, detail);
+        entry.extra = { remove: () => { actions.remove(); detail.remove(); } };
+      } else if (entry.extra) {
+        entry.extra.remove();
+        entry.extra = null;
       }
+
+      // 정렬 순서대로 배치 -- 이미 그 자리에 있으면 appendChild 는 아무것도 옮기지 않는다(DOM 변경 없음).
       list.appendChild(row);
     }
   }
