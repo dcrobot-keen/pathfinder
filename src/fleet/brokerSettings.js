@@ -82,71 +82,116 @@ export function createBrokerSettings(containerEl) {
   form.appendChild(formStatus);
   layout.appendChild(form);
 
-  // 오른쪽: M2 연결된 서비스 주소 설정 (localStorage 저장)
+  // 서비스 주소 -- 서버(data/settings.json)에 저장, localStorage 는 캐시. 다른 PC 에서 열어도 같은 값.
   const info = el('div', 'robot-form-panel settings-panel');
-  info.appendChild(el('div', 'robot-form-title', '연결된 서비스 (M2)'));
+  info.appendChild(el('div', 'robot-form-title', '서비스 주소'));
+  info.appendChild(el('div', 'robot-form-status', '현장 공통 설정입니다. 이 값은 서버에 저장되고 모든 브라우저가 같은 주소를 씁니다.'));
 
   const DEFAULT_SERVICES = {
     simViewer: 'http://localhost:8767',
     studio: 'http://localhost:8000/groups',
+    scanEngine: 'http://localhost:8000',
     navBrain: 'http://localhost:5173/apps/dashboard/nav.html',
     vpsServer: 'http://localhost:8080',
   };
-
   let savedServices = { ...DEFAULT_SERVICES };
   try {
     const raw = localStorage.getItem('pathfinder_services_endpoints');
     if (raw) savedServices = { ...DEFAULT_SERVICES, ...JSON.parse(raw) };
   } catch {}
 
-  const simViewerInput = textInput(savedServices.simViewer, DEFAULT_SERVICES.simViewer);
-  const studioInput = textInput(savedServices.studio, DEFAULT_SERVICES.studio);
-  const navBrainInput = textInput(savedServices.navBrain, DEFAULT_SERVICES.navBrain);
-  const vpsServerInput = textInput(savedServices.vpsServer, DEFAULT_SERVICES.vpsServer);
-
-  function serviceRow(label, input, desc) {
+  const inputs = {
+    simViewer: textInput(savedServices.simViewer, DEFAULT_SERVICES.simViewer),
+    studio: textInput(savedServices.studio, DEFAULT_SERVICES.studio),
+    scanEngine: textInput(savedServices.scanEngine, DEFAULT_SERVICES.scanEngine),
+    navBrain: textInput(savedServices.navBrain, DEFAULT_SERVICES.navBrain),
+    vpsServer: textInput(savedServices.vpsServer, DEFAULT_SERVICES.vpsServer),
+  };
+  const links = {};
+  function serviceRow(key, label, desc) {
+    const input = inputs[key];
     const wrap = el('div', 'settings-service-row');
     const header = el('div', 'settings-service-header');
     header.appendChild(el('b', '', label));
     const link = el('a', 'settings-service-link', '열기 ↗');
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.href = input.value || '#';
+    link.target = '_blank'; link.rel = 'noopener'; link.href = input.value || '#';
     input.addEventListener('input', () => { link.href = input.value || '#'; });
+    links[key] = link;
     header.appendChild(link);
     wrap.append(header, input);
     if (desc) wrap.appendChild(el('span', 'settings-service-desc', desc));
     return wrap;
   }
-
   const sList = el('div', 'settings-services');
-  sList.appendChild(serviceRow('시뮬레이터 뷰어', simViewerInput, 'ros-chromium simulator (:8767)'));
-  sList.appendChild(serviceRow('정합 워크스페이스', studioInput, 'scan-to-map-studio (:8000) — slicemap & floor 발행'));
-  sList.appendChild(serviceRow('로봇 두뇌 (nav.html)', navBrainInput, 'ros-chromium nav.html (:5173)'));
-  sList.appendChild(serviceRow('VPS 서버 URL', vpsServerInput, 'vps-system FastAPI (/localize)'));
+  sList.appendChild(serviceRow('simViewer', '시뮬레이터 뷰어', '시뮬레이션 화면의 3D 뷰어 · 월드 · 로봇 스트림'));
+  sList.appendChild(serviceRow('scanEngine', '스캔 엔진', '스캔 처리 · 정합 · 슬라이스맵 (FastAPI)'));
+  sList.appendChild(serviceRow('studio', '정합 페이지 (원본)', '스캔 엔진이 만드는 독립 정합 페이지 -- 디버그용'));
+  sList.appendChild(serviceRow('navBrain', '로봇 대시보드 (nav.html)', '실기 로봇의 브라우저 두뇌'));
+  sList.appendChild(serviceRow('vpsServer', 'VPS 서버', '위치 보정 (/localize)'));
 
-  const saveServicesBtn = el('button', 'robot-button', '서비스 주소 저장');
+  const saveServicesBtn = el('button', 'robot-button robot-button-primary', '서비스 주소 저장');
   const serviceStatus = el('div', 'robot-form-status');
-  saveServicesBtn.addEventListener('click', () => {
-    const data = {
-      simViewer: simViewerInput.value.trim() || DEFAULT_SERVICES.simViewer,
-      studio: studioInput.value.trim() || DEFAULT_SERVICES.studio,
-      navBrain: navBrainInput.value.trim() || DEFAULT_SERVICES.navBrain,
-      vpsServer: vpsServerInput.value.trim() || DEFAULT_SERVICES.vpsServer,
-    };
+  function applyServices(data) {
+    for (const [k, input] of Object.entries(inputs)) { input.value = data[k] ?? DEFAULT_SERVICES[k]; if (links[k]) links[k].href = input.value; }
+    try { localStorage.setItem('pathfinder_services_endpoints', JSON.stringify(data)); } catch {}
+  }
+  fetch('/api/settings/services').then((r) => (r.ok ? r.json() : null)).then((res) => { if (res?.services) applyServices(res.services); }).catch(() => {});
+  saveServicesBtn.addEventListener('click', async () => {
+    const data = Object.fromEntries(Object.entries(inputs).map(([k, input]) => [k, input.value.trim() || DEFAULT_SERVICES[k]]));
+    saveServicesBtn.disabled = true;
     try {
-      localStorage.setItem('pathfinder_services_endpoints', JSON.stringify(data));
-      serviceStatus.textContent = '서비스 주소가 브라우저에 저장되었습니다.';
-      serviceStatus.style.color = '#2a7d2a';
+      const r = await fetch('/api/settings/services', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ services: data }) });
+      const res = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(res.error || `HTTP ${r.status}`);
+      applyServices(res.services ?? data);
+      serviceStatus.textContent = '서버에 저장되었습니다. 모든 브라우저에 적용됩니다.';
+      serviceStatus.style.color = '#34d399';
       setTimeout(() => { serviceStatus.textContent = ''; }, 3000);
     } catch (e) {
       serviceStatus.textContent = `저장 실패: ${e.message}`;
-      serviceStatus.style.color = '#c0392b';
-    }
+      serviceStatus.style.color = '#ef4444';
+    } finally { saveServicesBtn.disabled = false; }
   });
-
   info.append(sList, saveServicesBtn, serviceStatus);
   layout.appendChild(info);
+
+  // 좌표 규약 -- 화면마다 흩어져 있던 설명을 한 카드에
+  const conv = el('div', 'robot-form-panel settings-panel');
+  conv.appendChild(el('div', 'robot-form-title', '좌표 규약'));
+  const convList = el('div', 'settings-services');
+  for (const [k, v] of [
+    ['현장 평면', 'm 단위, 원점 (0,0) = 합성 슬라이스맵 격자의 왼쪽-아래. +x 오른쪽, +y 위(북).'],
+    ['슬라이스맵 → 스캔', '평면 (x, y) = (x_arkit, −z_arkit). 스캔은 yaw 만큼 CCW 회전 후 (offsetX, −offsetZ) 이동.'],
+    ['시뮬레이터 월드', '같은 슬라이스맵 파일을 월드로 읽는다 → 좌표 변환 없음. 벽/가구 kind 는 셀 코드 3/2.'],
+    ['VDA5050', 'mapId = 현장 이름, theta 라디안 CCW+, 노드 도달 반경 0.35 m, startPause = 일시정지 · stopPause = 재개.'],
+    ['3D', 'three.js (X, Y, Z) = (x, 높이, −y). 스캔 메시는 스튜디오 Z-up 을 −90° 회전, 바닥 밴드를 0 으로.'],
+  ]) {
+    const row = el('div', 'settings-service-row');
+    const h = el('div', 'settings-service-header'); h.appendChild(el('b', '', k)); row.appendChild(h);
+    row.appendChild(el('span', 'settings-service-desc', v));
+    convList.appendChild(row);
+  }
+  conv.appendChild(convList);
+  layout.appendChild(conv);
+
+  // 도구 -- 임베드 밖의 원본 화면·문서로 가는 링크 (주소는 위 서비스 주소를 따른다)
+  const tools = el('div', 'robot-form-panel settings-panel');
+  tools.appendChild(el('div', 'robot-form-title', '도구 · 링크'));
+  const toolList = el('div', 'settings-services');
+  const toolLink = (label, hrefFn, desc) => {
+    const row = el('div', 'settings-service-row');
+    const h = el('div', 'settings-service-header'); h.appendChild(el('b', '', label));
+    const a = el('a', 'settings-service-link', '열기 ↗'); a.target = '_blank'; a.rel = 'noopener'; a.href = hrefFn();
+    h.appendChild(a); row.append(h, el('span', 'settings-service-desc', desc));
+    for (const input of Object.values(inputs)) input.addEventListener('input', () => { a.href = hrefFn(); });
+    return row;
+  };
+  toolList.appendChild(toolLink('시뮬레이터 3D 뷰어 (전체 화면)', () => `${inputs.simViewer.value}/?view=3d`, 'GT · LIDAR · 시점 전환 · 키보드 조종'));
+  toolList.appendChild(toolLink('정합 페이지 (원본)', () => inputs.studio.value, '스캔 엔진의 독립 정합 워크스페이스'));
+  toolList.appendChild(toolLink('스캔 엔진 API 문서', () => `${inputs.scanEngine.value}/docs`, 'FastAPI OpenAPI (Swagger UI)'));
+  toolList.appendChild(toolLink('로봇 대시보드 (nav.html)', () => inputs.navBrain.value, '실기 로봇 두뇌 · VDA5050 연결 · VPS 보정'));
+  tools.appendChild(toolList);
+  layout.appendChild(tools);
 
   let config = null;
   let brokerStatus = { connected: false, brokerUrl: null, error: null };

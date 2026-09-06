@@ -34,6 +34,7 @@ import { importSlicemapFiles } from './imports/importSlicemap.js';
 import { importRobotMapFiles } from './imports/importRobotMap.js';
 import { importFloorImageFile } from './imports/importFloorImage.js';
 import { createSite3D } from './site3d/site3dView.js';
+import { createSimStatusPanel } from './simulation/simStatusPanel.js';
 
 createProjectSelector(document.getElementById('project-selector'));
 initScanWizardModal();
@@ -355,6 +356,7 @@ function activateTab(tabKey) {
     if (!simulationTab) {
       simulationTab = createPathfindingTab(document.getElementById('simulation-map'), document.getElementById('simulation-panel'), 'obstacle', { variant: 'demo' });
       simulationTab.fitToData();
+      createSimStatusPanel(document.getElementById('simulation-status'));
     }
     simulationTab.resize();
     return;

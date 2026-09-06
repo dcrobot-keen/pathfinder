@@ -151,6 +151,7 @@ export function createSite3D(container, { obstacleSource, floorImage, slicemap, 
 
   // ---- 로봇 (VDA5050 플릿 스트림) ------------------------------------------------------------
   const robots = new Map(); // serial -> { group, mat, label }
+  const paths = new Map();  // serial -> { group, key }  계획 경로(주문) 표시
   const bodyGeo = new THREE.CylinderGeometry(ROBOT_R, ROBOT_R, 0.19, 28);
   const noseGeo = new THREE.BoxGeometry(0.07, 0.05, 0.05);
   let registry = new Map();
@@ -182,6 +183,31 @@ export function createSite3D(container, { obstacleSource, floorImage, slicemap, 
     const color = !online ? 0x525c6c : (st?.safetyState?.eStop ?? 'NONE') !== 'NONE' ? 0xef4444 : st?.paused ? 0xf5a623 : st?.driving ? 0x34d399 : 0x4fd1c5;
     r.mat.color.setHex(color);
     r.group.visible = true;
+    updatePath(rec);
+  }
+  // 주문 경로: 서버 레코드의 lastOrder.path (RCS 가 보낸 [x,y] 노드). 지나간 구간은 회색, 남은 구간은 주황 점선, 목적지는 빨간 디스크.
+  const pathMat = { done: new THREE.LineBasicMaterial({ color: 0x525c6c }), left: new THREE.LineDashedMaterial({ color: 0xff9800, dashSize: 0.25, gapSize: 0.15, linewidth: 2 }) };
+  const goalGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.02, 24);
+  const goalMat = new THREE.MeshBasicMaterial({ color: 0xe74c3c, transparent: true, opacity: 0.9 });
+  function updatePath(rec) {
+    const serial = rec.serialNumber;
+    const st = rec.state, lo = rec.lastOrder;
+    const active = lo?.path?.length > 1 && st?.orderId === lo.orderId && (st.nodesLeft ?? 0) > 0;
+    const key = active ? `${lo.orderId}:${st.nodesLeft}` : null;
+    const cur = paths.get(serial);
+    if (cur && cur.key === key) return;
+    if (cur) { scene.remove(cur.group); cur.group.traverse((o) => o.geometry?.dispose?.()); paths.delete(serial); }
+    if (!active) return;
+    const pts = lo.path.map(([x, y]) => new THREE.Vector3(x, 0.05, -y));
+    const doneCount = Math.max(1, Math.min(pts.length, pts.length - st.nodesLeft));
+    const group = new THREE.Group();
+    if (doneCount > 1) group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.slice(0, doneCount)), pathMat.done));
+    const rest = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.slice(doneCount - 1)), pathMat.left);
+    rest.computeLineDistances();
+    group.add(rest);
+    const goal = new THREE.Mesh(goalGeo, goalMat); goal.position.copy(pts[pts.length - 1]); goal.position.y = 0.01; group.add(goal);
+    scene.add(group);
+    paths.set(serial, { group, key });
   }
   const stream = subscribeFleetStream((msg) => {
     if (msg.type === 'snapshot') { for (const r of msg.robots) applyRobot(r); }

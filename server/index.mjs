@@ -11,6 +11,7 @@ import { WebSocketServer } from 'ws';
 import { createRobotModelsRouter } from './robotModels.mjs';
 import { createRobotsRouter } from './robots.mjs';
 import { createProjectsRouter } from './projects.mjs';
+import { createSettingsRouter } from './settings.mjs';
 import { createVda5050Bridge } from './vda5050.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -164,6 +165,7 @@ const vda5050 = await createVda5050Bridge({
   },
 });
 app.use('/api', vda5050.router);
+app.use('/api', await createSettingsRouter(DATA_DIR)); // 서비스 주소 (data/settings.json)
 
 httpServer.on('upgrade', (req, socket, head) => {
   const wss = { '/api/live-pose/stream': livePoseWss, '/api/drive-request/stream': driveRequestWss, [vda5050.streamPath]: vda5050.wss }[req.url];

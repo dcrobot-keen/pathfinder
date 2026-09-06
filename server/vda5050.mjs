@@ -308,7 +308,8 @@ export async function createVda5050Bridge({
     }
     const order = pathToOrder(path, { orderId, orderUpdateId, mapId: mapId ?? r.position?.mapId ?? undefined, header: header(topic) });
     publish(topic, order);
-    r.lastOrder = { orderId, orderUpdateId, sentAt: Date.now(), waypoints: path.length };
+    // path([x,y]...) 도 함께 둔다 -- 현장 3D 와 다른 클라이언트가 계획 경로·진행을 그릴 수 있게 (레코드는 스트림으로 방송된다)
+    r.lastOrder = { orderId, orderUpdateId, sentAt: Date.now(), waypoints: path.length, path };
     recordOrder(serialNumber, {
       orderId,
       orderUpdateId,

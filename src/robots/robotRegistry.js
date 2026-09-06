@@ -18,6 +18,7 @@ import {
   statusColor,
 } from './robotCodes.js';
 import { ROBOT_ICON_DATA_URI } from '../../shared/robotIcons.mjs';
+import { openRobotDrawer } from './robotDrawer.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -255,7 +256,9 @@ export function createRobotRegistryTab(containerEl) {
   devListPanel.append(devListTitle, devListStatus, devCardsWrap);
 
   function renderRobotCard(robot) {
-    const card = el('div', 'robot-card');
+    const card = el('div', 'robot-card robot-card--clickable');
+    card.title = '상세 보기';
+    card.addEventListener('click', (e) => { if (e.target.closest('button, a, input')) return; openRobotDrawer(robot); });
 
     const header = el('div', 'robot-card-header');
     const icon = document.createElement('img');
