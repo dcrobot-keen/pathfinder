@@ -569,7 +569,9 @@ export function createAlignWorkspace(rootEl, { onToast = (_message) => {} } = {}
     $('aw-save').disabled = layers.length === 0;
     $('aw-merged').hidden = true; $('aw-project').hidden = true;
     $('aw-save-result').textContent = ''; $('aw-project-note').textContent = '';
+    // 뷰가 막 보이기 시작한 프레임에는 컨테이너 크기가 0 일 수 있어 한 번 더 맞춘다
     requestAnimationFrame(fitAll);
+    setTimeout(fitAll, 300);
   }
 
   async function loadGroup(name) {
