@@ -1385,7 +1385,7 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
   function setStatus(text) {
     statusEl.textContent = text;
   }
-  setStatus(isOperate ? '왼쪽 목록에서 로봇을 고르고 "목적지 클릭" 뒤 지도를 클릭하세요.' : config.hint);
+  setStatus(isOperate ? '왼쪽 목록에서 로봇을 고르고 "목적지 지정" 뒤 지도를 클릭하세요.' : config.hint);
 
   function resize() {
     map.updateSize();

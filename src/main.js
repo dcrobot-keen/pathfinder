@@ -321,6 +321,7 @@ function activateTab(tabKey) {
         sideEl: document.getElementById('operate-side'),
       });
       operateTab.fitToData();
+      setTimeout(() => operateTab?.fitToData(), 600); // 첫 프레임에 크기가 아직 0 이거나 장애물이 늦게 오는 경우
     }
     operateTab.resize();
     return;
@@ -562,3 +563,14 @@ btnViewMesh.addEventListener('click', () => {
     }
   });
 });
+
+// 딥링크: ?tab=maps|robots|operate|simulation|settings (&sub=2d|3d|align) -- 화면 캡처·북마크용.
+// 탭 상태가 URL 에 없던 것을 여기서만 읽는다(URL 을 바꾸지는 않음).
+{
+  const q = new URLSearchParams(location.search);
+  const tab = q.get('tab');
+  const sub = q.get('sub');
+  if (sub && ['2d', '3d', 'align'].includes(sub)) mapsSub = sub;
+  if (tab && ['maps', 'robots', 'operate', 'simulation', 'settings'].includes(tab)) activateTab(tab);
+  else if (sub) activateMapsSub(sub);
+}
