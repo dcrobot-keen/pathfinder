@@ -6,6 +6,40 @@
 > (`scan-engine/.venv` 필요: `cd scan-engine && python -m venv .venv && .venv\Scripts\pip install -r requirements.txt -r requirements-server.txt`,
 > 설정은 `scan-engine/.env.example` → `.env`). 처리된 스캔 데이터는 `scan-engine/projects/`(gitignored).
 
+## 새 머신에서 띄우기 (macOS Apple Silicon · Windows · Linux 공통, 30~40분)
+
+필요: Node 22, Go 1.22+, Python 3.10~3.13, Docker Desktop(Linux 는 docker engine + compose v2), git. macOS 는 `brew install node@22 go python@3.12` 로.
+CUDA 는 필요 없다(3DGS 트윈 `dc-vps-digital-twin` 만 예외 -- 그건 이 스택에 포함되지 않는다).
+
+```bash
+# 1. 워크스페이스 폴더 하나에 저장소들을 형제로 둔다
+mkdir robot-project && cd robot-project
+git clone git@github.com:dcrobot-keen/pathfinder.git            # Fleet Studio + scan-engine (이 저장소)
+mkdir ros-chromium && cd ros-chromium
+git clone git@github.com:dcrobot-keen/robot-os-chromium.git     # 로봇 스택 (sim-driver, nav.html)
+git clone git@github.com:dcrobot-keen/simulator.git             # 2D/3D 시뮬레이터
+cd ..
+# (선택) iPhone 스캔 그룹 데이터: vps-system/data/<group>/... 를 같은 위치에 복사 -- 정합·3D 메시의 입력
+
+# 2. Fleet Studio
+cd pathfinder
+npm ci
+cd scan-engine && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-server.txt && cp .env.example .env && cd ..
+#    (Windows: .venv\Scripts\pip)  .env 의 STUDIO_GROUPS_DIR / STUDIO_PUBLISH_DIR 는 형제 폴더 기준 상대 경로
+
+# 3. 컨테이너 스택 (브로커 · 시뮬레이터 · 로봇 스택 · 대시보드)
+cp deploy/.env.example deploy/.env      # 월드 파일 · 로봇 스폰 · ROS_CHROMIUM_DIR
+npm run stack:up                        # 첫 실행은 이미지 빌드 포함 (node:22-alpine)
+
+# 4. 실행
+npm run dev                             # vite :3000 · api :3001 · 플래너 :3002 · scan-engine :8000
+#    브라우저: http://localhost:3000  (설정 › 브로커 mqtt://127.0.0.1:1883 저장하고 연결)
+```
+
+- 처음엔 현장이 없다: 지도 › 가져오기로 iPhone 스캔 zip 이나 슬라이스맵 파일을 넣으면 현장·장애물·바닥 이미지가 생기고, 정합 저장 시 시뮬레이터 월드(`simulator/worlds/`)로 publish 된다. `deploy/.env` 의 `SIM_WORLD` 를 그 파일로 바꾸고 `npm run stack:up` 을 다시 하면 시뮬 로봇이 그 지도에서 뜬다.
+- 상태 확인: 왼쪽 내비 하단의 점 4개(API · 플래너 · scan-engine · MQTT) 와 상단 배지(MQTT · 로봇 수). `npm test`, `npm run test:scan-engine`, `npm run check:api`.
+- Mac 한계: `dc-vps-digital-twin`(CUDA) 과 `vps-system/ros2_ws`(ROS2, SPOT 트랙) 는 돌지 않는다. hloc(VPS 특징 DB) 는 CPU/MPS 로 느리지만 동작. `ios-capture` 앱 빌드는 오히려 Mac(Xcode) 이 필수.
+
 아이폰 라이다로 스캔한 컬러드 포인트 클라우드(PCD)를 기반으로 실내 지도를 만들고,
 그 위에서 노드/링크/장애물을 편집하고, 등록된 로봇으로 경로탐색·다중 로봇
 충돌회피(deconfliction)까지 실험하는 실내 로봇 오케스트레이션 툴체인입니다.

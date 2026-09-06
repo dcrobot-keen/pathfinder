@@ -17,3 +17,4 @@ public/samples/scan.pcd
 data/vda5050.json
 data/fleet-log.json
 data/settings.json
+deploy/.env

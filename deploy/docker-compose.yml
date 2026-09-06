@@ -1,0 +1,160 @@
+# Fleet Studio 개발 스택의 컨테이너 부분: MQTT 브로커 · 2D/3D 시뮬레이터(한 월드에 로봇 N대) · sim-driver(로봇 스택,
+# VDA5050) · robot-os-chromium 대시보드/시그널링. Fleet Studio 자체(Vite · API · Go 플래너 · scan-engine)는 호스트에서
+# `npm run dev` 로 띄운다 -- 브라우저의 Gamepad/WebSerial 과 개발 편의 때문에 화면은 항상 호스트에서 연다.
+#
+#   cp deploy/.env.example deploy/.env         # 월드·로봇 스폰·형제 저장소 위치
+#   npm run stack:up                           # = docker compose -f deploy/docker-compose.yml --profile nav --profile fleet up -d
+#   npm run stack:down / stack:logs
+#
+# 이미지는 하나(node:22-alpine + 두 저장소의 npm ci). 소스 폴더는 바인드 마운트라 코드 수정은 `docker compose restart <svc>` 로
+# 반영된다(package.json 이 바뀔 때만 --build). 형제 저장소 위치는 ROS_CHROMIUM_DIR (기본 ../../ros-chromium =
+# 워크스페이스 루트의 ros-chromium/ 폴더: 그 아래 robot-os-chromium/, simulator/ 체크아웃).
+#
+# 포트(모두 127.0.0.1 만): 1883/9001 MQTT · 8765/8766 로봇0 Roboteq/센서 · 8775/8776 로봇1 · 8767 뷰어 · 5173 대시보드 · 9770 시그널링
+# sim-driver 는 호스트의 pathfinder API(:3001)에 host.docker.internal 로 접근한다 (Mac/Windows Docker Desktop, Linux 는 host-gateway).
+
+name: fleet-studio
+
+x-image: &image
+  build:
+    context: ${ROS_CHROMIUM_DIR:-../../ros-chromium}
+    dockerfile_inline: |
+      # One image for every Node process (simulator, dashboard static server, signaling, sim-driver).
+      # Build context = ROS_CHROMIUM_DIR (holds simulator/ and robot-os-chromium/). Only `ws`/`mqtt` are
+      # external deps, so the image is small. Sources are bind-mounted at run time; the COPY below keeps the
+      # image usable without mounts too.
+      FROM node:22-alpine
+      WORKDIR /app
+      COPY simulator/package.json simulator/package-lock.json ./simulator/
+      RUN cd simulator && npm ci --omit=dev
+      COPY robot-os-chromium/package.json robot-os-chromium/package-lock.json ./robot-os-chromium/
+      COPY robot-os-chromium/packages/bus/package.json                ./robot-os-chromium/packages/bus/
+      COPY robot-os-chromium/packages/device-abstraction/package.json ./robot-os-chromium/packages/device-abstraction/
+      COPY robot-os-chromium/packages/nodes/package.json              ./robot-os-chromium/packages/nodes/
+      COPY robot-os-chromium/packages/planner-wasm/package.json       ./robot-os-chromium/packages/planner-wasm/
+      COPY robot-os-chromium/packages/rtc/package.json                ./robot-os-chromium/packages/rtc/
+      COPY robot-os-chromium/packages/transport/package.json          ./robot-os-chromium/packages/transport/
+      COPY robot-os-chromium/apps/dashboard/package.json              ./robot-os-chromium/apps/dashboard/
+      COPY robot-os-chromium/apps/signaling-server/package.json       ./robot-os-chromium/apps/signaling-server/
+      COPY robot-os-chromium/apps/sim-driver/package.json             ./robot-os-chromium/apps/sim-driver/
+      RUN cd robot-os-chromium && npm ci --omit=dev
+      COPY simulator/ ./simulator/
+      COPY robot-os-chromium/ ./robot-os-chromium/
+      WORKDIR /app/simulator
+      CMD ["node", "src/index.js"]
+  image: fleet-studio-stack:local
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "127.0.0.1:1883:1883"   # MQTT (호스트의 pathfinder API, 컨테이너)
+      - "127.0.0.1:9001:9001"   # MQTT over WebSocket (호스트 브라우저 페이지)
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  simulator:
+    <<: *image
+    working_dir: /app/simulator
+    command: ["node", "src/index.js"]
+    environment:
+      SIM_WORLD: ${SIM_WORLD:-worlds/room.world.json}
+      SIM_NOISE: ${SIM_NOISE:-default}
+      SIM_SEED: ${SIM_SEED:-1}
+      SIM_RWD_MS: ${SIM_RWD_MS:-1000}
+      # 한 월드에 여러 대: "id@x,y,theta;id2@auto" (simulator/src/index.js)
+      SIM_ROBOTS: ${SIM_ROBOTS:-}
+      SCAN_MESH_DIR: /app/scan-projects
+    ports:
+      - "127.0.0.1:8765:8765"   # 로봇 0: Roboteq ASCII over WebSocket
+      - "127.0.0.1:8766:8766"   # 로봇 0: ground-truth + LIDAR
+      - "127.0.0.1:8767:8767"   # viewer.html (2D/3D, 모든 로봇)
+      - "127.0.0.1:8775:8775"   # 로봇 1 (SIM_ROBOTS 둘째): Roboteq
+      - "127.0.0.1:8776:8776"   # 로봇 1: 센서
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/src:/app/simulator/src:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/worlds:/app/simulator/worlds:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/viewer.html:/app/simulator/viewer.html:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/vendor:/app/simulator/vendor:ro
+      - ../scan-engine/projects:/app/scan-projects:ro   # iOS 스캔 메시(overlay.glb) -- 뷰어 3D
+
+  dashboard:
+    <<: *image
+    working_dir: /app/robot-os-chromium
+    command: ["node", "scripts/serve-dashboard.mjs"]
+    environment:
+      DASHBOARD_PORT: "5173"
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/apps:/app/robot-os-chromium/apps:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/packages:/app/robot-os-chromium/packages:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/manifests:/app/robot-os-chromium/manifests:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/scripts:/app/robot-os-chromium/scripts:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/worlds:/app/simulator/worlds:ro
+
+  signaling:
+    <<: *image
+    working_dir: /app/robot-os-chromium/apps/signaling-server
+    command: ["node", "src/index.js"]
+    environment:
+      SIGNALING_PORT: "9770"
+    ports:
+      - "127.0.0.1:9770:9770"
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/apps:/app/robot-os-chromium/apps:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/packages:/app/robot-os-chromium/packages:ro
+
+  # 로봇 스택(Odometry + PoseFusion + Map/Costmap + PathFollower + Vda5050Node) -- 브라우저 없이 시뮬 로봇 0 을 몬다.
+  sim-driver:
+    <<: *image
+    profiles: ["nav"]
+    working_dir: /app/robot-os-chromium/apps/sim-driver
+    command: ["node", "src/index.js"]
+    environment:
+      SIM_ROBOTEQ_URL: ws://simulator:8765
+      SIM_SENSOR_URL: ws://simulator:8766
+      PATHFINDER_URL: ${PATHFINDER_URL:-http://host.docker.internal:3001}
+      ROBOT_ID: ${ROBOT_ID:-tb3-sim-01}
+      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
+      MAP_ID: ${MAP_ID:-}                      # 비우면 시뮬레이터 월드 이름 (= 같은 슬라이스맵으로 만든 현장)
+      CORRECTION_PERIOD_MS: ${CORRECTION_PERIOD_MS:-2000}
+      MAX_DEVIATION_M: ${MAX_DEVIATION_M:-0.8}
+      SIM_SLICEMAP: ${SIM_WORLD:-}             # 동적 장애물 정지의 정적 마스크 = 월드와 같은 슬라이스맵
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - simulator
+      - mosquitto
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/apps:/app/robot-os-chromium/apps:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/packages:/app/robot-os-chromium/packages:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/manifests:/app/robot-os-chromium/manifests:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/worlds:/app/simulator/worlds:ro
+
+  # 둘째 로봇(profile fleet): 같은 시뮬레이터 프로세스의 SIM_ROBOTS 둘째 항목 (8775/8776). 서로 충돌하고 LIDAR 로 본다.
+  sim-driver-2:
+    <<: *image
+    profiles: ["fleet"]
+    working_dir: /app/robot-os-chromium/apps/sim-driver
+    command: ["node", "src/index.js"]
+    environment:
+      SIM_ROBOTEQ_URL: ws://simulator:8775
+      SIM_SENSOR_URL: ws://simulator:8776
+      PATHFINDER_URL: ${PATHFINDER_URL:-http://host.docker.internal:3001}
+      ROBOT_ID: ${ROBOT_ID_2:-tb3-sim-02}
+      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
+      MAP_ID: ${MAP_ID:-}
+      CORRECTION_PERIOD_MS: ${CORRECTION_PERIOD_MS:-2000}
+      MAX_DEVIATION_M: ${MAX_DEVIATION_M:-0.8}
+      SIM_SLICEMAP: ${SIM_WORLD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - simulator
+      - mosquitto
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/apps:/app/robot-os-chromium/apps:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/packages:/app/robot-os-chromium/packages:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/manifests:/app/robot-os-chromium/manifests:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/worlds:/app/simulator/worlds:ro
