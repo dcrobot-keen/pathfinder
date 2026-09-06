@@ -142,6 +142,23 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
   globalActions.append(stopAllBtn, pauseAllBtn, resumeAllBtn);
 
   const list = el('div', 'fleet-board-list');
+  // 위임된 클릭/키보드 -- 행(.fleet-row)은 스트림이 올 때마다 통째로 다시 만들어지므로, 행 자체에 리스너를
+  // 붙이면 "지금 이 순간의 그 DOM 노드"에 묶인다. list 컨테이너는 절대 교체되지 않으니 여기 하나만 달아두고
+  // 클릭 시점에 실제로 화면에 있는 행을 data-serial 로 찾는다 -- 재렌더링 타이밍과 무관하게 항상 맞는다.
+  list.addEventListener('click', (e) => {
+    const row = e.target.closest('.fleet-row');
+    if (!row || !list.contains(row)) return;
+    if (e.target.closest('button')) return; // 취소/일시정지/제거 버튼은 자기 핸들러가 처리(stopPropagation)
+    const serial = row.dataset.serial;
+    select(serial === selectedSerial ? null : serial);
+  });
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target.closest('.fleet-row');
+    if (!row) return;
+    e.preventDefault();
+    row.click();
+  });
   const empty = el('div', 'fleet-board-empty', '수신한 로봇이 없습니다. 설정에서 브로커를 연결하세요.');
 
   const eventsWrap = el('div', 'fleet-board-events');
@@ -313,11 +330,10 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       const online = brokerStatus.connected && r.connectionState === 'ONLINE' && !stale;
 
       const row = el('div', 'fleet-row');
+      row.dataset.serial = r.serialNumber;
       row.classList.toggle('selected', r.serialNumber === selectedSerial);
       row.classList.toggle('offline', !online);
       row.tabIndex = 0;
-      row.addEventListener('click', () => select(r.serialNumber === selectedSerial ? null : r.serialNumber));
-      row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); } });
 
       const icon = document.createElement('img');
       icon.className = 'fleet-row-icon';
