@@ -95,6 +95,9 @@ app.put('/api/live-pose/:robotId', (req, res) => {
     y: req.body.y,
     headingRad: req.body.headingRad,
     timestamp: typeof req.body.timestamp === 'number' ? req.body.timestamp : Date.now(),
+    // 어느 현장(pathfinder 프로젝트/시뮬레이터 월드) 소속인지 -- 없으면(구버전 sim-driver 등)
+    // 지도 쪽에서 항상 표시한다. src/liveRobotPose.js 참고.
+    mapId: typeof req.body.mapId === 'string' && req.body.mapId ? req.body.mapId : undefined,
   };
   latestPoseByRobot.set(robotId, pose);
   broadcastPose(robotId, pose);

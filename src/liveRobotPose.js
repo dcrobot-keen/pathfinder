@@ -12,6 +12,7 @@ import Feature from 'ol/Feature.js';
 import Point from 'ol/geom/Point.js';
 import { robotMarkerStyle, REFERENCE_SIZE_M } from './pathfinding/robotAnimation.js';
 import { listRobots } from './robots/robotApi.js';
+import { activeProjectName } from './appShared.js';
 
 const RECONNECT_DELAY_MS = 2000;
 const UNKNOWN_ROBOT_COLOR = '#e91e63';
@@ -76,7 +77,24 @@ export function startLiveRobotPoseTracking(source) {
     if (pose && featuresByRobotId.has(robotId)) applyPose(robotId, pose);
   }
 
+  // pose.mapId 는 로봇이 속한 현장(pathfinder 프로젝트/시뮬레이터 월드) 이름이다(sim-driver의
+  // MAP_ID 또는 시뮬레이터 월드 이름, VDA5050 state의 agvPosition.mapId). 다른 현장의 로봇이
+  // 이 지도 위에 같은 (x,y)로 잘못 겹쳐 보이지 않도록, 있으면 현재 현장과 대조한다. 없으면
+  // (구버전 소스 등, mapId 개념이 없는 로봇) 예전처럼 항상 그린다.
+  function belongsHere(pose) {
+    return !pose.mapId || pose.mapId === activeProjectName;
+  }
+
   function applyPose(robotId, pose) {
+    if (!belongsHere(pose)) {
+      const existing = featuresByRobotId.get(robotId);
+      if (existing) {
+        source.removeFeature(existing);
+        featuresByRobotId.delete(robotId);
+        lastPoseByRobotId.delete(robotId);
+      }
+      return;
+    }
     let feature = featuresByRobotId.get(robotId);
     if (!feature) {
       feature = new Feature(new Point([pose.x, pose.y]));

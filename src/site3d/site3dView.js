@@ -11,6 +11,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { subscribeFleetStream } from '../fleet/fleetApi.js';
 import { listRobots } from '../robots/robotApi.js';
+import { activeProjectName } from '../appShared.js';
 
 const WALL = {
   wall: { h: 0.5, color: 0xe7ecf3, opacity: 0.95 },
@@ -175,6 +176,12 @@ export function createSite3D(container, { obstacleSource, floorImage, slicemap, 
   }
   function applyRobot(rec) {
     if (!rec?.position || typeof rec.position.x !== 'number') return;
+    // 다른 현장(mapId)의 로봇은 이 3D 장면에 그리지 않는다 -- 같은 (x,y) 라도 다른 좌표계.
+    if (rec.position.mapId && rec.position.mapId !== activeProjectName) {
+      const existing = robots.get(rec.serialNumber);
+      if (existing) existing.group.visible = false;
+      return;
+    }
     const r = robotEntry(rec.serialNumber);
     r.group.position.set(rec.position.x, 0, -rec.position.y);
     r.group.rotation.y = rec.position.theta ?? 0;

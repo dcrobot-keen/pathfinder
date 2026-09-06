@@ -1203,6 +1203,8 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
     const features = [];
     for (const [serial, fleet] of fleetBySerial.entries()) {
       if (serial === excludeSerial || !fleet.position || typeof fleet.position.x !== 'number') continue;
+      // 다른 현장의 mapId면 이 현장 장애물로 넣지 않는다 (다른 좌표계라 같은 x,y가 무의미).
+      if (fleet.position.mapId && fleet.position.mapId !== activeProjectName) continue;
       const otherReg = commandRobotsById.get(serial) ?? null;
       const r = (otherReg?.sizeMeters ?? 0.35) * 0.7;
       const x = fleet.position.x;

@@ -166,7 +166,9 @@ export async function createVda5050Bridge({
         const pose = poseFromAgvPosition(msg.agvPosition, now);
         if (pose) {
           r.position = { x: pose.x, y: pose.y, theta: pose.headingRad, mapId: msg.agvPosition.mapId ?? null };
-          onPose(t.serialNumber, pose);
+          // live-pose fan-out(=지도의 "실시간 로봇 위치" 레이어)에도 mapId를 실어 보낸다 --
+          // src/liveRobotPose.js가 현재 현장과 다른 mapId의 마커를 걸러낼 수 있게.
+          onPose(t.serialNumber, { ...pose, mapId: msg.agvPosition.mapId ?? undefined });
         }
       }
       if (msg.velocity) r.velocity = { vx: msg.velocity.vx ?? 0, vy: msg.velocity.vy ?? 0, omega: msg.velocity.omega ?? 0 };

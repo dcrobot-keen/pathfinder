@@ -2,6 +2,7 @@
 // 데이터는 운영과 같은 /api/vda5050/stream 하나. 시뮬 로봇 = 레지스트리 company 에 'simulator' 가 있거나 시리얼에 'sim' 이 있는 것.
 import { subscribeFleetStream, getFleetEvents } from '../fleet/fleetApi.js';
 import { listRobots } from '../robots/robotApi.js';
+import { activeProjectName } from '../appShared.js';
 
 const el = (tag, className, text) => { const n = document.createElement(tag); if (className) n.className = className; if (text !== undefined) n.textContent = text; return n; };
 const fmtTime = (ts) => (ts ? new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-');
@@ -28,7 +29,10 @@ export function createSimStatusPanel(containerEl) {
   getFleetEvents().then(({ events: list }) => { events = list ?? []; renderTimeline(); }).catch(() => {});
 
   function renderRobots() {
-    const sims = Array.from(fleet.values()).filter((r) => isSim(r.serialNumber, registryBySerial.get(r.serialNumber)));
+    // 이 현장(activeProjectName) 소속만 -- 다른 현장의 시뮬레이터가 보낸 로봇은 mapId 로 걸러낸다.
+    const sims = Array.from(fleet.values()).filter(
+      (r) => isSim(r.serialNumber, registryBySerial.get(r.serialNumber)) && (!r.position?.mapId || r.position.mapId === activeProjectName)
+    );
     robotsHead.querySelector('.s2m-side__count').textContent = String(sims.length);
     robotsList.replaceChildren();
     if (!sims.length) { robotsList.appendChild(el('div', 's2m-side__empty', '시뮬 로봇이 브로커에 없습니다. 컨테이너 스택(npm run stack:up)이 떠 있는지 확인하세요.')); return; }
