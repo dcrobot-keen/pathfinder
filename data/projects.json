@@ -19,8 +19,8 @@
         "cols": 340,
         "rows": 340,
         "origin": [
-          -9.14439659666294,
-          -9.030557791231715
+          -9.171907979206082,
+          -9.041012858515337
         ],
         "z": 0.18,
         "sources": [
@@ -34,22 +34,22 @@
           },
           {
             "scan": "scan_20260905_102537",
-            "offsetX": 0.1159,
-            "offsetZ": -0.3129,
-            "yawRadians": 0.803067,
-            "method": "manual",
+            "offsetX": 0.0964,
+            "offsetZ": -0.2962,
+            "yawRadians": 0.797317,
+            "method": "icp",
             "metrics": {
-              "overlap_m": 17.25,
-              "inlier": 0.8453,
-              "conflict": 0.011,
-              "rmse_m": 0.052
+              "overlap_m": 17.05,
+              "inlier": 0.8325,
+              "conflict": 0.0102,
+              "rmse_m": 0.0514
             },
-            "cells": 11576
+            "cells": 11587
           }
         ]
       },
       "createdAt": "2026-09-05T05:01:39.092Z",
-      "updatedAt": "2026-09-05T08:33:21.148Z",
+      "updatedAt": "2026-09-06T00:37:34.491Z",
       "floorImage": {
         "url": "/api/imported-obstacles/project_20260905/floor.png",
         "extent": [
@@ -61,7 +61,12 @@
         "widthPx": 340,
         "heightPx": 340
       },
-      "approved": true
+      "approved": true,
+      "site": {
+        "id": "project_20260905",
+        "group": "project_20260905",
+        "name": "project_20260905"
+      }
     }
   ]
 }

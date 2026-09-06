@@ -6,8 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import express from 'express';
-import { createRobotModelsRouter } from '../server/robotModels.mjs';
-import { createRobotsRouter } from '../server/robots.mjs';
 
 let failures = 0;
 function check(name, cond, extra = '') {
@@ -17,6 +15,10 @@ function check(name, cond, extra = '') {
 
 const dataDir = await mkdtemp(join(tmpdir(), 'pf-models-'));
 process.env.PATHFINDER_DATA_DIR = dataDir;
+// 라우터 모듈은 import 시점에 PATHFINDER_DATA_DIR 를 읽어 DATA_DIR 를 고정한다. 정적 import 는 위 대입보다 먼저 실행되므로
+// (호이스팅) 실제 data/robots.json 에 테스트 로봇이 쌓였다 -- 환경 변수를 넣은 뒤 동적으로 불러온다.
+const { createRobotModelsRouter } = await import('../server/robotModels.mjs');
+const { createRobotsRouter } = await import('../server/robots.mjs');
 
 const app = express();
 app.use(express.json());

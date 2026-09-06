@@ -14,7 +14,7 @@ CUDA 는 필요 없다(3DGS 트윈 `dc-vps-digital-twin` 만 예외 -- 그건 �
 ```bash
 # 1. 워크스페이스 폴더 하나에 저장소들을 형제로 둔다
 mkdir robot-project && cd robot-project
-git clone git@github.com:dcrobot-keen/pathfinder.git            # Fleet Studio + scan-engine (이 저장소)
+git clone git@github.com:dcrobot-keen/fleet-studio.git pathfinder  # Fleet Studio + scan-engine (이 저장소)
 mkdir ros-chromium && cd ros-chromium
 git clone git@github.com:dcrobot-keen/robot-os-chromium.git     # 로봇 스택 (sim-driver, nav.html)
 git clone git@github.com:dcrobot-keen/simulator.git             # 2D/3D 시뮬레이터
