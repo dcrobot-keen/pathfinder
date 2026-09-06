@@ -246,7 +246,7 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     pauseAllBtn.disabled = true;
     try {
       const list = Array.from(robots.values()).filter((r) => r.connectionState === 'ONLINE');
-      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'stopPause').catch(() => {})));
+      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'startPause').catch(() => {})));
       onStatus(`전체 ${list.length}대 일시정지 전송`, false);
     } catch (e) {
       onStatus(`전체 일시정지 실패: ${e.message}`, true);
@@ -259,7 +259,7 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
     resumeAllBtn.disabled = true;
     try {
       const list = Array.from(robots.values()).filter((r) => r.connectionState === 'ONLINE');
-      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'startPause').catch(() => {})));
+      await Promise.all(list.map((r) => sendFleetInstantAction(r.manufacturer, r.serialNumber, 'stopPause').catch(() => {})));
       onStatus(`전체 ${list.length}대 재개 전송`, false);
     } catch (e) {
       onStatus(`전체 재개 실패: ${e.message}`, true);
@@ -345,7 +345,7 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         const cancelBtn = el('button', 'robot-button robot-button-danger', '취소');
         cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, 'cancelOrder', cancelBtn); });
         const pauseBtn = el('button', 'robot-button', s?.paused ? '재개' : '일시정지');
-        pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, s?.paused ? 'startPause' : 'stopPause', pauseBtn); });
+        pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); action(r, s?.paused ? 'stopPause' : 'startPause', pauseBtn); // VDA5050: startPause=일시정지, stopPause=재개 });
         const forgetBtn = el('button', 'robot-button', '목록에서 제거');
         forgetBtn.addEventListener('click', async (e) => {
           e.stopPropagation();

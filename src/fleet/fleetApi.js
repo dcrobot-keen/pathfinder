@@ -37,7 +37,7 @@ export function sendFleetOrder(manufacturer, serialNumber, path, { mapId, update
   });
 }
 
-/** actionType: cancelOrder | stopPause | startPause */
+/** actionType: cancelOrder | startPause(일시정지) | stopPause(재개) -- VDA5050 표준 의미 */
 export function sendFleetInstantAction(manufacturer, serialNumber, actionType) {
   return request(`/api/vda5050/robots/${encodeURIComponent(manufacturer)}/${encodeURIComponent(serialNumber)}/instant-actions`, {
     method: 'POST',

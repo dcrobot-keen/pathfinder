@@ -934,11 +934,9 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
   }
   commandBtn.addEventListener('click', () => setCommandMode(!commandMode));
 
-  // VDA5050 instantActions: 이 스택(robot-os-chromium Vda5050Node·플릿 보드)은 stopPause=일시정지,
-  // startPause=재개로 쓴다. 표준 명세(startPause=정지)와 이름이 반대라 실기 연동 때 양쪽을 함께
-  // 맞춰야 한다 -- doc/vda5050-rcs.md 남은 일.
-  const PAUSE_ACTION = 'stopPause';
-  const RESUME_ACTION = 'startPause';
+  // VDA5050 instantActions 표준 의미: startPause = 일시정지, stopPause = 재개 (2026-09-06 로봇·RCS 양쪽 정정).
+  const PAUSE_ACTION = 'startPause';
+  const RESUME_ACTION = 'stopPause';
 
   function buildActionBar() {
     const el = document.createElement('div');
