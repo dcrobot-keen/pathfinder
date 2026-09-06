@@ -3,8 +3,10 @@
 // sim-driver 만 현장별 compose 프로젝트로 분리하고(브로커·대시보드·시그널링은 deploy/docker-compose.dev.yml
 // 이 공유 인프라로 계속 띄운다), 현장마다 포트 베이스를 하나씩 배정해 호스트 포트가 겹치지 않게 한다.
 //
-// 대상은 deploy/docker-compose.site.dev.yml(소스 빌드형)이다. GHCR 이미지(docker-compose.yml)는 아직 CI가
-// 성공적으로 push한 적이 없어 여기서는 쓰지 않는다 -- 이미지가 준비되면 같은 분리를 그쪽에도 적용할 것.
+// 기본은 deploy/docker-compose.site.dev.yml(소스 빌드형, 이 저장소를 hacking 하는 개발 환경 기준) -- 형제
+// 저장소(ROS_CHROMIUM_DIR) 체크아웃이 있어야 한다. simulator/robot-os-chromium 소스를 안 고치는 보통 환경(예:
+// GHCR 이미지만 pull 하는 다른 머신)에서는 환경변수 SIM_STACK_MODE=prod 로 deploy/docker-compose.site.yml(이미지
+// pull 형)을 쓰게 한다.
 //
 //   GET  /api/sim/worlds                 -> { worlds: [...] }
 //   GET  /api/sim/config/:projectId      -> { world, robots, ports }
@@ -17,7 +19,7 @@ import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { JSONFilePreset } from 'lowdb/node';
 
-const SITE_COMPOSE = 'deploy/docker-compose.site.dev.yml';
+const SITE_COMPOSE = process.env.SIM_STACK_MODE === 'prod' ? 'deploy/docker-compose.site.yml' : 'deploy/docker-compose.site.dev.yml';
 const ROBOT_ID_RE = /^[a-zA-Z0-9_-]{1,32}$/;
 const SPAWN_RE = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$/;
 const MAX_ROBOTS = 2; // 이 현장에서 -- compose가 정의한 sim-driver/sim-driver-2 두 슬롯이 상한

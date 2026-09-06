@@ -1,17 +1,17 @@
-# 보통 사용(기본): GHCR 에서 미리 빌드된 이미지를 받아온다. simulator/robot-os-chromium 소스를 로컬에 체크아웃할
-# 필요가 없다 -- fleet-studio 하나만 clone 하면 된다. 이미지는 .github/workflows/stack-image.yml 이 두 저장소로부터
-# 빌드해 ghcr.io/dcrobot-keen/fleet-studio-stack 로 push 한다. simulator 소스를 직접 고칠 때는
-# docker-compose.dev.yml(형제 저장소를 바인드 마운트해 즉시 빌드)을 대신 쓴다.
+# 보통 사용(기본) · 공유 인프라: GHCR 에서 미리 빌드된 이미지를 받아온다. simulator/robot-os-chromium 소스를 로컬에
+# 체크아웃할 필요가 없다 -- fleet-studio 하나만 clone 하면 된다. 이미지는 .github/workflows/stack-image.yml 이 두
+# 저장소로부터 빌드해 ghcr.io/dcrobot-keen/fleet-studio-stack 로 push 한다.
 #
-#   npm run stack:up                           # = docker compose -f deploy/docker-compose.yml --profile nav --profile fleet up -d
+# 여기 있는 건 mosquitto · 대시보드 · 시그널링뿐이다 -- 현장마다 새로 띄울 이유가 없는 것들만. 시뮬레이터(현장별
+# 월드 + 로봇)는 deploy/docker-compose.site.yml 을 현장마다 별도 compose 프로젝트로 띄운다(설정 › 시뮬레이터 카드,
+# server/simControl.mjs). simulator 소스를 직접 고칠 때는 docker-compose.dev.yml + docker-compose.site.dev.yml
+# (형제 저장소를 바인드 마운트해 즉시 빌드)을 대신 쓴다.
+#
+#   npm run stack:up                           # = docker compose -f deploy/docker-compose.yml up -d
 #   npm run stack:pull  (새 이미지로 갱신) / stack:down / stack:logs
 #
-# 정합 워크스페이스가 저장한 슬라이스맵(SIM_WORLD)은 이 저장소 안의 deploy/worlds/ 에 쓰인다(scan-engine/.env 의
-# STUDIO_PUBLISH_DIR) -- 그래서 형제 저장소 없이도 최신 현장을 그대로 반영한다. 데모 월드(room/maze/...)는 이미지에도
-# 구워져 있지만 deploy/worlds/ 쪽이 항상 우선한다(같은 경로에 마운트).
-#
-# 포트(모두 127.0.0.1 만): 1883/9001 MQTT · 8765/8766 로봇0 Roboteq/센서 · 8775/8776 로봇1 · 8767 뷰어 · 5173 대시보드 · 9770 시그널링
-# sim-driver 는 호스트의 pathfinder API(:3001)에 host.docker.internal 로 접근한다 (Mac/Windows Docker Desktop, Linux 는 host-gateway).
+# 포트(모두 127.0.0.1 만): 1883/9001 MQTT · 5173 대시보드 · 9770 시그널링. 시뮬레이터 포트는 현장마다 다르다
+# (설정 › 시뮬레이터 카드가 배정 -- site.yml 참고).
 
 name: fleet-studio
 
@@ -22,32 +22,10 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
-      - "127.0.0.1:1883:1883"   # MQTT (호스트의 pathfinder API, 컨테이너)
+      - "127.0.0.1:1883:1883"   # MQTT (호스트의 pathfinder API, 컨테이너 -- 현장별 sim-driver 도 host.docker.internal 로 이 포트에 붙는다)
       - "127.0.0.1:9001:9001"   # MQTT over WebSocket (호스트 브라우저 페이지)
     volumes:
       - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-
-  simulator:
-    <<: *image
-    working_dir: /app/simulator
-    command: ["node", "src/index.js"]
-    environment:
-      SIM_WORLD: ${SIM_WORLD:-worlds/room.world.json}
-      SIM_NOISE: ${SIM_NOISE:-default}
-      SIM_SEED: ${SIM_SEED:-1}
-      SIM_RWD_MS: ${SIM_RWD_MS:-1000}
-      # 한 월드에 여러 대: "id@x,y,theta;id2@auto" (simulator/src/index.js)
-      SIM_ROBOTS: ${SIM_ROBOTS:-}
-      SCAN_MESH_DIR: /app/scan-projects
-    ports:
-      - "127.0.0.1:8765:8765"   # 로봇 0: Roboteq ASCII over WebSocket
-      - "127.0.0.1:8766:8766"   # 로봇 0: ground-truth + LIDAR
-      - "127.0.0.1:8767:8767"   # viewer.html (2D/3D, 모든 로봇)
-      - "127.0.0.1:8775:8775"   # 로봇 1 (SIM_ROBOTS 둘째): Roboteq
-      - "127.0.0.1:8776:8776"   # 로봇 1: 센서
-    volumes:
-      - ./worlds:/app/simulator/worlds:ro
-      - ../scan-engine/projects:/app/scan-projects:ro   # iOS 스캔 메시(overlay.glb) -- 뷰어 3D
 
   dashboard:
     <<: *image
@@ -68,51 +46,3 @@ services:
       SIGNALING_PORT: "9770"
     ports:
       - "127.0.0.1:9770:9770"
-
-  # 로봇 스택(Odometry + PoseFusion + Map/Costmap + PathFollower + Vda5050Node) -- 브라우저 없이 시뮬 로봇 0 을 몬다.
-  sim-driver:
-    <<: *image
-    profiles: ["nav"]
-    working_dir: /app/robot-os-chromium/apps/sim-driver
-    command: ["node", "src/index.js"]
-    environment:
-      SIM_ROBOTEQ_URL: ws://simulator:8765
-      SIM_SENSOR_URL: ws://simulator:8766
-      PATHFINDER_URL: ${PATHFINDER_URL:-http://host.docker.internal:3001}
-      ROBOT_ID: ${ROBOT_ID:-tb3-sim-01}
-      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
-      MAP_ID: ${MAP_ID:-}                      # 비우면 시뮬레이터 월드 이름 (= 같은 슬라이스맵으로 만든 현장)
-      CORRECTION_PERIOD_MS: ${CORRECTION_PERIOD_MS:-2000}
-      MAX_DEVIATION_M: ${MAX_DEVIATION_M:-0.8}
-      SIM_SLICEMAP: ${SIM_WORLD:-}             # 동적 장애물 정지의 정적 마스크 = 월드와 같은 슬라이스맵
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - simulator
-      - mosquitto
-    volumes:
-      - ./worlds:/app/simulator/worlds:ro
-
-  # 둘째 로봇(profile fleet): 같은 시뮬레이터 프로세스의 SIM_ROBOTS 둘째 항목 (8775/8776). 서로 충돌하고 LIDAR 로 본다.
-  sim-driver-2:
-    <<: *image
-    profiles: ["fleet"]
-    working_dir: /app/robot-os-chromium/apps/sim-driver
-    command: ["node", "src/index.js"]
-    environment:
-      SIM_ROBOTEQ_URL: ws://simulator:8775
-      SIM_SENSOR_URL: ws://simulator:8776
-      PATHFINDER_URL: ${PATHFINDER_URL:-http://host.docker.internal:3001}
-      ROBOT_ID: ${ROBOT_ID_2:-tb3-sim-02}
-      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
-      MAP_ID: ${MAP_ID:-}
-      CORRECTION_PERIOD_MS: ${CORRECTION_PERIOD_MS:-2000}
-      MAX_DEVIATION_M: ${MAX_DEVIATION_M:-0.8}
-      SIM_SLICEMAP: ${SIM_WORLD:-}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - simulator
-      - mosquitto
-    volumes:
-      - ./worlds:/app/simulator/worlds:ro
