@@ -287,15 +287,17 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
 
   // 로봇이 주행 중이면 위치/state 메시지가 초당 여러 번 들어와서, 메시지마다 바로 render()(list.replaceChildren())를
   // 부르면 카드 DOM이 그만큼 자주 통째로 새로 만들어진다 -- 사용자가 카드를 클릭한 그 순간에 하필 다시 그려지면
-  // 클릭이 옛 DOM 노드에 떨어져 씹힌다("카드를 눌러도 선택이 안 됨"). 화면 프레임당 한 번으로 묶는다.
-  let renderScheduled = false;
+  // 클릭이 옛 DOM 노드에 떨어져 씹힌다("카드를 눌러도 선택이 안 됨"). 짧은 지연으로 묶는다.
+  // requestAnimationFrame이 아니라 setTimeout을 쓴다 -- 운영 화면은 사용자가 다른 창/탭으로 넘어가 있어도 계속
+  // 최신 상태를 유지해야 하는데, rAF는 탭/창이 백그라운드면 브라우저가 통째로 멈춰버린다(그러면 다시 돌아올 때까지
+  // render()가 단 한 번도 안 불려 목록이 영영 비어 보인다 -- 실제로 이 문제로 재현/디버깅함).
+  let renderTimer = null;
   function scheduleRender() {
-    if (renderScheduled) return;
-    renderScheduled = true;
-    requestAnimationFrame(() => {
-      renderScheduled = false;
+    if (renderTimer) return;
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
       render();
-    });
+    }, 50);
   }
   function render() {
     const now = Date.now();
