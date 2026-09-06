@@ -574,3 +574,52 @@ btnViewMesh.addEventListener('click', () => {
   if (tab && ['maps', 'robots', 'operate', 'simulation', 'settings'].includes(tab)) activateTab(tab);
   else if (sub) activateMapsSub(sub);
 }
+
+// 왼쪽 내비 하단: 버전 · 빌드, 서비스 상태 점 (API · 플래너 · scan-engine · MQTT).
+// 상단 배지는 MQTT 만 보여 주는데, 나머지 셋이 죽으면 화면이 조용히 깨진다 -- 여기서 한눈에 보이게.
+{
+  const versionEl = document.getElementById('nav-version');
+  const healthEl = document.getElementById('nav-health');
+  const hash = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev';
+  if (versionEl) versionEl.textContent = `Fleet Studio v0.9 · ${hash}`;
+  if (healthEl) {
+    const services = [
+      { key: 'api', label: 'API', url: '/api/projects' },
+      { key: 'planner', label: '플래너', url: '/api/path/obstacle' }, // GET 은 405 -- 응답이 오면 살아 있는 것
+      { key: 'engine', label: 'scan-engine', url: '/scan-engine/api/groups' },
+      { key: 'mqtt', label: 'MQTT' },
+    ];
+    const items = new Map();
+    for (const svc of services) {
+      const item = document.createElement('span');
+      item.className = 'nav-health__item';
+      item.dataset.state = 'unknown';
+      item.innerHTML = `<i></i>${svc.label}`;
+      healthEl.appendChild(item);
+      items.set(svc.key, item);
+    }
+    async function probe(svc) {
+      try {
+        await fetch(svc.url, { method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(3000) });
+        return 'up';
+      } catch {
+        return 'down';
+      }
+    }
+    async function refreshHealth() {
+      for (const svc of services) {
+        if (!svc.url) continue;
+        const state = await probe(svc);
+        const item = items.get(svc.key);
+        item.dataset.state = state;
+        item.title = `${svc.label}: ${state === 'up' ? '응답' : '응답 없음'} (${svc.url})`;
+      }
+      const mqttUp = document.getElementById('gnb-mqtt-badge')?.classList.contains('online');
+      const mqttItem = items.get('mqtt');
+      mqttItem.dataset.state = mqttUp ? 'up' : 'down';
+      mqttItem.title = mqttUp ? 'MQTT 브로커 연결됨' : 'MQTT 브로커 연결 없음 (설정 › 브로커)';
+    }
+    refreshHealth();
+    setInterval(refreshHealth, 10000);
+  }
+}

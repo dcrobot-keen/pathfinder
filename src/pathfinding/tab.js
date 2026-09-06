@@ -169,6 +169,7 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
 
   // 레이어 on/off 패널 (2D 지도의 레이어 패널과 같은 컴포넌트 재사용).
   // .slice-panel은 top/right에 고정되어 있어 좌측의 pathfinding-panel과 겹치지 않는다.
+  // 레이어 토글은 지도 위 상자 대신 "표시" 버튼 → 팝오버 (레이어 + 색 범례). 바깥을 누르면 닫힌다.
   const layersPanelEl = document.createElement('div');
   mapEl.appendChild(layersPanelEl);
   renderSlicePanel(layersPanelEl, [], [], [
@@ -178,6 +179,42 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
     { layer: importedObstacleLayer, label: '스캔 장애물' },
     { layer: liveRobotPoseLayer, label: '실시간 로봇 위치' },
   ]);
+  layersPanelEl.classList.add('s2m-popover');
+  layersPanelEl.hidden = true;
+  if (isOperate) {
+    // 운영 기본: 편집용 노드/링크는 꺼 둔다 (필요하면 팝오버에서 켠다)
+    graphLayer.setVisible(false);
+    for (const row of layersPanelEl.querySelectorAll('.slice-row')) {
+      if (row.textContent.includes('노드/링크')) { const cb = row.querySelector('input'); if (cb) cb.checked = false; }
+    }
+  }
+  const legend = document.createElement('div');
+  legend.className = 's2m-legend';
+  legend.innerHTML = '<div class="slice-panel-title">범례</div>' + [
+    ['계획 경로', 'background: repeating-linear-gradient(90deg, #ff9800 0 6px, transparent 6px 10px); height: 3px; border-radius: 0'],
+    ['목적지', 'background: #e74c3c; border: 2px solid #fff'],
+    ['로봇 (등록 아이콘 · 이름)', 'background: #4fd1c5'],
+    ['스캔 장애물 (벽 · 가구)', 'background: transparent; border: 2px solid #ef4444; border-radius: 2px'],
+    ['다른 로봇 = 계획 시 장애물', 'background: #8b96a8'],
+  ].map(([label, sw]) => `<div class="s2m-legend__row"><span class="s2m-legend__sw" style="${sw}"></span><span>${label}</span></div>`).join('');
+  layersPanelEl.appendChild(legend);
+  const layersBtn = document.createElement('button');
+  layersBtn.className = 's2m-map-btn';
+  layersBtn.type = 'button';
+  layersBtn.title = '표시할 레이어와 범례';
+  layersBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg><span>표시</span>';
+  layersBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    layersPanelEl.hidden = !layersPanelEl.hidden;
+    layersBtn.classList.toggle('active', !layersPanelEl.hidden);
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (layersPanelEl.hidden) return;
+    if (layersPanelEl.contains(e.target) || layersBtn.contains(e.target)) return;
+    layersPanelEl.hidden = true;
+    layersBtn.classList.remove('active');
+  });
+  mapEl.appendChild(layersBtn);
 
   const geojsonFormat = new GeoJSON({
     dataProjection: indoorProjection,

@@ -135,7 +135,10 @@
       <button id="tab-operate" class="gnb-tab" data-tab="operate" title="실시간 플릿 관제, 목적지 명령, VDA5050 주문 관리"><span class="gnb-tab-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg></span><span class="gnb-tab-label">운영</span></button>
       <button id="tab-simulation" class="gnb-tab" data-tab="simulation" title="알고리즘 동적 회피 시뮬레이션 및 3D 뷰어"><span class="gnb-tab-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></span><span class="gnb-tab-label">시뮬레이션</span></button>
       <button id="tab-settings" class="gnb-tab" data-tab="settings" title="VDA5050 브로커, 외부 서비스 연동 및 좌표 규약 설정"><span class="gnb-tab-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span><span class="gnb-tab-label">설정</span></button>
-      <div class="s2m-shell__nav-foot">Fleet Studio v0.9<br>pathfinder · ros-chromium · scan-to-map-studio</div>
+      <div class="s2m-shell__nav-foot">
+        <div id="nav-version">Fleet Studio v0.9</div>
+        <div id="nav-health" class="nav-health" title="서비스 상태 (10초마다 확인)"></div>
+      </div>
     </nav>
 
     <!-- Workspace Views -->
