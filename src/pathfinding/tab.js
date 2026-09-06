@@ -1040,8 +1040,50 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
   }
 
   // 오른쪽 사이드 패널 + 액션 바를 플릿 스트림의 현재 상태로 맞춘다.
+  // 운영 알림 배너: 스트림 상태를 한 줄로 (브로커 · E-STOP · FATAL 오류 · 연결 끊김 · 근접 · 일시정지)
+  const alertsEl = isOperate ? document.getElementById('operate-alerts') : null;
+  function renderAlerts() {
+    if (!alertsEl) return;
+    const items = [];
+    if (!brokerConnected) items.push({ tone: 'danger', text: 'MQTT 브로커 연결 없음 — 로봇 상태와 명령이 전달되지 않습니다', hint: '설정 › 연결' });
+    const robots = Array.from(fleetBySerial.values());
+    const name = (r) => Array.from(commandRobotsById.values()).find((x) => x.vda5050Serial === r.serialNumber)?.name ?? r.serialNumber;
+    for (const r of robots) {
+      const st = r.state;
+      if (brokerConnected && r.connectionState === 'CONNECTIONBROKEN') items.push({ tone: 'warn', text: `${name(r)} 연결 끊김`, serial: r.serialNumber });
+      if (!st) continue;
+      if ((st.safetyState?.eStop ?? 'NONE') !== 'NONE') items.push({ tone: 'danger', text: `${name(r)} E-STOP (${st.safetyState.eStop})`, serial: r.serialNumber });
+      for (const e of st.errors ?? []) {
+        if (e.errorLevel === 'FATAL') items.push({ tone: 'danger', text: `${name(r)} ${e.errorType}: ${e.errorDescription ?? ''}`.trim(), serial: r.serialNumber });
+      }
+      if (st.paused) items.push({ tone: 'info', text: `${name(r)} 일시정지 중`, serial: r.serialNumber });
+    }
+    for (let i = 0; i < robots.length; i++) {
+      for (let j = i + 1; j < robots.length; j++) {
+        const a = robots[i], b = robots[j];
+        if (a.position?.x == null || b.position?.x == null || a.connectionState !== 'ONLINE' || b.connectionState !== 'ONLINE') continue;
+        const d = Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
+        if (d < 1.2) items.push({ tone: 'warn', text: `${name(a)} · ${name(b)} 근접 ${d.toFixed(2)} m`, serial: a.serialNumber });
+      }
+    }
+    alertsEl.replaceChildren();
+    for (const it of items.slice(0, 6)) {
+      const chip = document.createElement(it.serial ? 'button' : 'span');
+      chip.className = `s2m-alert s2m-alert--${it.tone}`;
+      chip.textContent = it.text;
+      if (it.hint) chip.title = it.hint;
+      if (it.serial) {
+        chip.title = '플릿 보드에서 선택';
+        chip.addEventListener('click', () => fleetBoard?.select(it.serial));
+      }
+      alertsEl.appendChild(chip);
+    }
+    if (items.length > 6) alertsEl.appendChild(Object.assign(document.createElement('span'), { className: 's2m-alert s2m-alert--info', textContent: `+${items.length - 6}` }));
+  }
+
   function syncSide() {
     updateActionBar();
+    renderAlerts();
     if (!sidePanel) return;
     const registryBySerial = new Map();
     for (const r of commandRobotsById.values()) registryBySerial.set(r.vda5050Serial, r);
@@ -1350,10 +1392,12 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
   }
 
   function fitToData() {
-    const extent = pcdSource.getExtent();
-    if (extent.every(Number.isFinite)) {
-      map.getView().fit(extent, { padding: [40, 40, 40, 40], maxZoom: 7 });
-    }
+    // PCD -> 스캔 장애물 -> 프로젝트 평면 순으로 맞출 범위를 고른다 (스캔 프로젝트는 PCD 가 없다).
+    let extent = pcdSource.getExtent();
+    if (!extent.every(Number.isFinite)) extent = importedObstacleSource.getExtent();
+    if (!extent.every(Number.isFinite)) extent = [0, 0, MAP_SIZE_X, MAP_SIZE_Y];
+    map.updateSize();
+    map.getView().fit(extent, { padding: [40, 40, 40, 40], maxZoom: 7 });
   }
 
   return { map, resize, fitToData, reset };

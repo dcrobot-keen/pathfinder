@@ -244,15 +244,23 @@ if (studioRefreshBtn) {
   });
 }
 
-// 시뮬레이션 3D 뷰어 제어 (접기/펼치기, 로봇 전환)
-const simViewerWrap = document.getElementById('simulation-viewer-wrap');
-const viewerToggleBtn = document.getElementById('btn-viewer-toggle');
-if (viewerToggleBtn && simViewerWrap) {
-  viewerToggleBtn.addEventListener('click', () => {
-    const isCollapsed = simViewerWrap.classList.toggle('collapsed');
-    viewerToggleBtn.textContent = isCollapsed ? '3D 펼치기' : '3D 접기';
+// 시뮬레이션 주 영역: 3D 뷰(시뮬레이터 뷰어 임베드) / 2D 데모(회피 애니메이션 지도) 토글, 로봇 시점 전환
+const simMapEl = document.getElementById('simulation-map');
+let simDemoFitted = false;
+const simViewBtns = document.querySelectorAll('.sim-view-btn');
+simViewBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const view = btn.dataset.simview;
+    simViewBtns.forEach((b) => b.classList.toggle('active', b === btn));
+    if (simMapEl) simMapEl.hidden = view !== '2d';
+    const frame = document.getElementById('sim-frame');
+    if (frame) frame.hidden = view !== '3d';
+    if (view === '2d') requestAnimationFrame(() => {
+      simulationTab?.resize();
+      if (!simDemoFitted) { simulationTab?.fitToData(); simDemoFitted = true; } // 숨긴 채 만들어져 처음엔 크기 0 이었다
+    });
   });
-}
+});
 const simBotBtns = document.querySelectorAll('.sim-bot-btn');
 const simFrame = document.getElementById('sim-frame');
 const simExtLink = document.getElementById('link-sim-external');
@@ -320,7 +328,7 @@ function activateTab(tabKey) {
 
   if (tabKey === 'simulation') {
     if (!simulationTab) {
-      simulationTab = createPathfindingTab(document.getElementById('simulation'), document.getElementById('simulation-panel'), 'obstacle', { variant: 'demo' });
+      simulationTab = createPathfindingTab(document.getElementById('simulation-map'), document.getElementById('simulation-panel'), 'obstacle', { variant: 'demo' });
       simulationTab.fitToData();
     }
     simulationTab.resize();

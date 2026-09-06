@@ -180,23 +180,30 @@
 
     <!-- 운영: 왼쪽 로봇 레일(플릿 보드) · 가운데 지도 + 액션 바 · 오른쪽 주문 목록/현장 요약 -->
     <div id="operate" class="view view-operate" data-view="operate">
+      <div id="operate-alerts" class="s2m-alerts" aria-live="polite"></div>
       <div id="operate-panel"></div>
       <div id="operate-map"></div>
       <aside id="operate-side" aria-label="주문 목록과 현장 요약"></aside>
     </div>
 
-    <div id="simulation" class="view" data-view="simulation">
+    <!-- 시뮬레이션: 데모 컨트롤 레일 | 주 영역(3D 뷰 / 2D 데모 토글). 운영과 같은 골격 (IA 점검 4단계) -->
+    <div id="simulation" class="view view-sim" data-view="simulation">
       <div id="simulation-panel"></div>
-      <div id="simulation-viewer-wrap">
-        <div class="viewer-embed-bar">
-          <span class="viewer-embed-title">시뮬레이터 3D 뷰</span>
+      <div id="simulation-main">
+        <div class="sim-mainbar">
+          <div class="sim-mainbar__tabs" role="tablist">
+            <button class="sim-view-btn active" data-simview="3d">3D 뷰</button>
+            <button class="sim-view-btn" data-simview="2d">2D 데모</button>
+          </div>
           <div class="viewer-bot-selector">
+            <span class="sim-mainbar__label">시점</span>
             <button class="sim-bot-btn active" data-url="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-01">tb3-sim-01</button>
             <button class="sim-bot-btn" data-url="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-02">tb3-sim-02</button>
           </div>
-          <button id="btn-viewer-toggle" class="sim-viewer-toggle-btn">3D 접기</button>
-          <a id="link-sim-external" class="settings-service-link" href="http://localhost:8767/?view=3d" target="_blank" rel="noopener">열기 ↗</a>
+          <span class="sim-mainbar__spacer"></span>
+          <a id="link-sim-external" class="settings-service-link" href="http://localhost:8767/?view=3d" target="_blank" rel="noopener">새 창 ↗</a>
         </div>
+        <div id="simulation-map" hidden></div>
         <iframe id="sim-frame" src="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-01" title="시뮬레이터 3D 뷰 (simulator viewer.html)"></iframe>
       </div>
     </div>
