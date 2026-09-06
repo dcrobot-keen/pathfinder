@@ -950,28 +950,6 @@ export function createPathfindingTab(mapEl, panelEl, mode, { variant = 'demo', s
       },
       onStatus: (text) => { commandStatus.textContent = text; },
     });
-    // [임시 진단] 카드 클릭이 어디에 떨어지는지 화면에 찍는다 -- 사용자 환경에서만 재현되는 "카드 클릭 무반응" 추적용.
-    // 캡처 단계 + document 레벨이라 어떤 stopPropagation 에도 막히지 않고 무조건 먼저 찍힌다. 원인 확인 후 제거할 것.
-    const diagLabel = (t) => `${t.tagName?.toLowerCase() ?? '?'}${t.className && typeof t.className === 'string' ? '.' + t.className.split(' ').slice(0, 2).join('.') : ''}`;
-    // 전용 줄에 쓴다 -- commandStatus 는 선택 성공 시 onSelect 가 "선택됨"으로 덮어써서 진단 문구가 사라진다.
-    const diagEl = document.createElement('div');
-    diagEl.style.cssText = 'font:11px/1.5 monospace;color:#f5a623;white-space:pre-wrap;padding:6px 0;border-top:1px dashed #444;margin-top:6px';
-    diagEl.textContent = '[진단] 카드를 클릭하면 여기에 클릭이 어디 떨어졌는지 표시됩니다.';
-    boardEl.appendChild(diagEl);
-    const diagPointer = window.PointerEvent ? 'pointerdown' : 'mousedown';
-    document.addEventListener(diagPointer, (e) => {
-      const t = e.target;
-      if (!boardEl.contains(t)) return;
-      const row = t.closest?.('.fleet-row');
-      diagEl.textContent = `[진단] ${diagPointer} ${diagLabel(t)} → 카드: ${row?.dataset.serial ?? '없음'} · 현재선택: ${fleetBoard?.getSelected()?.serialNumber ?? '없음'}`;
-    }, true);
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      if (!boardEl.contains(t)) return;
-      const row = t.closest?.('.fleet-row');
-      diagEl.textContent += `\n[진단] click ${diagLabel(t)} → 카드: ${row?.dataset.serial ?? '없음'} · 버튼안: ${t.closest?.('button') ? '예' : '아니오'} · 기본동작취소됨: ${e.defaultPrevented ? '예' : '아니오'}`;
-      setTimeout(() => { diagEl.textContent += `\n[진단] 200ms 뒤 선택: ${fleetBoard?.getSelected()?.serialNumber ?? '없음'} · 액션바: ${document.querySelector('.s2m-actionbar__name')?.textContent ?? '?'}`; }, 200);
-    }, true);
     if (sideEl) sidePanel = createOperateSidePanel(sideEl);
   } else {
     // 시뮬레이션(데모) 화면에는 실제 로봇 명령 박스를 두지 않는다 -- 운영 화면의 일이다(중복 제거).

@@ -15,6 +15,31 @@ function el(tag, className, text) {
 
 const CONNECTION_LABEL = { ONLINE: '온라인', OFFLINE: '오프라인', CONNECTIONBROKEN: '연결 끊김', UNKNOWN: '알 수 없음' };
 
+/** 값이 바뀔 때만 textContent 를 쓴다 -- 같은 값이라도 대입하면 텍스트 노드가 새로 만들어져, 누르고 있던 노드를 잃는다. */
+function setText(node, value) {
+  if (node.textContent !== value) node.textContent = value;
+}
+
+/** 상세 패널의 "위치 (x, y, θ)" 값 -- 매 틱 바뀌므로 패널을 다시 만들지 않고 이 문자열만 제자리에서 갱신한다. */
+function formatPos(r) {
+  const x = r.position?.x != null ? `${r.position.x.toFixed(2)}m` : '-';
+  const y = r.position?.y != null ? `${r.position.y.toFixed(2)}m` : '-';
+  const deg = r.position?.theta != null ? `${((r.position.theta * 180) / Math.PI).toFixed(1)}°` : '-';
+  const posInit = r.position?.positionInitialized ? '초기화됨' : '미초기화';
+  return `${x}, ${y}, ${deg} (${posInit})`;
+}
+
+/** 상세 패널/버튼의 모양을 정하는 값들만 모은 서명. 이게 같으면 패널을 다시 만들지 않는다(높이 흔들림·주문 이력 재조회 방지). */
+function detailSignature(r, reg, s, online) {
+  return JSON.stringify([
+    online, r.connectionState, r.position?.mapId ?? null, r.position?.positionInitialized ?? null,
+    s?.orderId ?? null, s?.lastNodeId ?? null, s?.nodesLeft ?? null, s?.paused ?? null, s?.driving ?? null,
+    s?.operatingMode ?? null, s?.safetyState?.eStop ?? null, s?.safetyState?.fieldViolation ?? null,
+    s?.batteryCharge != null ? Math.round(s.batteryCharge) : null, s?.batteryVoltage != null ? s.batteryVoltage.toFixed(1) : null,
+    s?.errors ?? null, r.lastOrder?.waypoints ?? null, reg?.id ?? null,
+  ]);
+}
+
 function fmtAge(ms) {
   if (ms == null) return '-';
   if (ms < 1000) return '방금';
@@ -35,11 +60,9 @@ function renderRobotDetail(r, reg, s) {
   const detail = el('div', 'fleet-row-detail');
   const grid = el('div', 'fleet-detail-grid');
 
-  const x = r.position?.x != null ? `${r.position.x.toFixed(2)}m` : '-';
-  const y = r.position?.y != null ? `${r.position.y.toFixed(2)}m` : '-';
-  const deg = r.position?.theta != null ? `${((r.position.theta * 180) / Math.PI).toFixed(1)}°` : '-';
-  const posInit = r.position?.positionInitialized ? '초기화됨' : '미초기화';
-  grid.appendChild(detailItem('위치 (x, y, θ)', `${x}, ${y}, ${deg} (${posInit})`));
+  const posItem = detailItem('위치 (x, y, θ)', formatPos(r));
+  posItem.querySelector('.fleet-detail-val').dataset.field = 'pos'; // render() 가 매 틱 제자리에서 갱신
+  grid.appendChild(posItem);
   grid.appendChild(detailItem('좌표계 (mapId)', r.position?.mapId ?? 'default'));
 
   const orderText = s?.orderId ? `${s.orderId} (노드 ${s.lastNodeId ?? '-'}, 잔여 ${s.nodesLeft ?? 0})` : '주문 없음';
@@ -145,7 +168,31 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
   // 위임된 클릭/키보드 -- 행(.fleet-row)은 스트림이 올 때마다 통째로 다시 만들어지므로, 행 자체에 리스너를
   // 붙이면 "지금 이 순간의 그 DOM 노드"에 묶인다. list 컨테이너는 절대 교체되지 않으니 여기 하나만 달아두고
   // 클릭 시점에 실제로 화면에 있는 행을 data-serial 로 찾는다 -- 재렌더링 타이밍과 무관하게 항상 맞는다.
+  // 선택 판정은 브라우저의 click 합성에 기대지 않는다. Chrome 은 mousedown 과 mouseup 이 같은 요소가 아니면
+  // click 을 안 만드는데, 누르고 있는 사이에 위쪽 카드(선택된 로봇의 상세 패널)가 갱신되며 높이가 바뀌면 아래
+  // 카드가 밀려 mouseup 이 다른 요소에 떨어진다 -- Playwright 로 사람처럼 눌렀다 떼면 실제로 재현됨(60회 중 2회).
+  // 그래서 pointerdown 에서 누른 카드를 기억하고, pointerup 에서 손이 8px 안에서 떨어졌으면 그 카드를 선택한다.
+  let press = null; // { serial, x, y, at }
+  let pointerSelectedAt = 0;
+  list.addEventListener('pointerdown', (e) => {
+    press = null;
+    if (e.button !== 0 || e.target.closest('button')) return;
+    const row = e.target.closest('.fleet-row');
+    if (row && list.contains(row)) press = { serial: row.dataset.serial, x: e.clientX, y: e.clientY };
+  });
+  list.addEventListener('pointerup', (e) => {
+    const p = press;
+    press = null;
+    if (!p || e.button !== 0 || e.target.closest('button')) return;
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) return; // 드래그는 클릭이 아니다
+    pointerSelectedAt = performance.now();
+    select(p.serial === selectedSerial ? null : p.serial);
+  });
+  list.addEventListener('pointercancel', () => { press = null; });
+  // click 은 키보드(Enter/Space → row.click()) 등 포인터 없이 오는 경우의 보조 경로. 방금 pointerup 이 처리한
+  // 직후에 따라오는 click 은 무시한다(같은 클릭을 두 번 토글하지 않게).
   list.addEventListener('click', (e) => {
+    if (performance.now() - pointerSelectedAt < 400) return;
     const row = e.target.closest('.fleet-row');
     if (!row || !list.contains(row)) return;
     if (e.target.closest('button')) return; // 취소/일시정지/제거 버튼은 자기 핸들러가 처리(stopPropagation)
@@ -372,17 +419,19 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       row.classList.toggle('selected', r.serialNumber === selectedSerial);
       row.classList.toggle('offline', !online);
 
-      if (reg?.icon) { if (icon.src !== reg.icon) icon.src = reg.icon; icon.hidden = false; } else { icon.hidden = true; icon.removeAttribute('src'); }
+      if (reg?.icon) { if (icon.getAttribute('src') !== reg.icon) icon.src = reg.icon; icon.hidden = false; } else { icon.hidden = true; if (icon.hasAttribute('src')) icon.removeAttribute('src'); }
 
-      name.textContent = reg?.name ?? r.serialNumber;
+      // 값이 실제로 바뀔 때만 쓴다. textContent 대입은 값이 같아도 텍스트 노드를 새로 갈아끼우는데, 사용자가
+      // 누르고 있는 자리가 바로 이 글자(예: .fleet-row-name)면 Chrome 이 누른 노드를 잃어 click 을 안 만든다.
+      setText(name, reg?.name ?? r.serialNumber);
       const conn = CONNECTION_LABEL[r.connectionState] ?? CONNECTION_LABEL.UNKNOWN;
       const stateText = !online ? conn + (stale && r.connectionState === 'ONLINE' ? ' · 오래됨' : '') : !s ? '온라인' : s.paused ? '일시정지' : s.driving ? `주행 중 · 남은 노드 ${s.nodesLeft ?? '-'}` : s.nodesLeft ? '대기' : '유휴';
-      sub.textContent = `${stateText} · ${fmtAge(age)}`;
+      setText(sub, `${stateText} · ${fmtAge(age)}`);
 
       const prox = proximityWarnings.get(r.serialNumber) ?? null;
       if (prox) {
         if (!entry.prox) { entry.prox = el('div', 'fleet-row-prox'); main.appendChild(entry.prox); }
-        entry.prox.textContent = prox;
+        setText(entry.prox, prox);
       } else if (entry.prox) {
         entry.prox.remove();
         entry.prox = null;
@@ -391,20 +440,30 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
       const lastErr = s?.errors?.length ? s.errors[s.errors.length - 1] : null;
       if (lastErr) {
         if (!entry.err) { entry.err = el('div', 'fleet-row-error'); main.appendChild(entry.err); }
-        entry.err.textContent = `${lastErr.errorType}${lastErr.errorLevel === 'FATAL' ? ' (FATAL)' : ''}`;
-        entry.err.title = lastErr.errorDescription ?? '';
+        setText(entry.err, `${lastErr.errorType}${lastErr.errorLevel === 'FATAL' ? ' (FATAL)' : ''}`);
+        const title = lastErr.errorDescription ?? '';
+        if (entry.err.title !== title) entry.err.title = title;
       } else if (entry.err) {
         entry.err.remove();
         entry.err = null;
       }
 
-      pill.className = `fleet-pill ${!online ? 'off' : s?.paused ? 'paused' : s?.driving ? 'driving' : 'idle'}`;
-      pill.textContent = !online ? '●' : s?.paused ? '∥' : s?.driving ? '▶' : '●';
-      batt.textContent = s?.batteryCharge != null ? `${s.batteryCharge.toFixed(0)}%` : '';
+      const pillClass = `fleet-pill ${!online ? 'off' : s?.paused ? 'paused' : s?.driving ? 'driving' : 'idle'}`;
+      if (pill.className !== pillClass) pill.className = pillClass;
+      setText(pill, !online ? '●' : s?.paused ? '∥' : s?.driving ? '▶' : '●');
+      setText(batt, s?.batteryCharge != null ? `${s.batteryCharge.toFixed(0)}%` : '');
 
       // 선택된 행에만 붙는 취소/일시정지/제거 버튼 + 상세 -- 선택된 로봇 하나만 값이 자주 바뀌므로
       // (다른 두 행의 본체는 그대로) 이 부분만 매번 다시 만들어도 클릭 대상 자체엔 영향이 없다.
       if (r.serialNumber === selectedSerial) {
+        const sig = detailSignature(r, reg, s, online);
+        if (entry.extra && entry.extra.sig === sig) {
+          // 모양이 안 바뀜 -> 패널을 그대로 두고 매 틱 바뀌는 위치 글자만 제자리에서 갱신 (높이 불변, 재조회 없음)
+          const posEl = entry.extra.detail.querySelector('[data-field="pos"]');
+          if (posEl) setText(posEl, formatPos(r));
+          if (row.parentNode !== list) list.appendChild(row);
+          continue;
+        }
         if (entry.extra) entry.extra.remove();
         const actions = el('div', 'fleet-row-actions');
         const cancelBtn = el('button', 'robot-button robot-button-danger', '취소');
@@ -427,14 +486,23 @@ export function createFleetBoard(containerEl, { onSelect = () => {}, onStatus = 
         actions.append(cancelBtn, pauseBtn, forgetBtn);
         const detail = renderRobotDetail(r, reg, s);
         row.append(actions, detail);
-        entry.extra = { remove: () => { actions.remove(); detail.remove(); } };
+        entry.extra = { sig, detail, remove: () => { actions.remove(); detail.remove(); } };
       } else if (entry.extra) {
         entry.extra.remove();
         entry.extra = null;
       }
 
-      // 정렬 순서대로 배치 -- 이미 그 자리에 있으면 appendChild 는 아무것도 옮기지 않는다(DOM 변경 없음).
-      list.appendChild(row);
+      // 새 행만 붙인다. 이미 붙어 있는 행은 여기서 절대 건드리지 않는다 -- appendChild 는 "이미 있는 자식"이라도
+      // 떼었다가 다시 넣는 동작이라(Chrome), 사용자가 마우스를 누르고 있는 동안 그게 일어나면 click 이벤트 자체가
+      // 취소된다. Playwright 로 사람처럼 40~160ms 눌렀다 떼면 24회 중 23회 click 이 안 뜨는 걸로 재현됨.
+      if (row.parentNode !== list) list.appendChild(row);
+    }
+
+    // 정렬 순서가 실제로 달라졌을 때만(로봇 추가/제거 등 드문 경우) 옮긴다.
+    const desired = rows.map((r) => r.serialNumber);
+    const current = Array.from(list.children).map((c) => c.dataset.serial);
+    if (desired.join('\n') !== current.join('\n')) {
+      for (const serial of desired) list.appendChild(rowEntries.get(serial).row);
     }
   }
 
