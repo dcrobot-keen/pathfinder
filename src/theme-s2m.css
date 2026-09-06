@@ -452,9 +452,11 @@ body.no-ribbon .view { top: var(--topbar-h); }
 .sim-view-btn.active { background: rgba(79, 209, 197, .14); color: var(--accent); }
 .sim-mainbar__label { color: var(--text-faint); font-size: 11px; }
 .viewer-bot-selector { display: inline-flex; align-items: center; gap: 6px; }
+#sim-bot-buttons { display: inline-flex; align-items: center; gap: 6px; }
 .sim-mainbar__spacer { flex: 1; }
 #simulation-map { flex: 1; position: relative; min-height: 0; }
 #simulation-main > #sim-frame { flex: 1; width: 100%; height: auto; min-height: 0; border: 0; background: var(--panel-3); }
+#sim-frame-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
 #simulation-main > [hidden] { display: none !important; }
 
 /* ---- 운영 알림 배너 (3열 위 한 줄; 비어 있으면 사라짐) ---- */

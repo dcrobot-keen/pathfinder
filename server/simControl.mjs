@@ -1,36 +1,37 @@
-// 설정 › 시뮬레이터 카드의 서버 쪽 -- 지금까지 "어떤 월드를 로드할지 · 로봇을 몇 대 띄울지"는
-// deploy/.env 를 손으로 고치고 터미널에서 docker compose 를 다시 실행해야 했다. 이 라우터는 같은
-// 일을 화면에서 하게 해준다: 프로젝트별로 저장된 설정(data/sim-config.json)을 읽고, 검증한 뒤
-// docker compose(-f deploy/docker-compose.dev.yml, 소스 빌드형)를 자식 프로세스로 실행한다.
+// 설정 › 시뮬레이터 카드의 서버 쪽 -- 현장(pathfinder 프로젝트)마다 어떤 월드를 로드할지 · 로봇을 몇 대
+// 띄울지를 화면에서 정하고 docker compose 로 실행한다. 여러 현장을 **동시에** 띄울 수 있다: 시뮬레이터·
+// sim-driver 만 현장별 compose 프로젝트로 분리하고(브로커·대시보드·시그널링은 deploy/docker-compose.dev.yml
+// 이 공유 인프라로 계속 띄운다), 현장마다 포트 베이스를 하나씩 배정해 호스트 포트가 겹치지 않게 한다.
 //
-// 범위는 지금 하나뿐인 시뮬레이터 인스턴스(월드 하나 + 로봇 최대 2대, compose가 정의한 sim-driver/
-// sim-driver-2 두 슬롯이 상한)를 켜고 끄는 것까지다. 여러 현장을 동시에 띄우는 오케스트레이션은
-// 범위 밖(architecture-improvements.md 참고).
+// 대상은 deploy/docker-compose.site.dev.yml(소스 빌드형)이다. GHCR 이미지(docker-compose.yml)는 아직 CI가
+// 성공적으로 push한 적이 없어 여기서는 쓰지 않는다 -- 이미지가 준비되면 같은 분리를 그쪽에도 적용할 것.
 //
-// GHCR 이미지(docker-compose.yml)는 아직 CI가 성공적으로 push한 적이 없어 여기서는 dev 파일을 쓴다 --
-// 이미지가 준비되면 COMPOSE_FILE 상수만 바꾸면 된다.
-//
-//   GET  /api/sim/worlds              -> { worlds: ["room.world.json", "project_20260905.slicemap.json", ...] }
-//   GET  /api/sim/config/:projectId   -> { world, robots }
-//   POST /api/sim/start   { projectId, world, robots } -> 저장 + docker compose up
-//   POST /api/sim/stop                                  -> docker compose stop (시뮬레이터 관련 서비스만)
-//   GET  /api/sim/status              -> { simulator, driver1, driver2, config }
+//   GET  /api/sim/worlds                 -> { worlds: [...] }
+//   GET  /api/sim/config/:projectId      -> { world, robots, ports }
+//   POST /api/sim/start/:projectId  { world, robots } -> 저장 + docker compose up (포트 배정, 다른 현장과 로봇 id 충돌 검사)
+//   POST /api/sim/stop/:projectId                      -> 이 현장의 컨테이너만 정지 (공유 인프라는 안 건드림)
+//   GET  /api/sim/status/:projectId      -> { simulator, driver1, driver2, world, robots, ports }
 import { Router } from 'express';
 import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { JSONFilePreset } from 'lowdb/node';
 
-const COMPOSE_FILE = 'deploy/docker-compose.dev.yml';
+const SITE_COMPOSE = 'deploy/docker-compose.site.dev.yml';
 const ROBOT_ID_RE = /^[a-zA-Z0-9_-]{1,32}$/;
 const SPAWN_RE = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$/;
-const MAX_ROBOTS = 2; // compose가 정의한 sim-driver/sim-driver-2 슬롯 수
+const MAX_ROBOTS = 2; // 이 현장에서 -- compose가 정의한 sim-driver/sim-driver-2 두 슬롯이 상한
+const FIRST_PORT_BASE = 8765;
+const PORT_STEP = 100; // 시뮬레이터 5개 포트(8765/6/7, 8775/6)를 한 블록으로 다음 현장에 넘겨준다
 
-function runCompose(repoRoot, args, envOverride = {}) {
+const composeProjectFor = (projectId) => `fs-sim-${projectId.slice(0, 8)}`;
+const portsFor = (base) => ({ roboteq: base, sensor: base + 1, viewer: base + 2, roboteq2: base + 10, sensor2: base + 11 });
+
+function runCompose(repoRoot, composeProject, args, envOverride = {}) {
   return new Promise((resolvePromise, reject) => {
     execFile(
       'docker',
-      ['compose', '-f', COMPOSE_FILE, ...args],
+      ['compose', '-p', composeProject, '-f', SITE_COMPOSE, ...args],
       { cwd: repoRoot, env: { ...process.env, ...envOverride }, timeout: 60000, maxBuffer: 4 * 1024 * 1024 },
       (err, stdout, stderr) => {
         if (err) reject(Object.assign(new Error(stderr?.trim().slice(-800) || err.message), { stdout, stderr }));
@@ -47,7 +48,7 @@ async function listWorlds(worldsDir) {
 
 function validateRobots(robots) {
   if (!Array.isArray(robots)) throw Object.assign(new Error('robots 는 배열이어야 합니다.'), { status: 400 });
-  if (robots.length > MAX_ROBOTS) throw Object.assign(new Error(`로봇은 최대 ${MAX_ROBOTS}대까지입니다 (sim-driver 슬롯 상한).`), { status: 400 });
+  if (robots.length > MAX_ROBOTS) throw Object.assign(new Error(`이 현장에서 로봇은 최대 ${MAX_ROBOTS}대까지입니다 (sim-driver 슬롯 상한).`), { status: 400 });
   for (const r of robots) {
     if (!ROBOT_ID_RE.test(r?.id ?? '')) throw Object.assign(new Error(`로봇 id 가 올바르지 않습니다: ${r?.id}`), { status: 400 });
     const spawn = r?.spawn ?? 'auto';
@@ -62,9 +63,30 @@ async function validateWorld(world, worldsDir) {
   return world;
 }
 
+async function composeState(repoRoot, composeProject) {
+  try {
+    const { stdout } = await runCompose(repoRoot, composeProject, ['ps', '--format', 'json']);
+    const rows = stdout
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const stateOf = (name) => rows.find((r) => r.Service === name)?.State ?? 'stopped';
+    return { simulator: stateOf('simulator'), driver1: stateOf('sim-driver'), driver2: stateOf('sim-driver-2') };
+  } catch {
+    return { simulator: 'stopped', driver1: 'stopped', driver2: 'stopped' };
+  }
+}
+
 export async function createSimControlRouter({ dataDir, repoRoot }) {
   const worldsDir = resolve(repoRoot, 'deploy/worlds');
-  const db = await JSONFilePreset(resolve(dataDir, 'sim-config.json'), { byProject: {} });
+  const db = await JSONFilePreset(dataDir + '/sim-config.json', { nextPortBase: FIRST_PORT_BASE, byProject: {} });
+  // 이전 버전(현장 하나만 관리하던 시절)의 data/sim-config.json 은 nextPortBase 가 없다 -- JSONFilePreset 은
+  // 파일이 이미 있으면 기본값을 무시하고 그 내용을 그대로 쓰므로, 없으면 채워 넣는다.
+  if (typeof db.data.nextPortBase !== 'number') {
+    db.data.nextPortBase = FIRST_PORT_BASE;
+    await db.write();
+  }
   const router = Router();
 
   router.get('/sim/worlds', async (req, res) => {
@@ -73,67 +95,84 @@ export async function createSimControlRouter({ dataDir, repoRoot }) {
 
   router.get('/sim/config/:projectId', (req, res) => {
     const saved = db.data.byProject[req.params.projectId];
-    res.json(saved ?? { world: null, robots: [{ id: 'tb3-sim-01', spawn: 'auto' }] });
-  });
-
-  router.post('/sim/start', async (req, res) => {
-    const { projectId, world, robots } = req.body ?? {};
-    if (!projectId || typeof projectId !== 'string') {
-      res.status(400).json({ error: 'projectId 가 필요합니다.' });
+    if (!saved) {
+      res.json({ world: null, robots: [{ id: 'tb3-sim-01', spawn: 'auto' }], ports: null });
       return;
     }
+    res.json({ world: saved.world, robots: saved.robots, ports: saved.portBase ? portsFor(saved.portBase) : null });
+  });
+
+  router.post('/sim/start/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    const { world, robots } = req.body ?? {};
     try {
       const validWorld = await validateWorld(world, worldsDir);
       const validRobots = validateRobots(robots);
-      db.data.byProject[projectId] = { world: validWorld, robots: validRobots };
+
+      // 다른 현장 중 지금 떠 있는 것과 로봇 id 가 겹치는지 확인 -- 같은 브로커를 쓰므로 시리얼이 겹치면 서로 덮어쓴다.
+      const requestedIds = new Set(validRobots.map((r) => r.id));
+      for (const [otherId, otherCfg] of Object.entries(db.data.byProject)) {
+        if (otherId === projectId || !otherCfg.portBase) continue;
+        const state = await composeState(repoRoot, composeProjectFor(otherId));
+        if (state.simulator !== 'running') continue;
+        for (const r of otherCfg.robots ?? []) {
+          if (requestedIds.has(r.id)) {
+            throw Object.assign(new Error(`로봇 id "${r.id}" 는 이미 실행 중인 다른 현장(${otherId})에서 쓰고 있습니다.`), { status: 409 });
+          }
+        }
+      }
+
+      const existing = db.data.byProject[projectId];
+      const portBase = existing?.portBase ?? db.data.nextPortBase;
+      if (!existing?.portBase) db.data.nextPortBase = portBase + PORT_STEP;
+      db.data.byProject[projectId] = { world: validWorld, robots: validRobots, portBase };
       await db.write();
 
+      const ports = portsFor(portBase);
+      const composeProject = composeProjectFor(projectId);
       const envOverride = {
         SIM_WORLD: `worlds/${validWorld}`,
         SIM_ROBOTS: validRobots.map((r) => `${r.id}@${r.spawn}`).join(';'),
         ROBOT_ID: validRobots[0]?.id ?? 'tb3-sim-01',
         ROBOT_ID_2: validRobots[1]?.id ?? 'tb3-sim-02',
+        SIM_PORT_0: String(ports.roboteq),
+        SIM_PORT_1: String(ports.sensor),
+        SIM_PORT_2: String(ports.viewer),
+        SIM_PORT_3: String(ports.roboteq2),
+        SIM_PORT_4: String(ports.sensor2),
       };
       const services = ['simulator'];
       if (validRobots[0]) services.push('sim-driver');
       if (validRobots[1]) services.push('sim-driver-2');
-      await runCompose(repoRoot, ['up', '-d', '--force-recreate', ...services], envOverride);
-      if (!validRobots[1]) await runCompose(repoRoot, ['stop', 'sim-driver-2']).catch(() => {});
-      if (!validRobots[0]) await runCompose(repoRoot, ['stop', 'sim-driver']).catch(() => {});
+      await runCompose(repoRoot, composeProject, ['up', '-d', '--force-recreate', ...services], envOverride);
+      if (!validRobots[1]) await runCompose(repoRoot, composeProject, ['stop', 'sim-driver-2']).catch(() => {});
+      if (!validRobots[0]) await runCompose(repoRoot, composeProject, ['stop', 'sim-driver']).catch(() => {});
 
-      res.json({ ok: true, world: validWorld, robots: validRobots });
+      res.json({ ok: true, world: validWorld, robots: validRobots, ports });
     } catch (err) {
       res.status(err.status ?? 500).json({ error: err.message });
     }
   });
 
-  router.post('/sim/stop', async (req, res) => {
+  router.post('/sim/stop/:projectId', async (req, res) => {
+    const composeProject = composeProjectFor(req.params.projectId);
     try {
-      await runCompose(repoRoot, ['stop', 'simulator', 'sim-driver', 'sim-driver-2']);
+      await runCompose(repoRoot, composeProject, ['stop', 'simulator', 'sim-driver', 'sim-driver-2']);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  router.get('/sim/status', async (req, res) => {
-    try {
-      const { stdout } = await runCompose(repoRoot, ['ps', '--format', 'json']);
-      const rows = stdout
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map((line) => JSON.parse(line));
-      const stateOf = (name) => rows.find((r) => r.Service === name)?.State ?? 'stopped';
-      res.json({
-        simulator: stateOf('simulator'),
-        driver1: stateOf('sim-driver'),
-        driver2: stateOf('sim-driver-2'),
-        configs: db.data.byProject,
-      });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+  router.get('/sim/status/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    const saved = db.data.byProject[projectId];
+    if (!saved?.portBase) {
+      res.json({ simulator: 'stopped', driver1: 'stopped', driver2: 'stopped', world: saved?.world ?? null, robots: saved?.robots ?? [], ports: null });
+      return;
     }
+    const state = await composeState(repoRoot, composeProjectFor(projectId));
+    res.json({ ...state, world: saved.world, robots: saved.robots, ports: portsFor(saved.portBase) });
   });
 
   return router;

@@ -18,7 +18,7 @@ import VectorLayer from 'ol/layer/Vector.js';
 import GeoJSON from 'ol/format/GeoJSON.js';
 import { createEditLayer } from './editLayer.js';
 import { buildGridLayer } from './grid2d.js';
-import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom, activeProjectFloorImage, activeProjectSlicemap } from './appShared.js';
+import { indoorProjection, MAP_SIZE_X, MAP_SIZE_Y, activeProjectId, activeProjectName, pcdSource, importedObstacleSource, liveRobotPoseSource, activeProjectImportedRoom, activeProjectFloorImage, activeProjectSlicemap } from './appShared.js';
 import { importedObstacleStyle, createImportedObstaclesPanel } from './importedObstacles.js';
 import { loadImportedObstacles } from './importedObstaclesApi.js';
 import { startLiveRobotPoseTracking } from './liveRobotPose.js';
@@ -35,6 +35,7 @@ import { importRobotMapFiles } from './imports/importRobotMap.js';
 import { importFloorImageFile } from './imports/importFloorImage.js';
 import { createSite3D } from './site3d/site3dView.js';
 import { createSimStatusPanel } from './simulation/simStatusPanel.js';
+import { createSimViewerFrame } from './simulation/simViewerFrame.js';
 import { openRobotDrawer } from './robots/robotDrawer.js';
 import { listRobots } from './robots/robotApi.js';
 
@@ -288,18 +289,7 @@ simViewBtns.forEach((btn) => {
     });
   });
 });
-const simBotBtns = document.querySelectorAll('.sim-bot-btn');
-const simFrame = document.getElementById('sim-frame');
-const simExtLink = document.getElementById('link-sim-external');
-simBotBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    simBotBtns.forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    const url = btn.dataset.url;
-    if (simFrame && url) simFrame.src = url;
-    if (simExtLink && url) simExtLink.href = url;
-  });
-});
+createSimViewerFrame({ projectId: activeProjectId });
 
 // 화면 헤더(crumb · 설명 · 상태 핀). 핀은 플릿 스트림이 채운다(아래 recountFleet).
 const SCREEN_META = {

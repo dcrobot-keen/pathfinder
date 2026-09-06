@@ -27,8 +27,6 @@ function textInput(value, placeholder = '') {
   return input;
 }
 
-const STATE_LABEL = { running: '실행 중', stopped: '중지됨', restarting: '재시작 중', exited: '중지됨' };
-
 /**
  * @param {HTMLElement} containerEl
  * @param {{ projectId: string, projectName: string }} opts
@@ -37,7 +35,11 @@ export function createSimControlCard(containerEl, { projectId, projectName }) {
   containerEl.className = 'robot-form-panel settings-panel';
   containerEl.appendChild(el('div', 'robot-form-title', '시뮬레이터'));
   containerEl.appendChild(
-    el('div', 'robot-form-status', '이 현장의 시뮬레이터를 여기서 켜고 끕니다. docker compose(개발용, deploy/docker-compose.dev.yml)를 대신 실행합니다.')
+    el(
+      'div',
+      'robot-form-status',
+      '이 현장의 시뮬레이터를 여기서 켜고 끕니다. 다른 현장과 동시에 띄울 수 있고(포트는 자동 배정), docker compose(개발용, deploy/docker-compose.site.dev.yml)를 대신 실행합니다.'
+    )
   );
 
   const statusLine = el('div', 'fleet-broker-status', '상태 확인 중...');
@@ -136,13 +138,14 @@ export function createSimControlCard(containerEl, { projectId, projectName }) {
       return;
     }
     const names = rows.filter((_, i) => status[`driver${i + 1}`] === 'running').map((r) => r.idInput.value);
-    statusLine.textContent = `실행 중 · ${worldSelect.value}${names.length ? ` · ${names.join(', ')}` : ''}`;
+    const viewer = status.ports?.viewer;
+    statusLine.textContent = `실행 중 · ${worldSelect.value}${names.length ? ` · ${names.join(', ')}` : ''}${viewer ? ` · 뷰어 :${viewer}` : ''}`;
     statusLine.style.color = '#2a7d2a';
   }
 
   async function pollStatus() {
     try {
-      renderStatus(await getSimStatus());
+      renderStatus(await getSimStatus(projectId));
     } catch {
       /* 폴링 실패는 조용히 무시 -- 다음 tick 에 다시 시도 */
     }
@@ -155,7 +158,7 @@ export function createSimControlCard(containerEl, { projectId, projectName }) {
       const world = worldSelect.value;
       const robots = readRobots();
       const res = await startSim(projectId, world, robots);
-      setFormStatus(`시작됨 -- ${res.world} · ${res.robots.map((r) => r.id).join(', ') || '(로봇 없음)'}`);
+      setFormStatus(`시작됨 -- ${res.world} · ${res.robots.map((r) => r.id).join(', ') || '(로봇 없음)'} · 뷰어 :${res.ports.viewer}`);
       await pollStatus();
     } catch (err) {
       setFormStatus(`시작 실패 -- ${err.message}`, true);
@@ -168,7 +171,7 @@ export function createSimControlCard(containerEl, { projectId, projectName }) {
     stopBtn.disabled = true;
     setFormStatus('정지하는 중...');
     try {
-      await stopSim();
+      await stopSim(projectId);
       setFormStatus('정지됨.');
       await pollStatus();
     } catch (err) {

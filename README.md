@@ -49,12 +49,16 @@ git clone git@github.com:dcrobot-keen/robot-os-chromium.git
 git clone git@github.com:dcrobot-keen/simulator.git
 cd ../pathfinder
 npm run stack:down                      # 이미지 기반 스택이 떠 있다면 먼저 내린다 (프로젝트 이름이 같다)
-npm run stack:dev:up                    # deploy/.env 의 ROS_CHROMIUM_DIR (기본 ../../ros-chromium) 를 본다
+npm run stack:dev:up                    # 공유 인프라(mosquitto·대시보드·시그널링)만. deploy/.env 의
+                                         # ROS_CHROMIUM_DIR (기본 ../../ros-chromium) 를 본다
 ```
 
-코드 수정은 `docker compose -f deploy/docker-compose.dev.yml restart simulator` 로 반영된다(`package.json` 이
-바뀌면 `npm run stack:dev:build`). 원격 이미지는 두 저장소에 push 될 때마다 CI(`.github/workflows/stack-image.yml`,
-fleet-studio 저장소)가 다시 빌드해 갱신한다 -- 최신을 받으려면 `npm run stack:pull && npm run stack:up`.
+시뮬레이터는 이제 여기서 안 띄운다 -- 현장을 열고 설정 › 시뮬레이터 카드에서 시작하면 그 소스로 빌드한다
+(`deploy/docker-compose.site.dev.yml`, 현장마다 별도 compose 프로젝트라 여러 현장을 동시에 띄울 수 있다).
+코드 수정은 `docker compose -p fs-sim-<현장 id 앞 8자> -f deploy/docker-compose.site.dev.yml restart simulator`
+로 반영된다(`package.json` 이 바뀌면 카드에서 다시 시작 -- 이미지가 재빌드된다). 원격 이미지는 두 저장소에 push
+될 때마다 CI(`.github/workflows/stack-image.yml`, fleet-studio 저장소)가 다시 빌드해 갱신한다 -- 최신을 받으려면
+`npm run stack:pull && npm run stack:up`(프로덕션 경로, 아직 현장별 분리 전).
 
 아이폰 라이다로 스캔한 컬러드 포인트 클라우드(PCD)를 기반으로 실내 지도를 만들고,
 그 위에서 노드/링크/장애물을 편집하고, 등록된 로봇으로 경로탐색·다중 로봇

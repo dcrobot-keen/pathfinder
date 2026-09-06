@@ -208,14 +208,14 @@
           </div>
           <div class="viewer-bot-selector">
             <span class="sim-mainbar__label">시점</span>
-            <button class="sim-bot-btn active" data-url="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-01">tb3-sim-01</button>
-            <button class="sim-bot-btn" data-url="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-02">tb3-sim-02</button>
+            <div id="sim-bot-buttons"></div>
           </div>
           <span class="sim-mainbar__spacer"></span>
-          <a id="link-sim-external" class="settings-service-link" href="http://localhost:8767/?view=3d" target="_blank" rel="noopener">새 창 ↗</a>
+          <a id="link-sim-external" class="settings-service-link" href="#" target="_blank" rel="noopener" hidden>새 창 ↗</a>
         </div>
         <div id="simulation-map" hidden></div>
-        <iframe id="sim-frame" src="http://localhost:8767/?view=3d&amp;embed=1&amp;robot=tb3-sim-01" title="시뮬레이터 3D 뷰 (simulator viewer.html)"></iframe>
+        <iframe id="sim-frame" title="시뮬레이터 3D 뷰 (simulator viewer.html)" hidden></iframe>
+        <div id="sim-frame-empty" class="align-ws__note">시뮬레이터가 꺼져 있습니다 -- 설정 › 시뮬레이터에서 시작하세요.</div>
       </div>
       <aside id="simulation-status" aria-label="시뮬 로봇 상태와 타임라인"></aside>
     </div>

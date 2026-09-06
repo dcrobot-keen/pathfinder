@@ -55,6 +55,18 @@
       "description": "플랜트 순찰 및 시설 점검용 4족 보행 로봇 1호기.",
       "createdAt": "2026-08-01T23:38:17.777Z",
       "updatedAt": "2026-09-05T00:00:00.000Z"
+    },
+    {
+      "id": "2d8ce413-ac17-40c1-91bb-2ed3435c01fb",
+      "name": "tb3-office-sim-01",
+      "modelId": "turtlebot3-burger",
+      "status": "standby",
+      "company": "ros-chromium simulator",
+      "description": "VDA5050(MQTT)으로 자동 등록된 시뮬레이터 로봇 (TurtleBot3 Burger 치수). ros-chromium sim-driver가 운전한다.",
+      "vda5050Serial": "tb3-office-sim-01",
+      "vda5050Manufacturer": "dcrobot",
+      "createdAt": "2026-09-06T08:00:46.775Z",
+      "updatedAt": "2026-09-06T08:00:46.775Z"
     }
   ]
 }

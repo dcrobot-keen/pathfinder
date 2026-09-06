@@ -15,22 +15,23 @@ export function getSimWorlds() {
   return request('/api/sim/worlds');
 }
 
-/** 프로젝트별 저장된 설정. { world, robots: [{id, spawn}] } */
+/** 프로젝트(현장)별 저장된 설정. { world, robots: [{id, spawn}], ports } */
 export function getSimConfig(projectId) {
   return request(`/api/sim/config/${encodeURIComponent(projectId)}`);
 }
 
-/** 저장하고 docker compose 로 시뮬레이터를 (재)시작한다. { ok, world, robots } */
+/** 저장하고 docker compose 로 이 현장의 시뮬레이터를 (재)시작한다. 포트는 현장마다 자동 배정되며 재시작해도
+ *  유지된다. { ok, world, robots, ports } */
 export function startSim(projectId, world, robots) {
-  return request('/api/sim/start', { method: 'POST', body: { projectId, world, robots } });
+  return request(`/api/sim/start/${encodeURIComponent(projectId)}`, { method: 'POST', body: { world, robots } });
 }
 
-/** 시뮬레이터 관련 컨테이너만 정지 (mosquitto/dashboard/signaling 은 그대로). { ok } */
-export function stopSim() {
-  return request('/api/sim/stop', { method: 'POST' });
+/** 이 현장의 시뮬레이터 컨테이너만 정지 (공유 인프라·다른 현장은 그대로). { ok } */
+export function stopSim(projectId) {
+  return request(`/api/sim/stop/${encodeURIComponent(projectId)}`, { method: 'POST' });
 }
 
-/** { simulator, driver1, driver2, configs } -- docker compose ps 파싱 */
-export function getSimStatus() {
-  return request('/api/sim/status');
+/** { simulator, driver1, driver2, world, robots, ports } -- 이 현장의 docker compose ps 파싱 */
+export function getSimStatus(projectId) {
+  return request(`/api/sim/status/${encodeURIComponent(projectId)}`);
 }

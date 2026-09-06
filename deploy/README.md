@@ -17,11 +17,19 @@ npm run stack:down
 - **`docker-compose.yml`(기본)**: `ghcr.io/dcrobot-keen/fleet-studio-stack`를 pull 만 한다. 소스 저장소가 필요 없다.
   이미지는 `.github/workflows/stack-image.yml`이 `robot-os-chromium`·`simulator` 두 저장소로부터 빌드해 push 한다
   (그 저장소에 push 될 때마다 갱신 -- 최신을 받으려면 `npm run stack:pull && npm run stack:up`).
-- **`docker-compose.dev.yml`(소스를 직접 고칠 때)**: `ROS_CHROMIUM_DIR`(기본 `../../ros-chromium`) 아래의
-  `robot-os-chromium/`·`simulator/` 체크아웃을 바인드 마운트해 그 자리에서 빌드한다. `npm run stack:dev:up` /
-  `stack:dev:down` / `stack:dev:logs` / `stack:dev:build`. 두 compose 는 `name: fleet-studio`로 프로젝트가 같으니
-  전환 전에 `npm run stack:down`(또는 `stack:dev:down`)으로 먼저 내릴 것.
+- **`docker-compose.dev.yml`(소스를 직접 고칠 때, 공유 인프라만)**: `robot-os-chromium`/`simulator`를
+  `ROS_CHROMIUM_DIR`(기본 `../../ros-chromium`) 체크아웃에서 바인드 마운트해 빌드하되, 여기 있는 건 mosquitto ·
+  대시보드 · 시그널링뿐이다. `npm run stack:dev:up` / `stack:dev:down` / `stack:dev:logs` / `stack:dev:build`.
+- **시뮬레이터는 현장(설정 › 시뮬레이터 카드)에서 켜고 끈다** -- `deploy/docker-compose.site.dev.yml`을
+  `server/simControl.mjs`가 현장마다 별도 compose 프로젝트(`-p fs-sim-<현장 id>`)로 띄운다. 여러 현장을
+  **동시에** 띄울 수 있다: 현장마다 포트 베이스를 하나씩 배정해(8765, 8865, 8965, ... `data/sim-config.json`에
+  저장, 재시작해도 유지) 시뮬레이터의 호스트 포트 5개(로봇 0/1 소켓 + 뷰어)가 안 겹치게 한다. sim-driver 는
+  브로커(mosquitto)를 hostname 대신 `host.docker.internal:1883`로 찾는다 -- 현장별 compose 프로젝트가 서로
+  다른 도커 네트워크에 있어서다(pathfinder API를 `host.docker.internal:3001`로 찾는 것과 같은 방식). 로봇 id가
+  다른 현장과 겹치면(같은 브로커를 쓰므로) 시작을 거절한다.
+  프로덕션(`docker-compose.yml`, GHCR 이미지)은 아직 이 분리가 안 돼 있다 -- 이미지 파이프라인이 준비되면
+  같은 방식으로 나눌 것.
 - `worlds/`: 시뮬레이터가 읽는 월드 파일. 데모 월드(room/maze/corridor/...)는 커밋되어 있고, 정합 워크스페이스에서
   저장하면 scan-engine 이 여기(`STUDIO_PUBLISH_DIR=../deploy/worlds`)에 `<group>.slicemap.json`/`.floor.png`를
-  다시 쓴다 → `docker compose ... restart simulator sim-driver sim-driver-2`로 새 월드를 읽는다.
-- sim-driver 는 호스트의 API 에 `host.docker.internal:3001` 로 붙는다 (Docker Desktop Mac/Windows 기본 제공, Linux 는 host-gateway 설정 포함).
+  다시 쓴다 -- 그 현장의 시뮬레이터를 설정 › 시뮬레이터 카드에서 다시 시작하면 새 월드를 읽는다.
+- sim-driver 는 호스트의 pathfinder API 에도 `host.docker.internal:3001` 로 붙는다 (Docker Desktop Mac/Windows 기본 제공, Linux 는 host-gateway 설정 포함).

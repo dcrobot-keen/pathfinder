@@ -1,0 +1,116 @@
+# 현장 하나의 시뮬레이터(simulator + sim-driver 최대 2대) -- 개발 모드(소스 빌드). 항상 -p 로 프로젝트 이름을
+# 지정해 현장마다 별도 compose 프로젝트로 띄운다(server/simControl.mjs 가 실행). 그래서 이 파일 안에서는 서비스
+# 이름이 "simulator"/"sim-driver" 하나뿐이어도, 현장 A 의 -p fs-sim-aaaaaaaa 와 현장 B 의 -p fs-sim-bbbbbbbb 는
+# 서로 다른 도커 네트워크에 있어 이름이 안 겹친다.
+#
+# 브로커(mosquitto)·대시보드·시그널링은 여기 없다 -- docker-compose.dev.yml(공유 인프라, npm run stack:dev:up)이
+# 따로 띄운다. sim-driver 는 그 mosquitto 를 hostname(mosquitto) 대신 host.docker.internal 로 찾는다: 현장별로
+# 프로젝트/네트워크가 분리돼 있어 "mosquitto"라는 서비스 이름이 이 프로젝트 안에는 없기 때문 -- pathfinder API를
+# host.docker.internal:3001 로 찾는 것과 같은 방식(같은 extra_hosts).
+#
+# 포트는 SIM_PORT_0..4(호스트 쪽만, 컨테이너 쪽은 고정)로 현장마다 다르게 받는다 -- server/simControl.mjs 가
+# 배정한 포트베이스로부터 계산해서 넘긴다(+0/+1/+2/+10/+11 오프셋, 첫 배정은 8765 라 기존과 동일).
+#
+# x-image 정의는 docker-compose.dev.yml 과 똑같다(compose 는 파일 간 앵커 공유가 안 됨) -- 둘을 같이 고칠 것.
+
+x-image: &image
+  build:
+    context: ${ROS_CHROMIUM_DIR:-../../ros-chromium}
+    dockerfile_inline: |
+      FROM node:22-alpine
+      WORKDIR /app
+      COPY simulator/package.json simulator/package-lock.json ./simulator/
+      RUN cd simulator && npm ci --omit=dev
+      COPY robot-os-chromium/package.json robot-os-chromium/package-lock.json ./robot-os-chromium/
+      COPY robot-os-chromium/packages/bus/package.json                ./robot-os-chromium/packages/bus/
+      COPY robot-os-chromium/packages/device-abstraction/package.json ./robot-os-chromium/packages/device-abstraction/
+      COPY robot-os-chromium/packages/nodes/package.json              ./robot-os-chromium/packages/nodes/
+      COPY robot-os-chromium/packages/planner-wasm/package.json       ./robot-os-chromium/packages/planner-wasm/
+      COPY robot-os-chromium/packages/rtc/package.json                ./robot-os-chromium/packages/rtc/
+      COPY robot-os-chromium/packages/transport/package.json          ./robot-os-chromium/packages/transport/
+      COPY robot-os-chromium/apps/dashboard/package.json              ./robot-os-chromium/apps/dashboard/
+      COPY robot-os-chromium/apps/signaling-server/package.json       ./robot-os-chromium/apps/signaling-server/
+      COPY robot-os-chromium/apps/sim-driver/package.json             ./robot-os-chromium/apps/sim-driver/
+      RUN cd robot-os-chromium && npm ci --omit=dev
+      COPY simulator/ ./simulator/
+      COPY robot-os-chromium/ ./robot-os-chromium/
+      WORKDIR /app/simulator
+      CMD ["node", "src/index.js"]
+  image: fleet-studio-stack:local
+
+services:
+  simulator:
+    <<: *image
+    working_dir: /app/simulator
+    command: ["node", "src/index.js"]
+    environment:
+      SIM_WORLD: ${SIM_WORLD:-worlds/room.world.json}
+      SIM_NOISE: ${SIM_NOISE:-default}
+      SIM_SEED: ${SIM_SEED:-1}
+      SIM_RWD_MS: ${SIM_RWD_MS:-1000}
+      SIM_ROBOTS: ${SIM_ROBOTS:-}
+      SCAN_MESH_DIR: /app/scan-projects
+    ports:
+      - "127.0.0.1:${SIM_PORT_0:-8765}:8765"   # 로봇 0: Roboteq ASCII over WebSocket
+      - "127.0.0.1:${SIM_PORT_1:-8766}:8766"   # 로봇 0: ground-truth + LIDAR
+      - "127.0.0.1:${SIM_PORT_2:-8767}:8767"   # viewer.html (2D/3D, 이 현장의 모든 로봇)
+      - "127.0.0.1:${SIM_PORT_3:-8775}:8775"   # 로봇 1: Roboteq
+      - "127.0.0.1:${SIM_PORT_4:-8776}:8776"   # 로봇 1: 센서
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/src:/app/simulator/src:ro
+      - ./worlds:/app/simulator/worlds:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/viewer.html:/app/simulator/viewer.html:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/simulator/vendor:/app/simulator/vendor:ro
+      - ../scan-engine/projects:/app/scan-projects:ro   # iOS 스캔 메시(overlay.glb) -- 뷰어 3D (모든 현장 공유, 읽기전용)
+
+  # 로봇 스택(Odometry + PoseFusion + Map/Costmap + PathFollower + Vda5050Node) -- 브라우저 없이 시뮬 로봇 0 을 몬다.
+  sim-driver:
+    <<: *image
+    profiles: ["nav"]
+    working_dir: /app/robot-os-chromium/apps/sim-driver
+    command: ["node", "src/index.js"]
+    environment:
+      SIM_ROBOTEQ_URL: ws://simulator:8765
+      SIM_SENSOR_URL: ws://simulator:8766
+      PATHFINDER_URL: ${PATHFINDER_URL:-http://host.docker.internal:3001}
+      ROBOT_ID: ${ROBOT_ID:-tb3-sim-01}
+      MQTT_URL: ${MQTT_URL:-mqtt://host.docker.internal:1883}
+      MAP_ID: ${MAP_ID:-}                      # 비우면 시뮬레이터 월드 이름 (= 같은 슬라이스맵으로 만든 현장)
+      CORRECTION_PERIOD_MS: ${CORRECTION_PERIOD_MS:-2000}
+      MAX_DEVIATION_M: ${MAX_DEVIATION_M:-0.8}
+      SIM_SLICEMAP: ${SIM_WORLD:-}             # 동적 장애물 정지의 정적 마스크 = 월드와 같은 슬라이스맵
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - simulator
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/apps:/app/robot-os-chromium/apps:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/packages:/app/robot-os-chromium/packages:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/manifests:/app/robot-os-chromium/manifests:ro
+      - ./worlds:/app/simulator/worlds:ro
+
+  # 둘째 로봇(profile fleet): 같은 시뮬레이터 프로세스의 SIM_ROBOTS 둘째 항목. 서로 충돌하고 LIDAR 로 본다.
+  sim-driver-2:
+    <<: *image
+    profiles: ["fleet"]
+    working_dir: /app/robot-os-chromium/apps/sim-driver
+    command: ["node", "src/index.js"]
+    environment:
+      SIM_ROBOTEQ_URL: ws://simulator:8775
+      SIM_SENSOR_URL: ws://simulator:8776
+      PATHFINDER_URL: ${PATHFINDER_URL:-http://host.docker.internal:3001}
+      ROBOT_ID: ${ROBOT_ID_2:-tb3-sim-02}
+      MQTT_URL: ${MQTT_URL:-mqtt://host.docker.internal:1883}
+      MAP_ID: ${MAP_ID:-}
+      CORRECTION_PERIOD_MS: ${CORRECTION_PERIOD_MS:-2000}
+      MAX_DEVIATION_M: ${MAX_DEVIATION_M:-0.8}
+      SIM_SLICEMAP: ${SIM_WORLD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - simulator
+    volumes:
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/apps:/app/robot-os-chromium/apps:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/packages:/app/robot-os-chromium/packages:ro
+      - ${ROS_CHROMIUM_DIR:-../../ros-chromium}/robot-os-chromium/manifests:/app/robot-os-chromium/manifests:ro
+      - ./worlds:/app/simulator/worlds:ro
