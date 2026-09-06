@@ -2,6 +2,8 @@
 // (server/vda5050.mjs)가 즉시 재접속한다. 플릿 탭(M1 이전)의 왼쪽 폼을 그대로
 // 옮긴 것. 로봇 표는 운영 화면의 fleetBoard.js로 갔다. doc/vda5050-rcs.md.
 import { getFleetConfig, putFleetConfig, subscribeFleetStream } from './fleetApi.js';
+import { createSimControlCard } from '../simulation/simControlCard.js';
+import { activeProjectId, activeProjectName } from '../appShared.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -193,6 +195,11 @@ export function createBrokerSettings(containerEl) {
   tools.appendChild(toolList);
   layout.appendChild(tools);
 
+  // 시뮬레이터 -- 이 현장의 월드 · 로봇 구성을 켜고 끈다 (server/simControl.mjs, docker compose 실행).
+  const simCard = el('div');
+  const simControl = createSimControlCard(simCard, { projectId: activeProjectId, projectName: activeProjectName });
+  layout.appendChild(simCard);
+
   let config = null;
   let brokerStatus = { connected: false, brokerUrl: null, error: null };
 
@@ -272,5 +279,5 @@ export function createBrokerSettings(containerEl) {
   });
   loadConfig();
 
-  return { destroy() { stream.close(); } };
+  return { destroy() { stream.close(); simControl.destroy(); } };
 }
