@@ -197,8 +197,9 @@ export async function createVda5050Bridge({
           } else {
             // 노드가 다 비었다 = 정상 도착, 취소(cancelOrder 액션 완료), 또는 로봇의 자체 중단(FATAL 오류).
             // 정상 도착도 nodesLeft 0 이라 셋을 구분해야 "중단된 주문이 109/109 완료"로 보이지 않는다.
-            const cancelled = (msg.actionStates ?? []).some((a) => a.actionType === 'cancelOrder' && a.actionStatus === 'FINISHED')
-              && rec?.status !== 'FINISHED';
+            // 취소 = 이 주문을 보낸 뒤에 cancelOrder 를 보냈을 때만. (actionStates 에는 예전 취소가 남아 있어 그것으로 판단하면
+            // 나중에 FATAL 로 중단된 주문까지 '취소'로 보인다.)
+            const cancelled = Boolean(rec && r.lastCancelAt && r.lastCancelAt > (rec.sentAt ?? 0)) && rec?.status !== 'FINISHED';
             const fatal = r.lastFatal && now - r.lastFatal.at < ABORT_WINDOW_MS ? r.lastFatal : null;
             const wasFinished = rec?.status === 'FINISHED' && now - (rec.finishedAt ?? 0) > ABORT_WINDOW_MS;
             if (!wasFinished && cancelled) {
@@ -331,6 +332,7 @@ export async function createVda5050Bridge({
     const topic = vda5050Topic({ ...db.data.config, manufacturer, serialNumber }, 'instantActions');
     const actionId = randomUUID();
     publish(topic, instantActionsMessage(actionType, { actionId, header: header(topic) }));
+    if (actionType === 'cancelOrder') record(manufacturer, serialNumber).lastCancelAt = Date.now(); // 아래 상태 처리가 '취소'와 '중단'을 가른다
     pushEvent('COMMAND', 'INFO', serialNumber, `즉시 제어 명령 전송: ${actionType}`);
     if (actionType === 'cancelOrder') {
       const list = orderHistory.get(serialNumber);

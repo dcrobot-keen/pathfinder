@@ -35,6 +35,8 @@ import { importRobotMapFiles } from './imports/importRobotMap.js';
 import { importFloorImageFile } from './imports/importFloorImage.js';
 import { createSite3D } from './site3d/site3dView.js';
 import { createSimStatusPanel } from './simulation/simStatusPanel.js';
+import { openRobotDrawer } from './robots/robotDrawer.js';
+import { listRobots } from './robots/robotApi.js';
 
 createProjectSelector(document.getElementById('project-selector'));
 initScanWizardModal();
@@ -622,6 +624,11 @@ btnViewMesh.addEventListener('click', () => {
   if (sub && ['2d', '3d', 'align'].includes(sub)) mapsSub = sub;
   if (tab && ['maps', 'robots', 'operate', 'simulation', 'settings'].includes(tab)) activateTab(tab);
   else if (sub) activateMapsSub(sub);
+  // &detail=<시리얼|이름>: 로봇 상세 드로어를 바로 연다 (캡처·공유용)
+  const detail = q.get('detail');
+  if (tab === 'robots' && detail) {
+    listRobots().then((all) => { const r = all.find((x) => x.vda5050Serial === detail || x.name === detail); if (r) openRobotDrawer(r); }).catch(() => {});
+  }
 }
 
 // 왼쪽 내비 하단: 버전 · 빌드, 서비스 상태 점 (API · 플래너 · scan-engine · MQTT).
